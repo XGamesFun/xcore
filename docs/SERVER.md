@@ -2,7 +2,7 @@
 
 Most games need no server: the page is the game. When a game needs one party everybody trusts (a leaderboard nobody
 can write to from the console, a result that pays a prize, a room the host cannot cheat in), it can carry **its own
-server code** in `server/`. `xcore publish` bundles it and puts it on games.fun beside the game's files, at the game's
+server code** in `server/`. `xcore publish` bundles it and puts it on xgames.fun beside the game's files, at the game's
 own `/api/*`. You set up no account elsewhere, no keys and no deploy.
 
 The contract is `gf-server-v1`. Every name and number in it lives in one module,
@@ -61,10 +61,10 @@ export default {
   removed on the way in.
 - **`env`**: `env.GF` (the platform, below), one Durable Object namespace per `objects` entry, the plain strings
   `env.GF_GAME_ID`, `env.GF_SLUG` and `env.GF_CONTRACT` (`"gf-server-v1"`), and your own secrets as `env.<NAME>`
-  (below, "Secrets"). No key of games.fun's. Keep keys out of server code: publish refuses one it finds.
+  (below, "Secrets"). No key of xgames.fun's. Keep keys out of server code: publish refuses one it finds.
 - **Runtime**: Cloudflare Workers, compatibility date `2025-06-01`.
-- **Outbound `fetch`** reaches only the origins in your `backend.json` and games.fun's own. To read Solana devnet
-  from the server, call games.fun's relay, `https://play.xgames.fun/loot/v1/rpc` (the methods loot's client uses, one
+- **Outbound `fetch`** reaches only the origins in your `backend.json` and xgames.fun's own. To read Solana devnet
+  from the server, call xgames.fun's relay, `https://play.xgames.fun/loot/v1/rpc` (the methods loot's client uses, one
   request a call): the public devnet RPC (`api.devnet.solana.com`) answers the Workers runtime with 403 ("Your IP or
   provider is blocked"), under `xcore dev` as well.
 - **Limits**: set by the game's plan (README §5, `xcore plan`). Free: 50 ms of CPU per request to `fetch`, 20
@@ -158,7 +158,7 @@ Every call answers `{ok: true, …}` or `{ok: false, code, why}` (`why` is words
 | `GF.verifyPlayer(token)`                                                                                                                                                                            | `{ok, sub, wallet, x, lvl, exp}`: who the player is, from the sign-in token the page sends (no display name: show `x.handle` when they signed in with X, else a name the page sends, cleaned)                                            |
 | `GF.saves.get(player, key = 'main')`, `.put(player, key, value)`, `.delete(player, key)`, `.list(player)`                                                                                           | a player's saves: any JSON value, 64 KB each, 16 a player                                                                                                                                                                                |
 | `GF.scores.submit(board, player, score, {name, order, writer})`, `.setup(board, {order, writer})`, `.top(board, {limit, offset})`, `.best(board, player)`, `.remove(board, player)`, `.drop(board)` | leaderboards: a player's best is kept; `order` `"high"` (default) or `"low"`; `writer: "server"`: only the server writes the board (or every board a pattern names: `daily-*`, `*`); `drop`: the board gone, its place among the 16 free |
-| `GF.loot.report({round, endedAt, winners})`, `GF.loot.status()`                                                                                                                                     | a result that pays prizes by place: games.fun's keeper signs it with the game's host key (set up by the owner in Studio); for amounts your server works out, your own key (below, "Paying a result")                                     |
+| `GF.loot.report({round, endedAt, winners})`, `GF.loot.status()`                                                                                                                                     | a result that pays prizes by place: xgames.fun's keeper signs it with the game's host key (set up by the owner in Studio); for amounts your server works out, your own key (below, "Paying a result")                                    |
 | `GF.info()`                                                                                                                                                                                         | `{ok, contract, gameId, slug}`                                                                                                                                                                                                           |
 
 `player` is the game's own word for a player; normally `verifyPlayer`'s `sub`, so nobody can write another player's.
@@ -185,7 +185,7 @@ xcore secret list                                               # the names; val
 xcore secret delete VOUCHER_SEED
 ```
 
-- games.fun keeps the value only on the server's host (Cloudflare), never stores or shows it, and never gives it to
+- xgames.fun keeps the value only on the server's host (Cloudflare), never stores or shows it, and never gives it to
   the page. A new publish keeps the secrets.
 - Set it once the game is published with its `server/`; it reaches the server's next request, with no publish.
 - Names: A–Z, 0–9 and `_`, starting with a letter, not `GF` or `GF_*`, not a room's binding. Values up to 5,120
@@ -195,7 +195,7 @@ xcore secret delete VOUCHER_SEED
 
 ### The economy's own RPC
 
-A game with an economy (`xcore loot add`) sends its Solana calls through games.fun's shared devnet relay by default
+A game with an economy (`xcore loot add`) sends its Solana calls through xgames.fun's shared devnet relay by default
 (the play host's `/loot/v1/rpc`), and every call counts toward the game's plan: $10 a million, the biggest cost a
 player of an economy game has (a page reading balances every 5 s spends Free's $1 in ~140 player-hours). Bring the
 game's own devnet RPC (Helius, Triton, QuickNode; their free plans fit a small game) instead:
@@ -266,21 +266,21 @@ about 3 ms of CPU for each second played, the largest line of its bill. Replay e
 voucher, a ranked board) and a random sample of the rest (one in ten, say), and bound the others as above. A cheater
 cannot tell which runs are replayed, and a run that pays is always one of them.
 
-### Paying a result: games.fun's keeper, or a voucher key of your own
+### Paying a result: xgames.fun's keeper, or a voucher key of your own
 
 A reward for a result (a score, a win, a podium) is a grant in the game's economy, claimed with a voucher: a
 signature that says this wallet earned it. The page can never sign one (anyone can change a page in the console), so
 a voucher comes from one of two signers. Both start from a result your server stands behind (above); they differ in
 who holds the key.
 
-|                    | **games.fun's keeper** (`env.GF.loot.report`)                                     | **your server's own key** (`xcore add vouchers`)                                          |
+|                    | **xgames.fun's keeper** (`env.GF.loot.report`)                                    | **your server's own key** (`xcore add vouchers`)                                          |
 | ------------------ | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Who signs          | games.fun, with the game's host key (made for the game, never shown to anyone)    | your server, with `VOUCHER_SEED` (a secret only it reads)                                 |
+| Who signs          | xgames.fun, with the game's host key (made for the game, never shown to anyone)   | your server, with `VOUCHER_SEED` (a secret only it reads)                                 |
 | What a result pays | a place: up to 16 winners a result, each paid its grant's own amount              | any amount up to the grant's (by score, by rank), worked out by your server               |
 | How often          | 120 reports an hour a game                                                        | your plan's request rates                                                                 |
 | To set up          | the owner certifies the host key in Studio once; the grant names the keeper's key | `xcore add vouchers`, `xcore secret set VOUCHER_SEED --new-key`, its address in the grant |
 | Under `xcore dev`  | printed, not signed                                                               | signed with the key in `.dev.vars`, against devnet                                        |
-| Follows loot       | when games.fun updates the keeper                                                 | when you update xcore (publish keeps `server/gf-loot/` at its loot)                       |
+| Follows loot       | when xgames.fun updates the keeper                                                | when you update xcore (publish keeps `server/gf-loot/` at its loot)                       |
 
 **Use the keeper** when the server already decides who won and the prize is fixed by place: a room's winner, the top
 three of a match, a hidden thing found first. No key to make or keep.
@@ -321,7 +321,7 @@ xcore add vouchers <folder>      # needs the economy (xcore loot add) with a gra
 It writes `server/vouchers.js` (routed at `api/vouchers/`, with its Durable Object `GameVouchers`), copies loot's
 voucher code into `server/gf-loot/` (bundled with the server, never a public file), makes a **test key** for
 `xcore dev` with its seed as `VOUCHER_SEED` in `.dev.vars` (and, in a folder kept in git, `.dev.vars` into
-`.gitignore`), and says its address. The **live key** is made here and sent to games.fun only, never kept on your machine:
+`.gitignore`), and says its address. The **live key** is made here and sent to xgames.fun only, never kept on your machine:
 
 1. `xcore publish`, then `xcore secret set VOUCHER_SEED --new-key`: a new key made and sent to the server only; it
    prints the key's address.
@@ -360,14 +360,14 @@ const { voucher } = await voucherFor(env, { grant: 'clear', wallet, round: match
   gets the same voucher (with no chain read, and a fresh one when it is about to run out), never one for another
   wallet or amount, and never one once the grant has been closed and made again (a new campaign pays new rounds only).
 - **Rate:** a player may make `VOUCHERS.perMinute` pay and link requests a minute (20).
-- **Keys:** the live key lives only on games.fun's server and is never shown again; a lost or leaked one: run
+- **Keys:** the live key lives only on xgames.fun's server and is never shown again; a lost or leaked one: run
   `xcore secret set VOUCHER_SEED --new-key` again, put the new address in the grant in place of the old, approve. A
   leaked key can pay no more than the grant's limits, so keep them tight. The test key in `.dev.vars` signs only
   what the grant lets it sign.
 - `person`: a player signed in with X is counted as one person, hashed with your key (never the account itself), for
   a grant with `perPerson`. A player signed in with a wallet only has no person, so a grant with `perPerson` refuses
   to pay them (`person`): sign in with X.
-- Each pay is one request to your server and one read of the grant, through games.fun's relay or your own RPC
+- Each pay is one request to your server and one read of the grant, through xgames.fun's relay or your own RPC
   (`xcore add rpc`).
 - A grant's limits count claims, not amounts: a daily cap of tokens is the grant's amount with one claim a day, or
   your server's own count in `PAY.check`.
@@ -377,7 +377,7 @@ const { voucher } = await voucherFor(env, { grant: 'clear', wallet, round: match
 
 ## Running it locally
 
-`xcore dev <folder>` runs `server/` under workerd, the runtime games.fun runs it on, at the page's `/game/api/*`
+`xcore dev <folder>` runs `server/` under workerd, the runtime xgames.fun runs it on, at the page's `/game/api/*`
 (WebSockets too), with the game's page beside it and a local `env.GF`: `verifyPlayer` accepts the local sign-in that
 `gamesfun.js` gets from it, and saves and scores are the ones the page reads through `/platform/v1/*` (kept in
 `.gamesfun/dev-platform.json`). `env.GF.loot.report` is printed, not signed or paid; a voucher key of your own
@@ -397,7 +397,7 @@ only the default export and the Durable Object classes exported (the check says 
 
 `xcore publish` bundles `server/` into **one file** with esbuild (minified, with the contract's own options), runs
 the checks above and the secret scan over each server file and the bundle, and sends it with the game's files when
-games.fun says it takes server code. Otherwise it publishes the files alone and says so. `xcore publish --check` shows
+xgames.fun says it takes server code. Otherwise it publishes the files alone and says so. `xcore publish --check` shows
 the bundle without publishing:
 
 ```

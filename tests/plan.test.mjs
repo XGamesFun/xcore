@@ -1,4 +1,4 @@
-// `xcore plan` (lib/publish/plans.mjs): the folder's own game and the saved sign-in, games.fun's routes and bodies,
+// `xcore plan` (lib/publish/plans.mjs): the folder's own game and the saved sign-in, xgames.fun's routes and bodies,
 // and the plan said in plain words.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -17,7 +17,7 @@ const LIMITS = {
   scores: { boards: 16, entriesPerBoard: 1000000 },
 };
 
-test('plan: the account, a game, activate and deactivate, through the routes games.fun takes', async t => {
+test('plan: the account, a game, activate and deactivate, through the routes xgames.fun takes', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const env = { GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'), GAMESFUN_CREDENTIALS: 'file' };
@@ -110,7 +110,7 @@ test('plan in words: the tier, the month, the limits, capped and the slots', () 
     includedCents: 0,
     games: [{ tier: 'scale', title: 'Showground', monthCents: 999, comp: true }],
   });
-  assert.match(account, /not open on this games.fun yet/);
+  assert.match(account, /not open on this xgames.fun yet/);
   const paid = describeAccount({
     slots: 2,
     used: 1,
@@ -123,7 +123,7 @@ test('plan in words: the tier, the month, the limits, capped and the slots', () 
   });
   assert.match(
     paid,
-    /Game slots: 1 of 2 in use, paid through 2026-12-01 \(buy or renew on games.fun: Studio → Plans, in SOL or USDC\)/,
+    /Game slots: 1 of 2 in use, paid through 2026-12-01 \(buy or renew on xgames.fun: Studio → Plans, in SOL or USDC\)/,
   );
   assert.match(paid, /usage credit \$5\.00/);
   assert.match(account, /Scale {3}Showground {2}\$9\.99 {2}\(granted\)/);

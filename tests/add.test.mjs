@@ -103,7 +103,7 @@ test('the database: anyone reads, a player writes only their own, the rules and 
   assert.deepEqual(data.delete('levels', 'moon', 'p1'), { ok: true, deleted: true });
 });
 
-test("the database's routes: the page's token is checked by games.fun, and the calls reach the one object", async () => {
+test("the database's routes: the page's token is checked by xgames.fun, and the calls reach the one object", async () => {
   const ctx = { storage: { sql: sqlite() } };
   const object = new GameData(ctx, {});
   const env = {
@@ -619,7 +619,7 @@ test('add vouchers: refused without an economy; the server, the signer copy, the
   );
   assert.ok(
     r.steps.some(s => /secret set VOUCHER_SEED --new-key/.test(s)),
-    'the live key is made on games.fun',
+    'the live key is made on xgames.fun',
   );
   assert.ok(
     r.steps.some(s => /gf\.loot\.link\(\)/.test(s)),

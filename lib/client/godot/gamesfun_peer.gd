@@ -1,5 +1,5 @@
-# GamesFunPeer: a games.fun room as Godot's MultiplayerPeer, so a game's high-level multiplayer (RPCs,
-# MultiplayerSpawner, MultiplayerSynchronizer, multiplayer.peer_connected …) runs over games.fun as it runs over ENet.
+# GamesFunPeer: a xgames.fun room as Godot's MultiplayerPeer, so a game's high-level multiplayer (RPCs,
+# MultiplayerSpawner, MultiplayerSynchronizer, multiplayer.peer_connected …) runs over xgames.fun as it runs over ENet.
 # Written by `xcore add multiplayer`; made by GamesFun.join_room(), never by hand:
 #
 #   var peer = await GamesFun.join_room(GamesFun.room_from_link() if GamesFun.room_from_link() != "" else GamesFun.room_code())

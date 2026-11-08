@@ -1,5 +1,5 @@
 // adopt: a web game made anywhere, read for its shape, built, and its record written (gamesfun.json → page), with
-// everything that does not fit games.fun's hosting listed with its fix.
+// everything that does not fit xgames.fun's hosting listed with its fix.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
@@ -112,14 +112,14 @@ test('a Node server that hands out a static folder: the folder is the page, the 
         /backend use custom/.test(w.fix) &&
         /into server\//.test(w.fix),
     ),
-    'both ways: server/ on games.fun, or its own host',
+    'both ways: server/ on xgames.fun, or its own host',
   );
   // ported: the game has server/ now, and the Node server is said to be left behind, not to be kept
   await mkdir(path.join(dir, 'server'), { recursive: true });
   await writeFile(path.join(dir, 'server', 'index.js'), 'export default { fetch() { return new Response("ok"); } };');
   const ported = await adopt(dir);
   assert.match(reportLines(ported).join('\n'), /server is not published; its server\/ is\)/);
-  assert.ok(ported.warn.some(w => /its server\/ is, and games\.fun runs that/.test(w.what)));
+  assert.ok(ported.warn.some(w => /its server\/ is, and xgames\.fun runs that/.test(w.what)));
   const socket = r.fix.find(f => /socket\.io\.js/.test(f.what));
   assert.match(
     socket.what,
@@ -361,7 +361,7 @@ test("workers from the root, SharedArrayBuffer, no tab icon; xcore's own .gamesf
   const warns = r.warn.map(w => w.what).join('\n');
   assert.match(
     warns,
-    /sim\.js:2 uses SharedArrayBuffer or Atomics\.wait: a games\.fun page is not cross-origin isolated/,
+    /sim\.js:2 uses SharedArrayBuffer or Atomics\.wait: a xgames\.fun page is not cross-origin isolated/,
   );
   assert.match(warns, /index\.html names no tab icon/);
   assert.doesNotMatch(warns, /hidden files never go up: \.gamesfun/);
@@ -564,7 +564,7 @@ test('paths from the root in every way a page loads a file: srcset, poster, styl
   );
 });
 
-test('engine exports that cannot start on games.fun are fixes: a Unity build compressed for Content-Encoding, a threaded Godot export', async t => {
+test('engine exports that cannot start on xgames.fun are fixes: a Unity build compressed for Content-Encoding, a threaded Godot export', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const page = (extra = '') =>

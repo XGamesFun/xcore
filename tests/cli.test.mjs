@@ -28,7 +28,7 @@ test('help lists its own commands; a kit command with no kit says how to get the
   assert.match(connect.stderr, /@xgamesfun\/kit[\s\S]*Usage: xcore backend use custom/);
   const create = run(['create', 'x'], { cwd: away.dir });
   assert.equal(create.status, 1);
-  assert.match(create.stderr, /"create" is not a games\.fun command[\s\S]*@xgamesfun\/kit/);
+  assert.match(create.stderr, /"create" is not a xgames\.fun command[\s\S]*@xgamesfun\/kit/);
   assert.equal(
     run(['--version'], { cwd: away.dir }).stdout.trim(),
     JSON.parse(await (await import('node:fs/promises')).readFile(new URL('../package.json', import.meta.url), 'utf8'))

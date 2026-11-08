@@ -1,5 +1,5 @@
-// Shared by the tests: temporary folders, the fixtures (web games made without games.fun), the command, and a stand-in
-// games.fun that signs in and takes a publish in memory.
+// Shared by the tests: temporary folders, the fixtures (web games made without xgames.fun), the command, and a stand-in
+// xgames.fun that signs in and takes a publish in memory.
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
@@ -47,7 +47,7 @@ export const passing = async () => ({
   run: 'verify-1',
 });
 
-/** A stand-in games.fun: the token exchange and logout, and the publish calls, in memory. */
+/** A stand-in xgames.fun: the token exchange and logout, and the publish calls, in memory. */
 export async function standIn() {
   const state = { codes: new Map(), tokens: new Set(), blobs: new Set(), calls: [], version: 0 };
   const server = createServer(async (req, res) => {
@@ -101,7 +101,7 @@ export async function standIn() {
       state.blobs.add(m[1]);
       return send(200, { stored: true });
     }
-    // a test may make the last step time out, as games.fun's gateway does past the route's limit
+    // a test may make the last step time out, as xgames.fun's gateway does past the route's limit
     if (req.url === '/api/kit/publish/p1' && state.completeStatus)
       return send(state.completeStatus, { error: 'gateway timeout' });
     if (req.url === '/api/kit/publish/p1')

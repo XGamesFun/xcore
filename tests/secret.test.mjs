@@ -1,5 +1,5 @@
-// `xcore secret` (lib/publish/secrets.mjs, lib/server/secrets.mjs): games.fun's name and value rules checked first, the
-// folder's own game and the saved sign-in, the routes and bodies games.fun takes, and the value never in an answer.
+// `xcore secret` (lib/publish/secrets.mjs, lib/server/secrets.mjs): xgames.fun's name and value rules checked first, the
+// folder's own game and the saved sign-in, the routes and bodies xgames.fun takes, and the value never in an answer.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
@@ -14,7 +14,7 @@ import { run, tempDir } from './helpers.mjs';
 
 const ORIGIN = 'https://studio.example';
 
-test("names and values: games.fun's rules", () => {
+test("names and values: xgames.fun's rules", () => {
   for (const ok of ['VOUCHER_KEY', 'A', 'K2']) assert.equal(secretNameProblem(ok), null);
   for (const bad of ['', 'lower', '_A', '9A', 'A-B', 'GF', 'GF_SLUG', 'A'.repeat(65)])
     assert.ok(secretNameProblem(bad), bad);
@@ -68,13 +68,13 @@ test('set, list, delete: the folder’s game, the saved token, the routes; refus
   assert.deepEqual((await listSecrets(dir, opts)).names, ['VOUCHER_KEY']);
   assert.equal((await deleteSecret(dir, 'VOUCHER_KEY', opts)).removed, true);
   const before = calls.length;
-  await assert.rejects(setSecret(dir, 'GF_SLUG', 'v', opts), /games.fun’s own/);
+  await assert.rejects(setSecret(dir, 'GF_SLUG', 'v', opts), /xgames.fun’s own/);
   await assert.rejects(setSecret(dir, 'OK', '', opts), /empty/);
   await assert.rejects(deleteSecret(dir, 'lower', opts), /A–Z/);
   assert.equal(calls.length, before, 'nothing was sent');
 });
 
-test(".dev.vars: the server's secrets on this machine, with games.fun's names only", async t => {
+test(".dev.vars: the server's secrets on this machine, with xgames.fun's names only", async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   assert.deepEqual(await readDevVars(tmp.dir), { secrets: {}, names: [], warnings: [] });
@@ -99,11 +99,11 @@ test('set --from-dev-vars: the value xcore dev gives the server, refused before 
   assert.match(missing.stderr, /\.dev\.vars in .* has no NOPE/);
   const both = run(['secret', 'set', 'VOUCHER_SEED', tmp.dir, '--from-dev-vars', '--from-file', 'x'], { env });
   assert.match(both.stderr, /one of --from-file, --from-dev-vars and --new-key/);
-  // found: it goes on to games.fun, which this folder is not on yet
+  // found: it goes on to xgames.fun, which this folder is not on yet
   assert.match(run(['secret', 'set', 'VOUCHER_SEED', tmp.dir, '--from-dev-vars'], { env }).stderr, /not on .* yet/);
 });
 
-test('set --new-key: a key made here and sent only to games.fun, its address said; refused beside another source', async t => {
+test('set --new-key: a key made here and sent only to xgames.fun, its address said; refused beside another source', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   await writeFile(path.join(tmp.dir, 'index.html'), '<!doctype html><title>g</title>\n');
@@ -116,6 +116,6 @@ test('set --new-key: a key made here and sent only to games.fun, its address sai
   assert.match(a.seed, /^[0-9a-f]{64}$/);
   assert.notEqual(a.seed, b.seed);
   assert.equal(a.address, await seedAddress(a.seed));
-  // found: it goes on to games.fun, which this folder is not on yet (nothing is written here)
+  // found: it goes on to xgames.fun, which this folder is not on yet (nothing is written here)
   assert.match(run(['secret', 'set', 'VOUCHER_SEED', tmp.dir, '--new-key'], { env }).stderr, /not on .* yet/);
 });

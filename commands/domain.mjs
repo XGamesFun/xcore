@@ -12,16 +12,16 @@ const usage = `Usage: xcore domain [list] [dir] [--json]
        xcore domain remove <domain> [dir] [--json]
 
 The published game on a domain of your own (play.mygame.com), besides its xgames.fun link: players see your
-address, and sign-in, saves, scores, rooms and the economy work there as on games.fun. Creator has 1 domain, Scale 5;
-Free has none. Sign-in still opens a small games.fun window, and a post on X still uses the xgames.fun link.
+address, and sign-in, saves, scores, rooms and the economy work there as on xgames.fun. Creator has 1 domain, Scale 5;
+Free has none. Sign-in still opens a small xgames.fun window, and a post on X still uses the xgames.fun link.
   list              the domains and their state
   add <domain>      ask for one: prints the DNS records to add where your domain's DNS is
-  check <domain>    look at its records now (games.fun also checks by itself); live once they are right
+  check <domain>    look at its records now (xgames.fun also checks by itself); live once they are right
   remove <domain>   stop serving the game there
 A game whose plan no longer has room for a domain keeps it, paused: it sends players to the xgames.fun link.`;
 
 const plainly = e => {
-  // games.fun's own words already say what to do; add the command only when they don't
+  // xgames.fun's own words already say what to do; add the command only when they don't
   if (e?.code === 'plan')
     throw new Error(
       /plan activate/.test(e.message)
@@ -29,7 +29,7 @@ const plainly = e => {
         : `${e.message} Custom domains come with Creator (1) and Scale (5): put the game in a slot with ${CMD} plan activate.`,
     );
   if (e?.code === 'domains-off')
-    throw new Error(`${e.message} (custom domains need games.fun's operator to set them up first.)`);
+    throw new Error(`${e.message} (custom domains need xgames.fun's operator to set them up first.)`);
   throw e;
 };
 
@@ -72,11 +72,11 @@ export default {
         );
         return 0;
       }
-      if (!d) throw new Error(`games.fun did not answer with ${host}.`);
+      if (!d) throw new Error(`xgames.fun did not answer with ${host}.`);
       console.log(describeDomain(d));
       if (d.status !== 'active')
         console.log(
-          `\nThen: ${CMD} domain check ${host} (DNS can take a few minutes; games.fun also checks by itself).`,
+          `\nThen: ${CMD} domain check ${host} (DNS can take a few minutes; xgames.fun also checks by itself).`,
         );
       // the page must know its domain: gamesfun.js 1.2.0 asks the play edge which game it is on a host of its own
       const stale = await staleClient(dir).catch(() => []);

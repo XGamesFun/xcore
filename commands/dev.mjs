@@ -1,4 +1,4 @@
-// `xcore dev [dir]`: the game as games.fun hosts it, on this machine, with its server, sign-in, saves, rooms and
+// `xcore dev [dir]`: the game as xgames.fun hosts it, on this machine, with its server, sign-in, saves, rooms and
 // economy RPC (../lib/dev/index.mjs). Runs until Ctrl+C.
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
@@ -7,11 +7,11 @@ import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore dev [dir] [--port <n>] [--no-build] [--open] [--json]
 
-Play the game on this machine as games.fun will host it, with everything a published game has behind it:
+Play the game on this machine as xgames.fun will host it, with everything a published game has behind it:
   http://127.0.0.1:<port>/game/   the published files, with the play host's headers
   /game/api/*                     the game's own server/ (Durable Objects, WebSockets, env.GF), reloaded on change
   /platform/v1/*                  sign-in (a local player), saves and leaderboards, the same store env.GF uses
-  /loot/v1/rpc                    the economy's Solana devnet RPC (XSOLANA_RPC_URL in .env, else games.fun's relay)
+  /loot/v1/rpc                    the economy's Solana devnet RPC (XSOLANA_RPC_URL in .env, else xgames.fun's relay)
 gamesfun.js (${CMD} add signin|database|multiplayer) uses all of it here, from any engine: open the page in two
 windows to play a room together. Running server/ needs Miniflare (workerd), installed once on first use (~140 MB).
 Saves, scores and Durable Object storage are kept in <dir>/.gamesfun/ (never published).
@@ -22,7 +22,7 @@ Saves, scores and Durable Object storage are kept in <dir>/.gamesfun/ (never pub
 
 export default {
   name: 'dev',
-  summary: 'play the game here as games.fun hosts it: its server, sign-in, saves, rooms and economy RPC',
+  summary: 'play the game here as xgames.fun hosts it: its server, sign-in, saves, rooms and economy RPC',
   usage,
   run: args =>
     guard(async () => {

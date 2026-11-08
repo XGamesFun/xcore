@@ -39,10 +39,10 @@ test('backend use custom: backend.json in the folder the build copies, its origi
     'https://api.orbit-example.net',
     'wss://api.orbit-example.net',
   ]);
-  // games.fun's own hosts: its publish route refuses them, so xcore does too (the game reaches its own host anyway)
+  // xgames.fun's own hosts: its publish route refuses them, so xcore does too (the game reaches its own host anyway)
   const own = run(['backend', 'use', 'custom', dir, '--url', 'https://play.xgames.fun/loot/v1/health']);
   assert.equal(own.status, 1);
-  assert.match(own.stderr, /play\.xgames\.fun" is games\.fun itself/);
+  assert.match(own.stderr, /play\.xgames\.fun" is xgames\.fun itself/);
   for (const bad of ['http://localhost:3000', 'https://10.0.0.1'])
     assert.equal(run(['backend', 'use', 'custom', dir, '--url', bad]).status, 1, bad);
 });
@@ -164,7 +164,7 @@ test("xsolana's words as xcore's", () => {
   assert.equal(say('  xsolana guide [part]            what'), '  xcore loot guide [part]         what');
 });
 
-test("the RPC: games.fun's shared relay unless XSOLANA_RPC_URL (or LOOT_RPC_URL) names a devnet one", () => {
+test("the RPC: xgames.fun's shared relay unless XSOLANA_RPC_URL (or LOOT_RPC_URL) names a devnet one", () => {
   assert.deepEqual(solanaRpc({}, { file: null }), { url: SHARED_RPC, shared: true, problem: null });
   assert.equal(
     solanaRpc({ XSOLANA_RPC_URL: 'https://own.example/rpc' }, { file: null }).url,

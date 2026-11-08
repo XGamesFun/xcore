@@ -63,11 +63,11 @@ test('a record whose token cannot be read is unreadable, and logout says it was 
   await rm(path.join(env.GAMESFUN_CONFIG_DIR, 'secrets'), { recursive: true, force: true });
   assert.equal((await signInState(g.origin, { env })).state, 'unreadable');
   assert.deepEqual(await logout(g.origin, { env }), { revoked: false, forgot: true, why: 'unreadable' });
-  assert.ok(!g.state.calls.includes('DELETE /api/kit/token'), 'games.fun was never asked');
+  assert.ok(!g.state.calls.includes('DELETE /api/kit/token'), 'xgames.fun was never asked');
   assert.equal((await signInState(g.origin, { env })).state, 'signed-out');
 });
 
-test('logout of a token games.fun already ended says so', async t => {
+test('logout of a token xgames.fun already ended says so', async t => {
   const tmp = await tempDir(),
     g = await standIn();
   t.after(async () => {
@@ -76,7 +76,7 @@ test('logout of a token games.fun already ended says so', async t => {
   });
   const env = { GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'), GAMESFUN_CREDENTIALS: 'file' };
   await signIn(g, env);
-  g.state.tokens.clear(); // revoked from games.fun's side
+  g.state.tokens.clear(); // revoked from xgames.fun's side
   assert.deepEqual(await logout(g.origin, { env }), { revoked: false, forgot: true, why: 'ended' });
 });
 
@@ -98,7 +98,7 @@ test(
     );
     await chmod(path.join(bin, 'secret-tool'), 0o755);
     const config = path.join(tmp.dir, 'config'),
-      key = 'games.fun https://example.test';
+      key = 'xgames.fun https://example.test';
     const desktop = { GAMESFUN_CONFIG_DIR: config, DBUS_SESSION_BUS_ADDRESS: 'unix:path=/x', PATH: bin };
     const ssh = { GAMESFUN_CONFIG_DIR: config, PATH: bin }; // no session bus: the file store
     assert.equal(

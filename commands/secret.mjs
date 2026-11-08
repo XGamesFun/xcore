@@ -1,4 +1,4 @@
-// `xcore secret set|list|delete`: a game server's own secrets on games.fun (../lib/publish/secrets.mjs).
+// `xcore secret set|list|delete`: a game server's own secrets on xgames.fun (../lib/publish/secrets.mjs).
 import { readFile } from 'node:fs/promises';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
@@ -11,12 +11,12 @@ const usage = `Usage: xcore secret set <NAME> [dir] [--from-file <path> | --from
        xcore secret delete <NAME> [dir] [--json]
 
 A key your game's server needs and no player may see (a voucher-signing key, an outside API's key, an RPC URL with
-its key): the server reads it as env.<NAME>. games.fun keeps the value only on the server's host (Cloudflare), never
+its key): the server reads it as env.<NAME>. xgames.fun keeps the value only on the server's host (Cloudflare), never
 shows it again and never gives it to the page. Set it after the game is published with its server/; it reaches the
 server's next request, with no publish. On this machine, ${CMD} dev reads the same names from the game folder's
 .dev.vars (NAME=value lines; a hidden file, so publish never sends it; keep it out of git).
   set <NAME>         the value from --from-file, or the folder's .dev.vars (--from-dev-vars: the same key as under
-                     xcore dev), or --new-key: a new Ed25519 key made here and sent to games.fun only, never kept on
+                     xcore dev), or --new-key: a new Ed25519 key made here and sent to xgames.fun only, never kept on
                      this machine (it prints the key's address: a voucher key's goes in the grant), else from stdin
                      when it is piped, else typed (not shown)
   list               the names (values are never shown)
@@ -71,7 +71,7 @@ async function fromDevVars(dir, name) {
 
 export default {
   name: 'secret',
-  summary: "a game server's secrets on games.fun (env.<NAME>): set, list, delete; never the page's",
+  summary: "a game server's secrets on xgames.fun (env.<NAME>): set, list, delete; never the page's",
   usage,
   run: args =>
     guard(async () => {
@@ -129,7 +129,7 @@ export default {
         );
         if (made)
           console.log(
-            `It is a new key, made here and kept only on games.fun's server. Its address: ${made.address}\nA voucher key's address goes in the grant's "vouchers" in xsolana.json (then ${CMD} loot approve).`,
+            `It is a new key, made here and kept only on xgames.fun's server. Its address: ${made.address}\nA voucher key's address goes in the grant's "vouchers" in xsolana.json (then ${CMD} loot approve).`,
           );
       }
       return 0;

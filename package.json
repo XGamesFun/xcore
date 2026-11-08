@@ -1,7 +1,7 @@
 {
   "name": "@xgamesfun/xcore",
   "version": "0.1.0",
-  "description": "games.fun from the command line: bring a web game you already made, check it as games.fun hosts it, give it a backend and a Solana economy, and publish it at a link anyone can play.",
+  "description": "xgames.fun from the command line: bring a web game you already made, check it as xgames.fun hosts it, give it a backend and a Solana economy, and publish it at a link anyone can play.",
   "keywords": [
     "game",
     "browser-game",
@@ -9,7 +9,7 @@
     "hosting",
     "web3",
     "solana",
-    "games.fun"
+    "xgames.fun"
   ],
   "homepage": "https://github.com/XGamesFun/xcore#readme",
   "repository": {
@@ -19,7 +19,7 @@
   "bugs": {
     "url": "https://github.com/XGamesFun/xcore/issues"
   },
-  "author": "games.fun",
+  "author": "xgames.fun",
   "license": "MIT",
   "type": "module",
   "bin": {

@@ -1,4 +1,4 @@
-// `xcore dev`'s word on games.fun's plan limits (lib/dev/limits.mjs): the rate past Free's and past Creator's, once a
+// `xcore dev`'s word on xgames.fun's plan limits (lib/dev/limits.mjs): the rate past Free's and past Creator's, once a
 // minute, and a slow route once.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

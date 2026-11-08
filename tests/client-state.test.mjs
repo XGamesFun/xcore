@@ -1,5 +1,5 @@
 // gamesfun.js's lifecycles in real Chrome: a local room that refuses a join settles and lets its channel go; one sign-in
-// at a time, that a second click shares and a sign-out ends (a late answer from games.fun signs nobody back in); and an
+// at a time, that a second click shares and a sign-out ends (a late answer from xgames.fun signs nobody back in); and an
 // older game's economy in loot.json, read when there is no xsolana.json.
 // functions handed to Chrome run in the page: its window, GamesFun and what the page keeps
 /* global window, GamesFun, codes, channels, room, joins */
@@ -19,7 +19,7 @@ const GAME = `<!doctype html><html><head><script src="./gamesfun.js"></script></
 // loot's page client, in miniature: no wallet in this browser
 const WALLETS = 'export const PAGE_RPC = "/rpc"; export async function solanaWallets() { return []; }';
 
-/** A game's host and a stand-in games.fun. `files` answers the game's own files (name → [status, body]). */
+/** A game's host and a stand-in xgames.fun. `files` answers the game's own files (name → [status, body]). */
 function standIn(files = {}) {
   const s = { requests: [], status: [], approved: false, hold: null, seen: [] };
   const server = createServer(async (req, res) => {
@@ -174,7 +174,7 @@ test(
     assert.equal(first?.id, 'x:42', 'the first click is answered');
     assert.equal(second?.id, 'x:42');
     assert.equal(await page.evaluate(() => window.same), true, 'the same promise');
-    assert.equal(g.s.requests.length, 1, 'one request on games.fun');
+    assert.equal(g.s.requests.length, 1, 'one request on xgames.fun');
     assert.equal(await page.evaluate(() => GamesFun.code), null);
   },
 );
@@ -232,7 +232,7 @@ test(
     });
     await page.waitForFunction(() => codes.length > 0);
     g.s.approved = true;
-    // the poll has gone out and is waiting on games.fun
+    // the poll has gone out and is waiting on xgames.fun
     while (!g.s.status.length) await page.waitForTimeout(50);
     await page.evaluate(() => GamesFun.signOut());
     release();

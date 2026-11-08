@@ -1,4 +1,4 @@
-// GamesFun for a Unity WebGL build: games.fun's page client (gamesfun.js, carried here as base64) and the two entry
+// GamesFun for a Unity WebGL build: xgames.fun's page client (gamesfun.js, carried here as base64) and the two entry
 // points GamesFun.cs calls. Written by `xcore add signin`; `xcore add signin` again brings it up to date.
 mergeInto(LibraryManager.library, {
   GamesFunInit: function (objectNamePtr) {

@@ -21,7 +21,7 @@ export default [
   { files: ['loot-page/**'], languageOptions: { globals: { ...globals.browser } } },
   // the page client: a classic script, in a game's page
   { files: ['lib/client/gamesfun.js'], languageOptions: { sourceType: 'script', globals: { ...globals.browser } } },
-  // the database: a Worker module on games.fun
+  // the database: a Worker module on xgames.fun
   {
     files: ['lib/client/server/**'],
     languageOptions: {

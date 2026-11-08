@@ -1,9 +1,9 @@
-// GamesFun: sign-in, saves, leaderboards and the game's own database on games.fun, for a Unity WebGL build.
+// GamesFun: sign-in, saves, leaderboards and the game's own database on xgames.fun, for a Unity WebGL build.
 // Written by `xcore add signin` (with GamesFun.jslib beside it); `xcore add signin` again brings it up to date.
 // Every call answers the JSON text {"data": …, "error": …, "status": …}; parse it with JsonUtility or your own JSON
 // library. Outside a WebGL build (the editor, a desktop build) the error says so and the game plays on. In Player
 // Settings → Publishing Settings, keep Compression Format Disabled (or turn on Decompression Fallback) and keep
-// threads off: games.fun sends files as they are and its pages are not cross-origin isolated.
+// threads off: xgames.fun sends files as they are and its pages are not cross-origin isolated.
 //
 //   string player = await GamesFun.SignIn();                     // from a button press: the player JSON, or "null"
 //   GamesFun.PlayerChanged += json => { … };                     // sign-in and sign-out
@@ -44,7 +44,7 @@ public class GamesFun : MonoBehaviour
 
     private static int next;
     private static readonly Dictionary<int, TaskCompletionSource<string>> pending = new Dictionary<int, TaskCompletionSource<string>>();
-    private const string NotHere = "{\"data\":null,\"error\":\"games.fun runs in a WebGL build only\",\"status\":0}";
+    private const string NotHere = "{\"data\":null,\"error\":\"xgames.fun runs in a WebGL build only\",\"status\":0}";
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
     private static void Boot()
@@ -57,7 +57,7 @@ public class GamesFun : MonoBehaviour
 #endif
     }
 
-    /// <summary>One call into games.fun's page client: a path ("saves.put") and its arguments as a JSON array.</summary>
+    /// <summary>One call into xgames.fun's page client: a path ("saves.put") and its arguments as a JSON array.</summary>
     public static Task<string> Call(string path, string argsJson)
     {
 #if UNITY_WEBGL && !UNITY_EDITOR
@@ -134,14 +134,14 @@ public class GamesFun : MonoBehaviour
         return b.ToString();
     }
 
-    /// <summary>The room the page was opened for (?room=CODE, as games.fun's room links pass it), or null.</summary>
+    /// <summary>The room the page was opened for (?room=CODE, as xgames.fun's room links pass it), or null.</summary>
     public static async Task<string> RoomFromLink()
     {
         var r = await Call("rooms.fromLink", "[]");
         return r == "null" || r.StartsWith("{") ? null : r.Trim('"');
     }
 
-    /// <summary>The link that opens the game in this room (games.fun's play page once published).</summary>
+    /// <summary>The link that opens the game in this room (xgames.fun's play page once published).</summary>
     public static async Task<string> RoomLink(string code)
     {
         var r = await Call("rooms.link", "[" + Str(code) + "]");
@@ -170,7 +170,7 @@ public class GamesFun : MonoBehaviour
         return room;
 #else
         await Task.Yield();
-        RoomError = "games.fun rooms run in a WebGL build only";
+        RoomError = "xgames.fun rooms run in a WebGL build only";
         return null;
 #endif
     }
@@ -236,7 +236,7 @@ public class GamesFun : MonoBehaviour
 }
 
 /// <summary>
-/// A games.fun room (GamesFun.JoinRoom): a relay with a host. The first player in is the host (Id 1); a message goes to
+/// A xgames.fun room (GamesFun.JoinRoom): a relay with a host. The first player in is the host (Id 1); a message goes to
 /// one player (to: their id), to everyone else (0), or to everyone but one (-id). Events come on Unity's main thread.
 /// </summary>
 public class GamesFunRoom

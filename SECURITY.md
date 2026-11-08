@@ -1,6 +1,6 @@
 # Security policy
 
-`xcore` signs people in to games.fun, stores publish tokens, scans games for secrets before they go public and handles
+`xcore` signs people in to xgames.fun, stores publish tokens, scans games for secrets before they go public and handles
 Solana economies, so we take security reports seriously.
 
 ## Reporting a vulnerability
@@ -34,6 +34,6 @@ A key or secret that the publish scan fails to catch is in scope.
 
 ## Out of scope
 
-- the games.fun website and hosting, `@xgamesfun/kit` and `@xgamesfun/solana`: report those to their own projects
+- the xgames.fun website and hosting, `@xgamesfun/kit` and `@xgamesfun/solana`: report those to their own projects
 - vulnerabilities in a game someone published with this tool
 - findings that need an already-compromised machine or account

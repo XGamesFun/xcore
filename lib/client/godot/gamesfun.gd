@@ -1,8 +1,8 @@
-# GamesFun: sign-in, saves, leaderboards and the game's own database on games.fun, for a Godot 4 Web export.
+# GamesFun: sign-in, saves, leaderboards and the game's own database on xgames.fun, for a Godot 4 Web export.
 # Written by `xcore add signin` (autoloaded as GamesFun in project.godot); `xcore add signin` again brings it up to date.
-# It loads games.fun's page client (gamesfun.js, carried inside this file) into the page and calls it. Every call
+# It loads xgames.fun's page client (gamesfun.js, carried inside this file) into the page and calls it. Every call
 # answers a Dictionary {data, error, status}; outside a Web export (the editor, a desktop build) the error says so and
-# the game plays on. Export for the Web with Thread Support off: games.fun pages are not cross-origin isolated.
+# the game plays on. Export for the Web with Thread Support off: xgames.fun pages are not cross-origin isolated.
 #
 #   var player = await GamesFun.sign_in()          # from a button press: the player signs in -> Dictionary or null
 #   GamesFun.player_changed.connect(func(p): ...)  # sign-in and sign-out (p: Dictionary or null)
@@ -12,7 +12,7 @@
 #   await GamesFun.scores_submit("best", 1200)     # leaderboards: r.data {improved, best, rank}
 #   var top = await GamesFun.scores_top("best")    # top.data: [{rank, player, name, score, at}]
 #   await GamesFun.db_add("levels", {"name": "Moon"})  # the game's own database (xcore add database)
-#   multiplayer.multiplayer_peer = await GamesFun.join_room(code)  # Godot's multiplayer over games.fun (xcore add multiplayer)
+#   multiplayer.multiplayer_peer = await GamesFun.join_room(code)  # Godot's multiplayer over xgames.fun (xcore add multiplayer)
 #   await GamesFun.loot_call("shop")               # the game's Solana economy (xcore loot add): loot_ready, loot_connect
 #
 # A script that also runs without the autoload (headless tests, `godot --script`) fails to parse on the bare name
@@ -113,7 +113,7 @@ func _set_player(p):
 
 func _run(path: String, args: Array):
 	if _bridge == null:
-		return {"data": null, "error": "games.fun runs in a Web export only", "status": 0}
+		return {"data": null, "error": "xgames.fun runs in a Web export only", "status": 0}
 	var pending = _Pending.new()
 	_keep.append(pending)
 	_bridge.run(path, JSON.stringify(args), pending.callback)
@@ -241,7 +241,7 @@ func room_code() -> String:
 	return s
 
 
-## The room this page was opened for (games.fun's room links and their X cards pass ?room=CODE), or "".
+## The room this page was opened for (xgames.fun's room links and their X cards pass ?room=CODE), or "".
 func room_from_link() -> String:
 	if _bridge == null:
 		return ""
@@ -249,7 +249,7 @@ func room_from_link() -> String:
 	return str(c) if c != null else ""
 
 
-## The link that opens the game in this room (games.fun's play page once published; its X card shows the room).
+## The link that opens the game in this room (xgames.fun's play page once published; its X card shows the room).
 func room_link(code: String) -> String:
 	if _bridge == null:
 		return ""
@@ -304,5 +304,5 @@ func api(path: String, init := {}):
 	return await _run("api", [path, init])
 
 
-# games.fun's page client (lib/client/gamesfun.js), as base64
+# xgames.fun's page client (lib/client/gamesfun.js), as base64
 const SOURCE = "__GAMESFUN_SOURCE_B64__"

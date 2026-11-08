@@ -1,5 +1,5 @@
 // `xcore backend use custom`: a backend you already run on the public internet (an API, a WebSocket server). It
-// writes backend.json with its URL and the origins the page talks to, so games.fun's play host lets the published page
+// writes backend.json with its URL and the origins the page talks to, so xgames.fun's play host lets the published page
 // reach them (its page policy opens to exactly those). Nothing is signed in to or deployed; its keys stay on its
 // server. A backend the kit connects for you (Supabase, Railway) is the kit's: `backend connect` with @xgamesfun/kit.
 import { mkdir, writeFile } from 'node:fs/promises';

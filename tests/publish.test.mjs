@@ -1,4 +1,4 @@
-// Publishing a brought game against a stand-in games.fun: sign in, the files and checks, only new files uploaded, the
+// Publishing a brought game against a stand-in xgames.fun: sign in, the files and checks, only new files uploaded, the
 // same link updated, a secret refused, sign out; a game the kit made is never published by this package alone.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -117,7 +117,7 @@ test('a timeout on the last step says the game may be published, and publishing 
       /may have gone through anyway[\s\S]*--status[\s\S]*updates this same game/.test(e.message),
   );
   const link = JSON.parse(await readFile(path.join(dir, '.gamesfun', 'publish.json'), 'utf8'))[g.origin];
-  assert.equal(link.projectId, 'g1', 'the game is remembered as soon as games.fun made it');
+  assert.equal(link.projectId, 'g1', 'the game is remembered as soon as xgames.fun made it');
   g.state.completeStatus = null;
   g.state.calls.length = 0;
   await publishGame(dir, { origin: g.origin, env, check: passing });
