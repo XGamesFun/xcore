@@ -74,5 +74,5 @@ export default {
         console.log(`${what}\n${describeGame(r)}`);
       }
       return 0;
-    }),
+    }, args),
 };

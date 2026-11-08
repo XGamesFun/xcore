@@ -62,7 +62,7 @@ export default {
         );
         for (const s of r.steps) console.log(`  - ${s}`);
         return 0;
-      });
+      }, args);
     const xsolana = solanaCommand();
     if (!xsolana) {
       console.error(

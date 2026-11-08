@@ -51,5 +51,5 @@ export default {
       for (const w of r.written.length ? r.written : ['already up to date']) console.log(`  ${w}`);
       console.log('\nNext:');
       for (const s of r.steps) console.log(`  - ${s}`);
-    }),
+    }, args),
 };

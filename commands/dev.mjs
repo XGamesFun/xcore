@@ -70,5 +70,5 @@ export default {
       });
       await dev.close();
       return 0;
-    }),
+    }, args),
 };

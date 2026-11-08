@@ -27,7 +27,7 @@ Set `GAMESFUN_DEBUG=1` to print stack traces for errors.
 | Path            | What it holds                                                                                                  |
 | --------------- | -------------------------------------------------------------------------------------------------------------- |
 | `bin/xcore.mjs` | the command's entry point: loads `commands/` and hands other commands to the kit                               |
-| `commands/`     | one module per command (`adopt`, `check`, `backend`, `loot`, `login`, `logout`, `publish`)                     |
+| `commands/`     | one module per command (`adopt`, `check`, `dev`, `publish`, `add`, `backend`, `loot`, `secret`, …)             |
 | `lib/`          | everything the commands use; `lib/publish/` is the publish pipeline, `lib/server/` the `gf-server-v1` contract |
 | `loot-page/`    | the browser-side wallet helper copied into a game with an economy                                              |
 | `skills/`       | instructions for coding agents                                                                                 |

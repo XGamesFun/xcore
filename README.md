@@ -404,7 +404,7 @@ signs, with no key for you to keep. When the amount depends on the result (paid 
 bounds runs before paying, when there are entry fees or a prize pool, or when results come faster than 120 an hour,
 give the server its own key: `xcore add vouchers` writes `server/vouchers.js` (its `PAY.check` is what your server
 checks) and a test key in `.dev.vars` for `xcore dev`. In order: `xcore publish`, `xcore secret set VOUCHER_SEED
---new-key` (the live key, made on games.fun and never on your machine: it prints the address), that address into the
+--new-key` (the live key: made here, sent only to games.fun and never kept on your machine; it prints the address), that address into the
 grant in `xsolana.json`, `xcore loot approve`, `xcore publish`. A voucher pays only a wallet the player proved is
 theirs (signed in with it, or linked with `gf.loot.link()`), and since a wallet is free, pay rewards worth farming
 only to players signed in with X (`VOUCHERS.payOnly`). A grant names up to three keys, so the keeper and your own can
@@ -439,6 +439,13 @@ check on exactly the files built), and uploads its published folder with its `se
 
 `publish --check` runs steps 1 to 4 above without publishing (`--check --verify` adds the check and remembers a pass), `--status`
 shows the link and the account, `--draft` saves a private version, `--new` makes a new game with a new link.
+
+**For scripts and agents**: every command takes `--json`. A failure is then also printed on stdout as
+`{ "ok": false, "error", "code", "state", "next" }`: `code` is why (`usage`, `login`, `files`, `secrets`, `build`,
+`size`…), `next` the command that moves it on. `login --status --json` and `publish --status --json` name the sign-in's
+`state` (`signed-in`, `signed-out`, `expired`, or `unreadable` when the token is kept where this session cannot read
+it, such as the Secret Service over SSH); `publish --status --json` also names the game's `link` (`never`, `started`,
+`public`, `draft`, or `draft-over-public`); `adopt --json` gives `state` (`refused`, `fix`, `ready`) and `next`.
 
 **Where the token is kept**: the macOS keychain; on Linux the Secret Service (`secret-tool`) when it runs, else a file
 only you can read under `~/.config/gamesfun/secrets/`; on Windows a file encrypted for your user (DPAPI) under

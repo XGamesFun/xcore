@@ -53,7 +53,7 @@ test('set, list, delete: the folder’s game, the saved token, the routes; refus
     /not on https:\/\/studio.example yet: publish it with its server\/ first/,
   );
   await writeFile(path.join(dir, '.gamesfun', 'publish.json'), JSON.stringify({ [ORIGIN]: { projectId: 'g-77' } }));
-  await assert.rejects(listSecrets(dir, opts), /not signed in/);
+  await assert.rejects(listSecrets(dir, opts), /not signed in/i);
   await saveSecret(credentialKey(ORIGIN), 'gfk_test_token', { studio: ORIGIN, email: 'a@example.com' }, { env });
 
   const value = 'made-up-' + Date.now();

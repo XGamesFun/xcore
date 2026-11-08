@@ -2,14 +2,22 @@
 // list fails "it stays inside its origins". Skipped where there is no Chrome, Edge or Chromium (and no Playwright one).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { adopt } from '../lib/publish/adopt.mjs';
-import { findChrome, playwrightChromium } from '../lib/browser.mjs';
+import { findChrome, playwrightChromium, playwrightCli } from '../lib/browser.mjs';
 import { pageVerify } from '../lib/check.mjs';
 import { fixture, tempDir } from './helpers.mjs';
 
 const browser = findChrome() ?? ((await playwrightChromium()).installed ? true : null);
 const skip = browser ? false : 'no Chrome, Edge or Chromium here';
+
+// runs everywhere: CI has Chrome, so the download a machine without one takes is never reached there
+test("playwright-core's command line, which downloads Chromium where there is no Chrome, is found", () => {
+  const cli = playwrightCli();
+  assert.equal(path.basename(cli), 'cli.js');
+  assert.ok(existsSync(cli), cli);
+});
 
 test(
   'a static game passes: it fits the hosting, starts clean at both sizes, stays inside its origins',

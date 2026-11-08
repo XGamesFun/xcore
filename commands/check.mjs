@@ -56,5 +56,5 @@ export default {
         );
       }
       return r.pass ? 0 : 1;
-    }),
+    }, args),
 };

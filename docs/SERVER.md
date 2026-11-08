@@ -321,7 +321,7 @@ xcore add vouchers <folder>      # needs the economy (xcore loot add) with a gra
 It writes `server/vouchers.js` (routed at `api/vouchers/`, with its Durable Object `GameVouchers`), copies loot's
 voucher code into `server/gf-loot/` (bundled with the server, never a public file), makes a **test key** for
 `xcore dev` with its seed as `VOUCHER_SEED` in `.dev.vars` (and, in a folder kept in git, `.dev.vars` into
-`.gitignore`), and says its address. The **live key** is made on games.fun, so it is never on your machine:
+`.gitignore`), and says its address. The **live key** is made here and sent to games.fun only, never kept on your machine:
 
 1. `xcore publish`, then `xcore secret set VOUCHER_SEED --new-key`: a new key made and sent to the server only; it
    prints the key's address.
@@ -332,7 +332,7 @@ voucher code into `server/gf-loot/` (bundled with the server, never a public fil
    page's JSON, the signed-in player and `env`, and answers `{grant, round, amount}` (grant: its key or id; round:
    the result's own id, any text, used once; amount: base units, or `'grant'` for the grant's own amount, always
    named so a forgotten amount never pays the most) or `{why}` to refuse. Until you write it, nothing is paid. Count a
-   player's daily total in `PAY.paid` (it runs once a voucher is signed), not in `check`.
+   player's daily total in `PAY.paid` (it runs once a round, after its voucher is signed; again only if it threw), not in `check`.
 4. Who is paid: set `VOUCHERS.payOnly` to `'x'` for rewards worth farming (above, "Who gets paid"); the grant's
    `perDay` total caps the rest.
 5. `xcore loot approve` (the grant's change goes live), then `xcore publish`. `api/vouchers/key` answers the live

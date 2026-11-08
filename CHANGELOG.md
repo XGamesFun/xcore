@@ -2,7 +2,35 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
-## 0.1.0 (unreleased)
+## Unreleased
+
+Every lifecycle the commands report now has one named state, one place that decides it, and the same answer for a
+person and for `--json`.
+
+- Sign-in: `login --status`, `publish --status` and every signed call name the state (`signed-in`, `signed-out`,
+  `expired`, `unreadable`). An expired sign-in is refused in its own words and gives way to GitHub's OIDC token in
+  Actions; a token is read from the store its record names, so a sign-in saved over SSH is never shadowed by an older
+  keyring token; `logout` says why a token was not revoked (`why`: `unreadable`, `ended`, `offline`, `refused`).
+- `publish --status` names the game's `link` (`never`, `started`, `public`, `draft`, `draft-over-public`): an
+  interrupted first publish no longer reads "version undefined", and a draft over a public game says the earlier
+  version is the one playing.
+- `--json` failures are printed on stdout too, as `{ ok: false, error, code, state, next }`; `adopt --json` gives
+  `state` (`refused`, `fix`, `ready`) and `next`.
+- `adopt` again with one of `--build`, `--out` or `--static` keeps the rest of `gamesfun.json` (and says what it
+  kept); `add` refuses a broken `gamesfun.json` or test key before writing any file.
+- Vouchers: a round goes free → reserved → signed in one place (`roundStep`); a round whose signing failed can be signed
+  again by its wallet; `PAY.paid` runs once a round, never twice for two asks at once or a renewal, and again if it
+  threw; a voucher signed with an earlier key is signed anew.
+- Rooms: two players hosting one code at once get one host, and a room never passes `maxPlayers`.
+- `xcore dev`: saves made at once on start are all kept; an install interrupted by Ctrl-C no longer blocks the next one
+  for 10 minutes; `close()` stops a pending reload; a port in use stops the started game server.
+- The page client: two sign-in clicks share one sign-in, sign-out ends a pending one, and a late answer never signs the
+  player back in; a local room's "taken" and "nobody here" answers settle the join; an older game's `loot.json` is read
+  when it has no `xsolana.json`.
+- `check` downloads Chromium where there is no Chrome (it failed: playwright-core's exports); its progress goes to
+  stderr. `adopt`'s next step names the folder; `check --port 4000 <game>` goes to the kit for a game it made.
+
+## 0.1.0 (2026-11-08)
 
 The first release: games.fun from the command line, the one place to start: a web game you already made is brought,
 checked, given a backend and an economy, and published; an idea for a game goes to the kit.
@@ -30,7 +58,7 @@ checked, given a backend and an economy, and published; an idea for a game goes 
   Unity `LootLink()`); a wallet the page names is refused. `VOUCHERS.payOnly: 'x'` pays only players signed in with X,
   a grant with `perPerson` pays only them, and `VOUCHERS.perMinute` limits a player's requests. It makes a test key
   for `xcore dev` (`VOUCHER_SEED` in `.dev.vars`, kept out of git); `xcore secret set VOUCHER_SEED --new-key` makes the
-  live key on games.fun, never on the machine, and prints its address for the grant.
+  live key, sends it only to games.fun and never keeps it on the machine, and prints its address for the grant.
 - Paying a result, in docs/SERVER.md, the README and the skill: games.fun's keeper (`env.GF.loot.report`) for prizes
   fixed by place, the server's own key for amounts it works out, replayed or bounded runs, entry fees and prize pools,
   or more than 120 results an hour. A grant names up to three keys, so both can pay it while a game moves over.

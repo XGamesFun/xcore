@@ -33,7 +33,7 @@ export const run = (args, { cwd = ROOT, env = {} } = {}) =>
     cwd,
     encoding: 'utf8',
     timeout: 300_000,
-    env: { ...process.env, GAMESFUN_KIT: '', GAMESFUN_NO_UPDATE_CHECK: '1', ...env },
+    env: { ...process.env, GAMESFUN_KIT: '', ...env },
   });
 
 /** A check that passes without Chrome (publish's own runs the page check: tests/check.test.mjs). */

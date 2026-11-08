@@ -75,7 +75,13 @@ export function publishCommand({
             console.log(
               s.signedIn
                 ? `Signed in to ${origin} as ${s.signedIn.email ?? s.signedIn.as}.`
-                : `Not signed in to ${origin} (${CMD} login).`,
+                : s.signIn.oidcError
+                  ? `GitHub's OIDC token could not be had: ${s.signIn.oidcError}`
+                  : s.signIn.state === 'expired'
+                    ? `The sign-in to ${origin} ended on ${String(s.signIn.expiresAt).slice(0, 10)} (${CMD} login).`
+                    : s.signIn.state === 'unreadable'
+                      ? `Signed in to ${origin} as ${s.signIn.email}, but this session cannot read the token (${CMD} login here).`
+                      : `Not signed in to ${origin} (${CMD} login).`,
             );
             console.log(statusLine(named(dir), origin, s));
           }
@@ -136,7 +142,7 @@ export function publishCommand({
             ).join('\n'),
           );
         return r.url || values.draft ? 0 : 1;
-      }),
+      }, args),
   };
 }
 
@@ -148,13 +154,23 @@ const failedNames = failed => failed.map(c => `${c.n} ${c.name}`).join('; ');
 
 /** `publish --status`: where this folder's game is published, and whether it is live. */
 function statusLine(where, origin, s) {
-  if (!s.known) return `${where} has not been published to ${origin} yet.`;
-  const at = s.known.url ? `published at ${s.known.url}` : 'a private draft';
   let live = '';
   if (s.live?.error) live = ` games.fun says: ${s.live.error}`;
   else if (s.live) live = s.live.published ? ` Live: version ${s.live.version?.number}.` : ' Not live now.';
-  const own = s.known.gameUrl ? `\n  the game itself: ${s.known.gameUrl}` : '';
-  return `${where} is ${at} (version ${s.known.lastVersion}).${live}${own}`;
+  const own = s.known?.gameUrl ? `\n  the game itself: ${s.known.gameUrl}` : '';
+  const v = s.known?.lastVersion;
+  switch (s.link) {
+    case 'never':
+      return `${where} has not been published to ${origin} yet.`;
+    case 'started':
+      return `${where} was started on ${origin}, but no version finished going up. Run ${CMD} publish again: it goes on with the same game.${live}`;
+    case 'draft':
+      return `${where} is a private draft (version ${v}).${live}${own}`;
+    case 'draft-over-public':
+      return `${where} is published at ${s.known.url}; its latest version (${v}) is a private draft, so an earlier version is the one playing.${live}${own}`;
+    default:
+      return `${where} is published at ${s.known.url} (version ${v}).${live}${own}`;
+  }
 }
 
 /** `publish --check` when nothing is refused: what goes up, and the server bundle when there is one. */
