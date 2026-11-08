@@ -361,7 +361,7 @@ test("workers from the root, SharedArrayBuffer, no tab icon; xcore's own .gamesf
   const warns = r.warn.map(w => w.what).join('\n');
   assert.match(
     warns,
-    /sim\.js:2 uses SharedArrayBuffer or Atomics\.wait: a xgames\.fun page is not cross-origin isolated/,
+    /sim\.js:2 uses SharedArrayBuffer or Atomics\.wait: an xgames\.fun page is not cross-origin isolated/,
   );
   assert.match(warns, /index\.html names no tab icon/);
   assert.doesNotMatch(warns, /hidden files never go up: \.gamesfun/);

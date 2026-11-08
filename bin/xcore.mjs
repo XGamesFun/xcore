@@ -124,7 +124,7 @@ export async function main([name, ...args]) {
     console.error(
       own
         ? `${NO_KIT}\n\n${own.usage ?? ''}`
-        : `"${name}" is not a xgames.fun command. ${NO_KIT}\n\n${help(commands, null)}`,
+        : `"${name}" is not an xgames.fun command. ${NO_KIT}\n\n${help(commands, null)}`,
     );
     return 1;
   }

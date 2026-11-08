@@ -80,7 +80,7 @@ test("the platform's store: its own tokens only, for this game, and the hosted l
   assert.equal(
     s.verifyPlayer('eyJhbGciOiJFZERTQSJ9.e30.sig').code,
     'bad',
-    'a xgames.fun token is checked only when hosted',
+    'an xgames.fun token is checked only when hosted',
   );
   assert.equal((await s.run('saves.put', [player.id, 'main', { level: 3 }])).ok, true);
   assert.deepEqual((await s.run('saves.get', [player.id, 'main'])).value, { level: 3 });
