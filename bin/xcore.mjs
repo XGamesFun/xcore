@@ -9,6 +9,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
+import { parseArgs } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { CMD } from '../lib/command.mjs';
 
@@ -39,9 +40,14 @@ export function findKit({ cwd = process.cwd(), env = process.env, here = HERE } 
   return null;
 }
 
+// the flags of check, publish, dev and backend that take a value: their value is never the game's folder
+const VALUE_FLAGS = Object.fromEntries(
+  ['out', 'port', 'title', 'url', 'origin'].map(f => [f, { type: 'string', multiple: true }]),
+);
+
 /** Does this command, with these arguments, belong to the kit even though this package has a command by its name? */
-function kitsTurn(name, args) {
-  const positionals = args.filter(a => !a.startsWith('-'));
+export function kitsTurn(name, args) {
+  const { positionals } = parseArgs({ args, options: VALUE_FLAGS, strict: false, allowPositionals: true });
   if (name === 'backend') return !(positionals[0] === 'use' && positionals[1] === 'custom');
   if (name === 'publish' || name === 'check' || name === 'dev') {
     const dir = path.resolve(positionals[0] ?? '.');
@@ -72,9 +78,8 @@ function runKit(kit, args) {
   });
 }
 
-const NO_KIT = `That is the kit's (@xgamesfun/kit): it makes games, the studio page, verify and the build loop. Get it with
-  git clone https://github.com/XGamesFun/games-kit && cd games-kit && npm ci
-then run xcore inside that folder, or set GAMESFUN_KIT=<folder> to use a kit from anywhere.`;
+const NO_KIT = `That is the kit's (@xgamesfun/kit): it makes games, the studio page, verify and the build loop. The kit is
+not released yet; with a checkout of it, run xcore inside that folder, or set GAMESFUN_KIT=<folder> to use it from anywhere.`;
 
 function help(commands, kit) {
   const lines = ['Usage: xcore <command> [options]', '', 'games.fun:'];

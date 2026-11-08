@@ -18,7 +18,7 @@ const run = (args, { env = {} } = {}) =>
   new Promise(resolve => {
     const child = spawn(process.execPath, [BIN, ...args], {
       cwd: ROOT,
-      env: { ...process.env, GAMESFUN_KIT: '', GAMESFUN_NO_UPDATE_CHECK: '1', ...env },
+      env: { ...process.env, GAMESFUN_KIT: '', ...env },
     });
     let stdout = '',
       stderr = '';

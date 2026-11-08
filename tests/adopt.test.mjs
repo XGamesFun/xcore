@@ -26,6 +26,20 @@ test('plain static files are their own published folder', async t => {
     reportLines(r).join('\n'),
     /plain static files[\s\S]*Next: (npx -y @xgamesfun\/xcore|xcore|npx xcore|node bin\/xcore\.mjs) check/,
   );
+  // the next commands name the folder, unless they run in it
+  const next = shown => reportLines(r, { shown }).at(-1);
+  assert.match(
+    next(() => 'my-game'),
+    / check my-game \(.* publish my-game\.$/,
+  );
+  assert.match(
+    next(() => 'my game'),
+    / check "my game" \(/,
+  );
+  assert.match(
+    next(() => '.'),
+    / check \(.* publish\.$/,
+  );
 });
 
 test('a project with a build is built; its output is published and its public folder takes the files gamesfun adds', async t => {

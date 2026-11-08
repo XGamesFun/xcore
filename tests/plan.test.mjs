@@ -63,7 +63,7 @@ test('plan: the account, a game, activate and deactivate, through the routes gam
   const opts = { origin: ORIGIN, env, fetchImpl };
   await assert.rejects(gamePlan(dir, opts), /not on https:\/\/studio.example yet: publish it first/);
   await writeFile(path.join(dir, '.gamesfun', 'publish.json'), JSON.stringify({ [ORIGIN]: { projectId: 'g-77' } }));
-  await assert.rejects(gamePlan(dir, opts), /not signed in/);
+  await assert.rejects(gamePlan(dir, opts), /not signed in/i);
   await saveSecret(credentialKey(ORIGIN), 'gfk_test_token', { studio: ORIGIN, email: 'a@example.com' }, { env });
 
   assert.equal((await gamePlan(dir, opts)).tier, 'free');

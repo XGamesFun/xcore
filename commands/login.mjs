@@ -1,7 +1,7 @@
 import { createInterface } from 'node:readline/promises';
 import { guard, parse, printJson } from '../lib/cli.mjs';
 import { openUrl } from '../lib/open.mjs';
-import { login, savedLogin, studioOrigin } from '../lib/publish/client.mjs';
+import { login, signInState, storeWords, studioOrigin } from '../lib/publish/client.mjs';
 import { storeName } from '../lib/credentials.mjs';
 import { CMD } from '../lib/command.mjs';
 
@@ -23,17 +23,9 @@ export default {
       const { values } = parse(args, { code: { type: 'boolean' }, status: { type: 'boolean' } }, usage);
       const origin = studioOrigin();
       if (values.status) {
-        const s = await savedLogin(origin);
-        const out = s
-          ? { studio: origin, email: s.email, expiresAt: s.expiresAt, store: s.store }
-          : { studio: origin, signedIn: false };
-        if (values.json) printJson(out);
-        else
-          console.log(
-            s
-              ? `Signed in to ${origin} as ${s.email} until ${s.expiresAt} (token in ${s.store === 'file' ? 'a file only you can read' : s.store}).`
-              : `Not signed in to ${origin}. Run: ${CMD} login`,
-          );
+        const { token: _token, words, ...s } = await signInState(origin);
+        if (values.json) printJson({ ...s, signedIn: s.state === 'signed-in' });
+        else console.log(s.state === 'signed-in' ? words : `${words} Run: ${s.next}`);
         return 0;
       }
       const rl = values.code ? createInterface({ input: process.stdin, output: process.stderr }) : null;
@@ -48,11 +40,11 @@ export default {
         if (values.json) printJson({ studio: origin, ...r });
         else
           console.log(
-            `Signed in to ${origin} as ${r.email}. The token is kept in ${r.store === 'file' ? 'a file only you can read' : r.store === 'dpapi' ? 'a file encrypted for your Windows user' : r.store === 'keychain' ? 'the macOS keychain' : 'the Secret Service'} until ${new Date(r.expiresAt).toISOString().slice(0, 10)}. Next: ${CMD} publish`,
+            `Signed in to ${origin} as ${r.email}. The token is kept in ${storeWords(r.store)} until ${new Date(r.expiresAt).toISOString().slice(0, 10)}. Next: ${CMD} publish`,
           );
         return 0;
       } finally {
         rl?.close();
       }
-    }),
+    }, args),
 };

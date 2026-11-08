@@ -85,5 +85,5 @@ export default {
           `\nThis folder's ${stale.join(', ')} is older than this xcore's: on its own domain an older copy can't tell which game it is, so sign-in fails there. Run ${CMD} add signin ${dir}, then ${CMD} publish ${dir}, so the page knows its domain.`,
         );
       return 0;
-    }),
+    }, args),
 };

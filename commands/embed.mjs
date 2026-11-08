@@ -53,5 +53,5 @@ export default {
         );
       } else console.log(r.changed ? `${r.origin} may no longer show the game.` : `${r.origin} was not on the list.`);
       return 0;
-    }),
+    }, args),
 };

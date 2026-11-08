@@ -133,5 +133,5 @@ export default {
           );
       }
       return 0;
-    }),
+    }, args),
 };

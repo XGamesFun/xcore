@@ -133,7 +133,7 @@ the result, when the server replays or bounds runs, for entry fees or a prize po
 the own key, run `xcore add vouchers <folder>`: it writes `server/vouchers.js` and a test key for `xcore dev` (its
 seed in `.dev.vars`, kept out of git). Then, in order: write `PAY.check` with the person (what their server checks
 before it pays; nothing is paid until it is written) and count payouts in `PAY.paid`; they publish; they run `xcore
-secret set VOUCHER_SEED --new-key` (the live key, made on games.fun and never on their machine; it prints the address);
+secret set VOUCHER_SEED --new-key` (the live key: made here, sent to games.fun only and never kept on their machine; it prints the address);
 that address goes in the grant's `vouchers` (`xcore loot check`); they approve and publish again. Never read the seed
 out of `.dev.vars` or repeat it.
 

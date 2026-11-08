@@ -66,5 +66,5 @@ export default {
           `Wrote ${shown(file)}: the published page may reach ${config.origins.join(', ')}. Next: ${CMD} check, which fails on a request to any other origin.`,
         );
       return 0;
-    }),
+    }, args),
 };

@@ -3,7 +3,7 @@
 import { guard, parse, printJson } from '../lib/cli.mjs';
 import path from 'node:path';
 import { shown } from '../lib/games.mjs';
-import { adopt, reportLines } from '../lib/publish/adopt.mjs';
+import { adopt, adoptNext, reportLines } from '../lib/publish/adopt.mjs';
 import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore adopt [folder] [--build "<command>"] [--out <dir>] [--static <dir>] [--no-build] [--json]
@@ -49,9 +49,11 @@ export default {
         noBuild: values['no-build'] === true,
         onLine: values.json ? () => {} : l => console.error(`  build: ${l}`),
       });
-      if (values.json) printJson({ ...r, dir: shown(r.dir) });
-      else console.log(reportLines(r, { shown }).join('\n'));
+      if (values.json) {
+        const { state, next } = adoptNext(r, { shown });
+        printJson({ ...r, dir: shown(r.dir), state, next });
+      } else console.log(reportLines(r, { shown }).join('\n'));
       // 1 while anything is refused or left to fix (for scripts and agents); 0 when only "worth a look" remains
       return r.refused.length || r.fix.length ? 1 : 0;
-    }),
+    }, args),
 };
