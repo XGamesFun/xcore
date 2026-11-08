@@ -4,6 +4,17 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 
 ## Unreleased
 
+Project files (STORAGE.md §8.6–8.8):
+
+- `env.GF.files` (`put`, `get`, `head`, `list`, `delete`, `usage`) in the contract's `GF_METHODS` and under `xcore dev`, with
+  xgames.fun's path rules and caps (25 MB a file, Free's 100 MB); the files are kept in `.gamesfun/dev/files/`.
+- `xcore dev` serves the public files on a port of their own, with the files domain's headers (nosniff,
+  `sandbox; default-src 'none'`, CORP cross-origin, `*` CORS, no referrer), its types (media, fonts, JSON and text
+  inline; anything else a download), ETag and one range; the page's policy lets it load pictures, sounds, fonts and
+  data from there, as the play edge does for `<slug>.xgamesusercontent.com`.
+- `xcore files ls|put|get|rm|usage`, here or `--live` through xgames.fun's owner routes, refused in words while
+  `/api/kit/me` does not list `"files"`; publish refuses a server that uses `env.GF.files` until it does.
+
 A database of the game's own, on D1 (xgames.fun's storage interface, STORAGE.md §8.1–8.5):
 
 - `gamesfun.json` → `database` (`engine`, `binding`, `migrations`, `collections`), checked as xgames.fun checks it:

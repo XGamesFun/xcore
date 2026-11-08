@@ -51,11 +51,13 @@ export default {
           throw new Error(`port ${port} is in use: pick another with --port <n>`, { cause: e });
         throw e;
       }
-      if (values.json) printJson({ url: dev.url, origin: dev.origin, server: dev.server, rpc: dev.rpc });
+      if (values.json)
+        printJson({ url: dev.url, origin: dev.origin, files: dev.files, server: dev.server, rpc: dev.rpc });
       else {
         say(`\n${shown(dir)} on this machine: ${dev.url}`);
         say(`  server: ${dev.server ? (dev.server.running ? 'running' : 'not running (above)') : 'none (no server/)'}`);
         say(`  sign-in, saves, scores: a local player; kept in ${shown(dev.store.file)}`);
+        say(`  project files (env.GF.files, xcore files): public ones at ${dev.files}/, a site of their own`);
         say(`  economy RPC: ${dev.rpc}`);
         say('Ctrl+C stops it.');
       }

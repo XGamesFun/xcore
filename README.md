@@ -26,6 +26,7 @@ xcore dev ./my-game                        # play it here as xgames.fun hosts it
 xcore add signin ./my-game                 # players sign in (X or a wallet); saves and leaderboards
 xcore add database ./my-game               # a database of its own (D1), put up with the game
 xcore db query "SELECT * FROM players"     # read it here, or --live on xgames.fun
+xcore files put ./level.json levels/1.json --public --live   # a file its server and page read
 xcore add multiplayer ./my-game            # rooms players share (Godot's own multiplayer runs over them)
 xcore backend use custom ./my-game --url https://api.my-game.example   # only if it calls a backend you run
 xcore loot add ./my-game                   # only if it gets an economy (a Solana economy on loot)
@@ -188,6 +189,7 @@ has behind it, so the whole game runs before it is published:
 | `http://127.0.0.1:8787/game/` | the published files (it runs `page.build` first, unless `--no-build`), with the play host's headers                                                                                                                                                                                                                                                                                                                |
 | `/game/api/*`                 | the game's `server/` under workerd, the runtime xgames.fun runs it on: Durable Objects with their storage kept, WebSockets, `env.GF`, the game's database (a local D1 in `.gamesfun/dev/d1/`, its migrations applied), and its secrets from `.dev.vars`. A change under `server/` or to `.dev.vars` reloads it. Miniflare (with workerd, about 140 MB) is installed once, the first time a game with a server runs |
 | `/platform/v1/*`              | sign-in, saves and leaderboards: `gamesfun.js` signs in a local player (each tab its own, so two tabs play a room together), and `env.GF.verifyPlayer` accepts its token. Saves and scores are kept in `.gamesfun/dev-platform.json`, never published                                                                                                                                                              |
+| `http://127.0.0.1:8788/`      | the game's public project files (`env.GF.files`, `xcore files`), kept in `.gamesfun/dev/files/`: another origin, as `<slug>.xgamesusercontent.com` is to the published game                                                                                                                                                                                                                                        |
 | `/loot/v1/rpc`                | the economy's Solana devnet RPC: xgames.fun's shared relay (what a published page talks to unless the game brings its own: `xcore add rpc`), or your own with `XSOLANA_RPC_URL` in `.env` (its URL is never shown; a call the shared relay would refuse is said in the terminal). The economy's calls answer once it is live on devnet (`xcore loot approve`)                                                      |
 
 Games made with any engine get all of it through `gamesfun.js` (`xcore add signin`): on a plain local server it stands
@@ -279,6 +281,26 @@ shared by all its players): read and write when something happens, not every fra
 it back as it was up to 30 days ago, after showing what it would do; for a game with an economy it warns that loot
 balances and payouts on chain are not rolled back. A game made with xcore 0.1.0 keeps its `server/database.js` (a
 Durable Object, the older way), which goes on working.
+
+### Project files: `xcore files`
+
+A game with a server keeps files of its own on xgames.fun: replays, generated levels, a large saved world, content
+packs (Free 100 MB, Creator 10 GB, Scale 100 GB; 25 MB a file). Its server writes and reads them with
+`env.GF.files` ([docs/SERVER.md](docs/SERVER.md), "Project files"), and you put them from your machine:
+
+```bash
+xcore files put ./levels/forest-3.json levels/forest-3.json --public --live   # served at https://<slug>.xgamesusercontent.com/levels/forest-3.json
+xcore files ls levels/ --live
+xcore files get replays/run-1.json --live --out run-1.json
+xcore files rm levels/old.json --live
+xcore files usage --live
+```
+
+A public file is served from a site of its own, which the browser treats as a stranger to the game: it cannot use the
+player's sign-in or call the game's `api/`, and anything that could carry a script (HTML, SVG, JavaScript) is a
+download, never a page. The game's page may load its pictures, sounds and fonts and `fetch` its data. Players never
+write here. Without `--live`, `xcore files` works on the files `xcore dev` gives the server, kept in
+`.gamesfun/dev/files/` and served on a port of their own.
 
 ### Multiplayer: `xcore add multiplayer`
 

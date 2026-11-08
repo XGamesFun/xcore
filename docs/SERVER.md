@@ -160,6 +160,7 @@ Every call answers `{ok: true, …}` or `{ok: false, code, why}` (`why` is words
 | `GF.scores.submit(board, player, score, {name, order, writer})`, `.setup(board, {order, writer})`, `.top(board, {limit, offset})`, `.best(board, player)`, `.remove(board, player)`, `.drop(board)` | leaderboards: a player's best is kept; `order` `"high"` (default) or `"low"`; `writer: "server"`: only the server writes the board (or every board a pattern names: `daily-*`, `*`); `drop`: the board gone, its place among the 16 free |
 | `GF.loot.report({round, endedAt, winners})`, `GF.loot.status()`                                                                                                                                     | a result that pays prizes by place: xgames.fun's keeper signs it with the game's host key (set up by the owner in Studio); for amounts your server works out, your own key (below, "Paying a result")                                    |
 | `GF.info()`                                                                                                                                                                                         | `{ok, contract, gameId, slug}`                                                                                                                                                                                                           |
+| `GF.files.put(path, body, {type, public})`, `.get(path)`, `.head(path)`, `.list({prefix, after})`, `.delete(path)`, `.usage()`                                                                      | the game's project files (below, "Project files"): replays, levels, content packs; public ones on the files site                                                                                                                         |
 
 `player` is the game's own word for a player; normally `verifyPlayer`'s `sub`, so nobody can write another player's.
 The page writes the same saves and boards for its own signed-in player (`/platform/v1/*`), so a board is the player's
@@ -173,6 +174,49 @@ nobody fills a day's board ahead of time; `GF.scores.setup('*', {writer: 'server
 boards at all (a board's own rule wins over a pattern, a longer pattern over a shorter one). A game has 16 boards:
 **`GF.scores.drop(board)`** removes one (a past day's, once its prizes are paid) and frees its place. Only the server
 can set or lift a rule (`writer: 'any'`) or drop a board.
+
+### Project files: `env.GF.files`
+
+Files that you or the game's server write, never players: replays, generated levels, a large saved world, content
+packs. xgames.fun keeps them for the game (Free 100 MB, Creator 10 GB, Scale 100 GB; 25 MB a file), and serves the
+public ones from a site of their own, `https://<slug>.xgamesusercontent.com/<path>`.
+
+```js
+// the server keeps a replay, public: the page loads it from its address
+const saved = await env.GF.files.put(`replays/${runId}.json`, JSON.stringify(replay), {
+  type: 'application/json',
+  public: true,
+});
+if (!saved.ok) return Response.json({ why: saved.why }, { status: saved.code === 'full' ? 507 : 400 });
+return Response.json({ replay: saved.url });
+
+// a file only the server reads
+const world = await env.GF.files.get('worlds/main.bin');
+if (world.ok) state = new Uint8Array(await new Response(world.body).arrayBuffer());
+```
+
+| Call                                               | Answer                                                                                                                                  |
+| -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `GF.files.put(path, body, {type, public = false})` | `{ok, path, bytes, url?}`: `body` a string, an ArrayBuffer or a stream of bytes; `url` when public; over the game's cap, `code: "full"` |
+| `GF.files.get(path)`                               | `{ok, body, type, bytes, public}`: `body` is a stream of the bytes (`await new Response(body).text()`)                                  |
+| `GF.files.head(path)`                              | the same, without `body`                                                                                                                |
+| `GF.files.list({prefix, after, limit = 100})`      | `{ok, items: [{path, bytes, type, public, updatedAt}], after}`: a prefix is empty or a folder ending in `/`; pass `after` on            |
+| `GF.files.delete(path)`, `GF.files.usage()`        | `{ok, deleted}`, `{ok, bytes, files, cap}`                                                                                              |
+
+- **Paths** are letters, digits, `.`, `_` and `-`, with `/` between folders, at most 512 characters, and no `.` or
+  `..` part: `levels/forest-3.json`.
+- **The files site is a stranger to the game.** A file there cannot use the player's sign-in or call the game's
+  `api/`. Every answer carries `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox; default-src
+'none'`. Pictures (PNG, JPEG, WebP, GIF, AVIF), sounds, videos, fonts, JSON and plain text are served as
+  themselves; anything else (HTML, SVG, JavaScript, CSS, XML, PDF) is a download, `application/octet-stream`. The
+  game's page may load pictures, sounds, fonts and `fetch` from it, never scripts or styles.
+- **From your machine:** `xcore files put <file> [path] [--public]`, `ls`, `get`, `rm`, `usage`; with `--live`, the
+  game's files on xgames.fun.
+- **Locally**, `xcore dev` keeps them in `.gamesfun/dev/files/` (never published) and serves the public ones on a port
+  of their own (`project files: … http://127.0.0.1:8788`), so the browser treats them as another site, as it will
+  live. `xcore files` without `--live` reads and writes the same ones.
+- Publish refuses a server that uses `env.GF.files` while xgames.fun does not keep project files yet (its
+  `GET /api/kit/me` lists `"files"` once it does).
 
 ### Secrets
 
@@ -489,7 +533,8 @@ has the same owner spaces, rules and paging, with `RULES` at its top and `dataOf
 `.gamesfun/dev-platform.json`). `env.GF.loot.report` is printed, not signed or paid; a voucher key of your own
 (`xcore add vouchers`) signs for real, with the test key in `.dev.vars`. The dev host answers only `localhost`,
 `127.0.0.1` and `[::1]`, so a page on another site can't reach it. Durable Object storage is kept in
-`.gamesfun/dev-server/`, the game's database (a local D1, its migrations applied) in `.gamesfun/dev/d1/`, its secrets come from `.dev.vars`, and a change under `server/`, to `gamesfun.json` or to
+`.gamesfun/dev-server/`, the game's database (a local D1, its migrations applied) in `.gamesfun/dev/d1/`, its project files in
+`.gamesfun/dev/files/` (the public ones on a port of their own), its secrets come from `.dev.vars`, and a change under `server/`, to `gamesfun.json` or to
 `.dev.vars` rebuilds and reloads it. Miniflare (with
 workerd, about 140 MB) is installed once on first use, into xcore's state folder (`GAMESFUN_SERVER_DEPS=<folder>` uses
 one installed elsewhere). What is not the same as hosted: no CPU or request limits (its log says when the page's requests would pass Free's
