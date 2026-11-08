@@ -523,7 +523,11 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Restored .* to 2026-11-08T10:00:00Z \(bookmark bm1\)/);
   assert.match(r.stderr, /not rolled back/);
-  assert.deepEqual(seen.at(-1)[2], { timestamp: '2026-11-08T10:00:00Z', confirm: true });
+  assert.deepEqual(seen.at(-1)[2], { timestamp: '2026-11-08T10:00:00.000Z', confirm: true });
+  // unix seconds go up as the same ISO time: xgames.fun reads a bare number as milliseconds
+  r = await xc(['restore', '1794132000', '--live', '--yes']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(seen.at(-1)[2], { timestamp: '2026-11-08T10:00:00.000Z', confirm: true });
   r = await xc(['restore', 'yesterday', '--live', '--yes']);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /restore needs a time/);

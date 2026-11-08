@@ -271,7 +271,13 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
         200,
         { ok: true, path: 'art/hero.png', bytes: 4, url: 'https://moth.xgamesusercontent.com/art/hero.png' },
       ];
-    if (method === 'GET') return [200, Buffer.from('PNG!'), { 'content-type': 'image/png' }];
+    // as xgames.fun answers a download: always an attachment, the file's own type in x-gf-type
+    if (method === 'GET')
+      return [
+        200,
+        Buffer.from('PNG!'),
+        { 'content-type': 'application/octet-stream', 'x-gf-type': 'image/png', 'x-gf-public': '1' },
+      ];
     if (method === 'DELETE') return [200, { ok: true, deleted: true }];
     return null;
   };
@@ -299,6 +305,7 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
   assert.equal(seen.at(-1).url, '/api/kit/games/g1/files?prefix=art%2F');
   r = await xc(['get', 'art/hero.png', '--out', path.join(tmp.dir, 'h.png')]);
   assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Got art\/hero\.png .*image\/png\)/);
   assert.equal(await readFile(path.join(tmp.dir, 'h.png'), 'utf8'), 'PNG!');
   r = await xc(['rm', 'art/hero.png']);
   assert.match(r.stdout, /Deleted art\/hero\.png on xgames\.fun/);
