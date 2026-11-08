@@ -1,6 +1,6 @@
 // Shared by the tests: temporary folders, the fixtures (web games made without xgames.fun), the command, and a stand-in
 // xgames.fun that signs in and takes a publish in memory.
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
@@ -36,6 +36,18 @@ export const run = (args, { cwd = ROOT, env = {} } = {}) =>
     env: { ...process.env, GAMESFUN_KIT: '', ...env },
   });
 
+/** The command, run as a person runs it, without blocking: a stand-in xgames.fun in this process can answer it. */
+export const runAsync = (args, { cwd = ROOT, env = {} } = {}) =>
+  new Promise(resolve => {
+    const child = spawn(process.execPath, [BIN, ...args], { cwd, env: { ...process.env, GAMESFUN_KIT: '', ...env } });
+    let stdout = '',
+      stderr = '';
+    child.stdout.on('data', c => (stdout += c));
+    child.stderr.on('data', c => (stderr += c));
+    child.stdin.end();
+    child.on('close', status => resolve({ status, stdout, stderr }));
+  });
+
 /** A check that passes without Chrome (publish's own runs the page check: tests/check.test.mjs). */
 export const passing = async () => ({
   pass: true,
@@ -47,19 +59,35 @@ export const passing = async () => ({
   run: 'verify-1',
 });
 
-/** A stand-in xgames.fun: the token exchange and logout, and the publish calls, in memory. */
+/**
+ * A stand-in xgames.fun: the token exchange and logout, and the publish calls, in memory. A test may set
+ * state.me (more of GET /api/kit/me's answer: server, features), state.refuse ({at: 'begin' | 'complete', status,
+ * body}: that publish step answers it), and state.handle(method, url, json, {req, raw, authed}) → [status, body] | [status, body,
+ * headers] | null for routes of its own (the database's and the files' owner routes). state.published is the last
+ * publish's body; state.uploads maps each uploaded blob's sha256 to its bytes.
+ */
 export async function standIn() {
-  const state = { codes: new Map(), tokens: new Set(), blobs: new Set(), calls: [], version: 0 };
+  const state = { codes: new Map(), tokens: new Set(), blobs: new Set(), calls: [], version: 0, uploads: new Map() };
   const server = createServer(async (req, res) => {
-    let body = '';
-    for await (const c of req) body += c;
-    const json = body ? JSON.parse(body) : null,
-      send = (s, v) => {
-        res.writeHead(s, { 'content-type': 'application/json' });
-        res.end(JSON.stringify(v));
-      };
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const raw = Buffer.concat(chunks),
+      body = raw.toString('utf8');
+    let json = null;
+    try {
+      json = body ? JSON.parse(body) : null;
+    } catch {
+      /* a raw upload (a file's bytes): json stays null */
+    }
+    const send = (s, v, headers = {}) => {
+      res.writeHead(s, { 'content-type': 'application/json', ...headers });
+      res.end(Buffer.isBuffer(v) ? v : JSON.stringify(v));
+    };
     const auth = (req.headers.authorization ?? '').slice(7);
     state.calls.push(`${req.method} ${req.url}`);
+    // a test's own routes, told whether the call carried a signed-in token
+    const own = state.handle?.(req.method, req.url, json, { req, raw, authed: state.tokens.has(auth) });
+    if (own) return send(...own);
     if (req.url === '/api/kit/token' && req.method === 'POST') {
       const want = state.codes.get(json.code);
       if (!want || want !== challengeFor(json.verifier)) return send(400, { error: 'That sign-in code is not valid.' });
@@ -81,15 +109,26 @@ export async function standIn() {
       return send(200, {
         email: 'alice@example.com',
         limits: { files: 3000, totalBytes: 1e8, fileBytes: 100 * 1048576 },
+        ...(state.me ?? {}),
       });
+    if (req.url === '/api/kit/publish' && state.refuse?.at === 'begin')
+      return send(state.refuse.status, state.refuse.body);
     if (req.url === '/api/kit/publish') {
+      state.published = json;
       state.beganWith = json.projectId ?? null;
       state.tree = json.tree;
       state.verify = json.verify;
+      state.askedDraft = json.draft === true;
       return send(200, {
         id: 'p1',
         projectId: 'g1',
-        missing: json.tree.files.map(f => f.sha256).filter(s => !state.blobs.has(s)),
+        missing: [
+          ...new Set([
+            ...json.tree.files.map(f => f.sha256),
+            ...(json.server?.modules ?? []).map(m => m.sha256),
+            ...(json.server?.database?.migrations ?? []).map(m => m.sha256),
+          ]),
+        ].filter(s => !state.blobs.has(s)),
         newBytes: 100,
         draft: false,
       });
@@ -99,25 +138,29 @@ export async function standIn() {
       if (json.content == null) return send(200, { upload: null });
       if (sha256(Buffer.from(json.content, 'base64')) !== m[1]) return send(400, { error: 'bad' });
       state.blobs.add(m[1]);
+      state.uploads.set(m[1], Buffer.from(json.content, 'base64'));
       return send(200, { stored: true });
     }
     // a test may make the last step time out, as xgames.fun's gateway does past the route's limit
+    if (req.url === '/api/kit/publish/p1' && state.refuse?.at === 'complete')
+      return send(state.refuse.status, state.refuse.body);
     if (req.url === '/api/kit/publish/p1' && state.completeStatus)
       return send(state.completeStatus, { error: 'gateway timeout' });
     if (req.url === '/api/kit/publish/p1')
       return send(200, {
         projectId: 'g1',
         version: { id: 'v', number: ++state.version },
-        draft: !state.verify.pass,
-        published: state.verify.pass
-          ? {
-              published: true,
-              slug: 'dot-catch',
-              url: 'http://x/play/dot-catch',
-              gameUrl: 'http://x/g',
-              friendsUrl: null,
-            }
-          : null,
+        draft: state.askedDraft || !state.verify.pass,
+        published:
+          state.verify.pass && !state.askedDraft
+            ? {
+                published: true,
+                slug: 'dot-catch',
+                url: 'http://x/play/dot-catch',
+                gameUrl: 'http://x/g',
+                friendsUrl: null,
+              }
+            : null,
         studioUrl: 'http://x/studio/g1',
       });
     send(404, { error: 'no' });

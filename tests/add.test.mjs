@@ -12,6 +12,7 @@ import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import {
   addDatabase,
+  addDatabaseObject,
   addMultiplayer,
   addRpc,
   addSignin,
@@ -261,7 +262,7 @@ test('add database again: an untouched RULES from before 0.1.1 (anyone read) bec
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await fixture(tmp, 'static');
-  await addDatabase(dir);
+  await addDatabaseObject(dir);
   const file = path.join(dir, 'server/database.js');
   const now = await readFile(file, 'utf8');
   assert.match(now, /'\*': \{ read: 'owner', write: 'owner' \}/);
@@ -359,11 +360,11 @@ test('signin for a Godot project: the autoload carries the client; for a Unity p
   await assert.rejects(addSignin(path.join(tmp.dir)), /not a game xcore knows/);
 });
 
-test('database: server/ and its object declared; the bundle is one publish takes; a server of its own is left to its owner', async t => {
+test('the older database (server/database.js): its object declared; the bundle is one publish takes; a server of its own is left to its owner', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await fixture(tmp, 'static');
-  const r = await addDatabase(dir);
+  const r = await addDatabaseObject(dir);
   assert.ok(existsSync(path.join(dir, 'gamesfun.js')), 'signin comes with it');
   assert.deepEqual(JSON.parse(await readFile(path.join(dir, 'gamesfun.json'), 'utf8')).server.objects, [
     { class: 'GameData', binding: 'GAME_DATA' },
@@ -380,7 +381,7 @@ test('database: server/ and its object declared; the bundle is one publish takes
   const own = await fixture(tmp2, 'static');
   await mkdir(path.join(own, 'server'));
   await writeFile(path.join(own, 'server', 'index.js'), 'export default { fetch: () => new Response("mine") };\n');
-  const o = await addDatabase(own);
+  const o = await addDatabaseObject(own);
   assert.equal(
     await readFile(path.join(own, 'server', 'index.js'), 'utf8'),
     'export default { fetch: () => new Response("mine") };\n',
@@ -397,7 +398,7 @@ test('multiplayer beside the database: one server routes both, both objects decl
   const dir = await fixture(tmp, 'static');
   const m = await addMultiplayer(dir);
   assert.match(m.steps.join('\n'), /GamesFun\.rooms\.join/);
-  await addDatabase(dir);
+  await addDatabaseObject(dir);
   const index = await readFile(path.join(dir, 'server/index.js'), 'utf8');
   assert.match(index, /handleDatabase[\s\S]*handleRooms/);
   assert.match(index, /Written by `xcore add database` and `xcore add multiplayer`/);

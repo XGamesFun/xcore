@@ -4,6 +4,25 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 
 ## Unreleased
 
+A database of the game's own, on D1 (xgames.fun's storage interface, STORAGE.md §8.1–8.5):
+
+- `gamesfun.json` → `database` (`engine`, `binding`, `migrations`, `collections`), checked as xgames.fun checks it:
+  the binding's name and its clash with a Durable Object's, migration names (`0001_init.sql`), at most 200 of 1 MB,
+  and append only: a migration published (and remembered in `.gamesfun/publish.json`) that changed is refused before
+  anything goes up.
+- `xcore add database`: a game with a server gets the block, `server/migrations/0001_init.sql` and `server/gf-db.js`
+  (prepared queries, `withPlayer`); a game with none gets the block with `collections`, and **xcore's stock server**
+  as its server, which serves `api/db/*` from D1 with the same routes and answers as `server/database.js`, so
+  `gf.db` is unchanged. A game that has `server/database.js` keeps it; the check says it is the older way.
+- `xcore publish` sends `server.database` with the migration files as blobs, refuses a game with a database when
+  xgames.fun's `/api/kit/me` does not list `"d1"`, and says xgames.fun's `migration-changed` (409) and
+  `migration-failed` (422) in plain words.
+- `xcore dev` runs a local D1 in `.gamesfun/dev/d1/`, applies the migrations at each start and reload, and keeps the
+  server down with the reason when an applied migration changed.
+- `xcore db info|query|export|import|restore`: the local database, or `--live` through xgames.fun's owner routes. A
+  query only reads unless `--write`; `restore --live` shows its preview, warns that loot balances and payouts are not
+  rolled back for a game with an economy, and needs `--yes` or the word `restore` typed.
+
 The database is safe by default, and the secret scan reads every byte:
 
 - `xcore add database`: a collection is private by default (`RULES` `'*': { read: 'owner', write: 'owner' }`); a

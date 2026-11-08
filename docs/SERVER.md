@@ -375,6 +375,112 @@ const { voucher } = await voucherFor(env, { grant: 'clear', wallet, round: match
   export `GameVouchers`, as `xcore add vouchers` says. `signVoucher` from `@xgamesfun/solana/results` is the same
   signature, for a server that signs by itself.
 
+## A database of its own
+
+`xcore add database` gives the game **one D1 database** (SQLite, run by Cloudflare), made on xgames.fun by the
+first publish that has one and kept between publishes. Its server reads it as `env.DB`. It holds all of the game's
+own data: its records (guilds, match history, shop stock), a player's state with rules (runs left today, gold), and,
+for a game with no server, the documents its page saves.
+
+```json
+{
+  "database": {
+    "engine": "d1",
+    "binding": "DB",
+    "migrations": "server/migrations",
+    "collections": { "*": { "read": "owner", "write": "owner" }, "profiles": { "read": "anyone", "write": "owner" } }
+  }
+}
+```
+
+| Field         | Rule                                                                                                                                                                                                              |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine`      | `"d1"`, the only one                                                                                                                                                                                              |
+| `binding`     | default `"DB"`: its name on `env`. The rules of a Durable Object's binding (A–Z, 0–9 and `_`, not `GF` or `GF_…`), and not one of theirs                                                                          |
+| `migrations`  | default `"server/migrations"`, a folder inside `server/` (never a public file). Files named `0001_init.sql`, `0002_add_guilds.sql` …: four digits, `_`, lowercase words; at most 200, 1 MB each                   |
+| `collections` | read only by the stock server (below): who may read and write each collection of the page's documents. `read`: `"owner"` or `"anyone"`; `write`: `"owner"` or `"server"`. Without it, each player's own, as `"*"` |
+
+**Migrations are append only.** Publish applies the new ones, in name order, before the new version goes live; a
+migration that fails stops the publish (the version before keeps playing; the ones applied before it stay applied).
+Once a migration is published it never changes: put the next change in a new file
+(`0002_add_gold.sql`: `ALTER TABLE players ADD COLUMN gold INTEGER NOT NULL DEFAULT 0;`). A changed or missing one is
+refused, by `xcore publish` before anything goes up and by xgames.fun.
+
+### From a server of its own
+
+`xcore add database` in a game with a `server/` writes the block, an example first migration
+(`server/migrations/0001_init.sql`, change it before you publish) and `server/gf-db.js`:
+
+```js
+import { db, withPlayer } from './gf-db.js';
+
+export default {
+  async fetch(request, env) {
+    const sub = await withPlayer(request, env); // env.GF.verifyPlayer's sub, or null for a guest
+    if (!sub) return Response.json({ why: 'Sign in first.' }, { status: 401 });
+    await db(env).run('INSERT OR IGNORE INTO players (id) VALUES (?)', sub);
+    // a rule is one statement, so a burst of requests cannot spend the same run twice
+    const left = await db(env).first(
+      'UPDATE players SET runs = runs - 1 WHERE id = ? AND runs > 0 RETURNING runs',
+      sub,
+    );
+    if (!left) return Response.json({ why: 'No runs left today.' }, { status: 409 });
+    return Response.json({ runs: left.runs });
+  },
+};
+```
+
+`db(env).all`, `.first`, `.run` and `.batch([[sql, ...params], …])` (all of them or none) are prepared statements:
+pass every value as a `?` and an argument, never inside the SQL's text. `env.DB` is D1 itself, for anything else.
+
+### With no server: the stock server
+
+A game with the block and no `server/` gets **xcore's stock server** as its server: publish bundles it
+([`lib/client/server/stock.js`](../lib/client/server/stock.js), with `collections` built in) and it serves the page's
+`api/db/*` from the database, with the same routes and answers as the older `server/database.js`, so
+`GamesFun.db` in the page is the same. Its documents are in a table it makes itself, `gf_docs`.
+
+- **Each player has a space of their own** in every collection: a document is `{id, owner, value, updatedAt}`,
+  found by collection, owner and id, so two players can both have a `main` and nobody takes another's id. By default
+  a player reads and writes only their own.
+- `read: "anyone"`: everyone reads the collection; another player's document by its owner,
+  `GamesFun.db.get('profiles', 'main', { owner: playerId })`, a player's list with `{ owner: playerId }`.
+- `write: "server"`: only a server writes it (owner `"server"`); the page reads it without naming an owner. The stock
+  server has no code of yours, so such a collection needs a server of your own to fill it.
+- A list comes newest first, a page at a time: `const page = await GamesFun.db.list('levels')`, then
+  `GamesFun.db.list('levels', { after: page.after })`; `after` is `null` on the last page.
+
+### On this machine, and on xgames.fun: `xcore db`
+
+`xcore dev` runs a local D1 for the server, kept in `.gamesfun/dev/d1/` (hidden: never published), and applies the
+same migrations when it starts and reloads. A migration changed after it was applied here keeps the server down with
+the reason, as xgames.fun would refuse it; put it back, or delete `.gamesfun/dev/d1/` to start the local database
+afresh.
+
+```sh
+xcore db info                                     # here: its size, the migrations applied, its tables
+xcore db query "SELECT * FROM players LIMIT 10"   # one statement; reads only without --write
+xcore db query "UPDATE players SET runs = 3 WHERE id = ?" --params '["dev:ab12"]' --write
+xcore db export                                   # SQL into .gamesfun/exports/ (or --out <file>)
+xcore db import seed.sql                          # statements of your own, or an export; all or none
+xcore db info --live                              # the same on xgames.fun, with --live
+xcore db restore 2026-11-08T12:00:00Z --live      # back in time, up to 30 days (D1 Time Travel)
+```
+
+`--live` goes through xgames.fun's owner routes with your sign-in (`xcore login`), and each call is kept in the
+game's audit log. Without `--write`, a query is only `SELECT`, `EXPLAIN`, `PRAGMA table_info` or `table_list`, here
+and live. `restore` says what it would go back to first, and goes on only with `--yes` or when you type `restore`.
+**A game with an economy:** a restore puts back the database only. Loot balances, items and payouts on chain stay
+as they are, so a player can keep what they won while the database forgets it; export first. An export holds your
+players' data: keep it out of git and off shared drives.
+
+Publish refuses a game with a database while xgames.fun does not run databases yet (its `GET /api/kit/me` lists
+`"d1"` once it does), and says so.
+
+**The older database**, `server/database.js` (one Durable Object with SQLite storage, from xcore 0.1.0), keeps
+working for a game that has it, and `xcore add database` keeps it up to date; the check says it is the older way. It
+has the same owner spaces, rules and paging, with `RULES` at its top and `dataOf(env)` for the server's own code.
+
 ## Running it locally
 
 `xcore dev <folder>` runs `server/` under workerd, the runtime xgames.fun runs it on, at the page's `/game/api/*`
@@ -383,7 +489,7 @@ const { voucher } = await voucherFor(env, { grant: 'clear', wallet, round: match
 `.gamesfun/dev-platform.json`). `env.GF.loot.report` is printed, not signed or paid; a voucher key of your own
 (`xcore add vouchers`) signs for real, with the test key in `.dev.vars`. The dev host answers only `localhost`,
 `127.0.0.1` and `[::1]`, so a page on another site can't reach it. Durable Object storage is kept in
-`.gamesfun/dev-server/`, its secrets come from `.dev.vars`, and a change under `server/`, to `gamesfun.json` or to
+`.gamesfun/dev-server/`, the game's database (a local D1, its migrations applied) in `.gamesfun/dev/d1/`, its secrets come from `.dev.vars`, and a change under `server/`, to `gamesfun.json` or to
 `.dev.vars` rebuilds and reloads it. Miniflare (with
 workerd, about 140 MB) is installed once on first use, into xcore's state folder (`GAMESFUN_SERVER_DEPS=<folder>` uses
 one installed elsewhere). What is not the same as hosted: no CPU or request limits (its log says when the page's requests would pass Free's
