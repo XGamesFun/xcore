@@ -1,0 +1,7 @@
+{
+  "name": "orbit-hop",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node build.mjs", "dev": "node build.mjs" },
+  "devDependencies": { "vite": "*" }
+}

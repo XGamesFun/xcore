@@ -1,0 +1,6 @@
+{
+  "name": "server-rendered",
+  "private": true,
+  "scripts": { "start": "node server.js" },
+  "dependencies": { "express": "*" }
+}

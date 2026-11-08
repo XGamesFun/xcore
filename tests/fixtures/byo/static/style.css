@@ -1,0 +1,2 @@
+body { margin: 0; background: #12161f; color: #e8ecf4; font: 16px system-ui, sans-serif; display: grid; place-items: center; min-height: 100vh; }
+canvas { background: #1d2433; width: min(90vw, 480px); }

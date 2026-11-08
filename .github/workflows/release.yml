@@ -1,0 +1,61 @@
+# Publish @xgamesfun/xcore to npm when a version tag is pushed: bump "version" in package.json and package-lock.json
+# (npm version <x.y.z> --no-git-tag-version), add its CHANGELOG.md entry, commit, then
+#   git tag v<version> && git push origin v<version>
+# npm trusted publishing: the package's settings on npmjs.com name this repository, this workflow file and the `npm`
+# environment; npm then takes the run's OIDC token (id-token: write) instead of a stored NPM_TOKEN, and adds provenance.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    timeout-minutes: 20
+    env:
+      GAMESFUN_NO_UPDATE_CHECK: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+      - name: The tag is package.json's version, and npm can publish with OIDC
+        env:
+          TAG: ${{ github.ref_name }}
+        shell: node {0}
+        run: |
+          const { readFileSync } = require('node:fs');
+          const { execFileSync } = require('node:child_process');
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+          if (process.env.TAG !== `v${pkg.version}`) { console.error(`the tag ${process.env.TAG} is not v${pkg.version} (package.json)`); process.exit(1); }
+          if (lock.version !== pkg.version || lock.packages[''].version !== pkg.version) { console.error(`package-lock.json is ${lock.version}, not ${pkg.version}`); process.exit(1); }
+          const npm = execFileSync('npm', ['--version'], { encoding: 'utf8' }).trim();
+          const [a, b, c] = npm.split('.').map(Number);
+          if (a < 11 || (a === 11 && (b < 5 || (b === 5 && c < 1)))) { console.error(`npm ${npm} cannot use trusted publishing (11.5.1 or newer needed)`); process.exit(1); }
+          console.log(`publishing ${pkg.name}@${pkg.version} with npm ${npm}`);
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - name: What goes into the package
+        run: npm pack --dry-run
+      - name: Publish (a pre-release version goes out under the "next" dist-tag)
+        run: |
+          case "$(node -p "require('./package.json').version")" in
+            *-*) npm publish --tag next ;;
+            *) npm publish ;;
+          esac

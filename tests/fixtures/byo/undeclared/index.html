@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Score Board</title></head>
+<body>
+<h1>Score Board</h1>
+<script>
+  // calls a backend that backend.json does not list (a test fixture)
+  fetch('https://api.scoreboard-example.net/top').then(r => r.json()).then(() => {}, () => {});
+</script>
+</body>
+</html>

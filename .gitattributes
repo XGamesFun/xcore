@@ -1,0 +1,4 @@
+# LF everywhere, Windows checkouts too: the tests and the templates xcore writes read the files as they are
+* text=auto eol=lf
+*.png binary
+*.ico binary

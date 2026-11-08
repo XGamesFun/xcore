@@ -1,0 +1,35 @@
+# Lint and the tests on every push and pull request: Linux, macOS and Windows, Node 24. The runners have Chrome,
+# which the page check's tests drive.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    env:
+      GAMESFUN_NO_UPDATE_CHECK: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Lint and formatting (on Linux only, as the result is the same everywhere)
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run lint
+      - run: npm test

@@ -1,0 +1,72 @@
+{
+  "name": "@xgamesfun/xcore",
+  "version": "0.1.0",
+  "description": "games.fun from the command line, the one place to start: sign in, bring a web game you already made, check it as games.fun hosts it, give it a backend and a Solana economy on loot (@xgamesfun/solana), and publish it at a link anyone can play. Making a game from an idea is the kit's (@xgamesfun/kit), which it hands those commands to.",
+  "keywords": [
+    "game",
+    "browser-game",
+    "publish",
+    "hosting",
+    "web3",
+    "solana",
+    "games.fun"
+  ],
+  "homepage": "https://github.com/XGamesFun/xcore#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XGamesFun/xcore.git"
+  },
+  "bugs": {
+    "url": "https://github.com/XGamesFun/xcore/issues"
+  },
+  "author": "games.fun",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "xcore": "bin/xcore.mjs"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    "./commands/*": "./commands/*.mjs",
+    "./publish": "./lib/publish/index.mjs",
+    "./publish/*": "./lib/publish/*.mjs",
+    "./server/*": "./lib/server/*.mjs",
+    "./*": "./lib/*.mjs"
+  },
+  "files": [
+    "bin/",
+    "commands/",
+    "docs/",
+    "lib/",
+    "loot-page/",
+    "skills/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "lint": "eslint . && prettier --check .",
+    "format": "prettier --write .",
+    "test": "node --test \"tests/**/*.test.mjs\""
+  },
+  "dependencies": {
+    "@xgamesfun/solana": "0.25.0",
+    "esbuild": "0.28.2",
+    "playwright-core": "1.63.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.14.0",
+    "globals": "17.13.0",
+    "prettier": "3.9.10"
+  },
+  "overrides": {
+    "minimatch": "11.0.3"
+  }
+}

@@ -1,0 +1,5 @@
+node_modules/
+evidence/
+package-lock.json
+# sample games the tests check, kept as a person would write them
+tests/fixtures/
