@@ -3,7 +3,8 @@
 // holds nothing a secret scanner (GitHub's push protection, xgames.fun's own) would stop.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { scanFile, secretsMessage, isPublicKey } from '../lib/publish/scan.mjs';
+import { scanFile, secretsMessage, isPublicKey, SECRET_PATTERNS, SCAN_OVERLAP } from '../lib/publish/scan.mjs';
+import { MAX_MATCH, SECRET_PATTERNS as ALL_PATTERNS } from '../lib/secret-patterns.mjs';
 
 const bytes = text => new TextEncoder().encode(text);
 const kinds = (path, text) => scanFile(path, typeof text === 'string' ? bytes(text) : text).map(h => h.kind);
@@ -224,4 +225,121 @@ test('the refusal counts files, names each finding, and never repeats the value'
   assert.ok(!words.includes(key), 'the key itself is never shown');
   assert.match(secretsMessage([...hits, { path: 'other.js', line: 3, kind: 'x' }]), /2 files look like/);
   assert.equal(secretsMessage([]), null);
+});
+
+/**
+ * The longest text a regular expression can match, from its source: Infinity when a run has no upper bound. Knows the
+ * syntax the secret patterns use (classes, groups, alternatives, look-arounds, quantifiers).
+ */
+function longestMatch(source) {
+  let i = 0;
+  const alternatives = () => {
+    let best = 0,
+      now = 0;
+    for (;;) {
+      if (i >= source.length || source[i] === ')') return Math.max(best, now);
+      if (source[i] === '|') {
+        best = Math.max(best, now);
+        now = 0;
+        i++;
+        continue;
+      }
+      now += quantified(atom());
+    }
+  };
+  const atom = () => {
+    const c = source[i++];
+    if (c === '\\') return /[bB]/.test(source[i++]) ? 0 : 1;
+    if (c === '^' || c === '$') return 0;
+    if (c === '[') {
+      if (source[i] === '^') i++;
+      if (source[i] === ']') i++;
+      while (source[i] !== ']') i += source[i] === '\\' ? 2 : 1;
+      i++;
+      return 1;
+    }
+    if (c === '(') {
+      let zero = false;
+      if (source[i] === '?') {
+        const look = /^\?(?:<?[=!])/.exec(source.slice(i));
+        zero = !!look;
+        i += look ? look[0].length : source[i + 1] === ':' ? 2 : source.indexOf('>', i) - i + 1;
+      }
+      const n = alternatives();
+      i++; // )
+      return zero ? 0 : n;
+    }
+    return 1;
+  };
+  const quantified = n => {
+    const q = /^(?:\?|\*|\+|\{(\d+)(,(\d*))?\})\??/.exec(source.slice(i));
+    if (!q) return n;
+    i += q[0].length;
+    if (q[0][0] === '?') return n;
+    if (q[0][0] === '*' || q[0][0] === '+') return n ? Infinity : 0;
+    const most = q[2] === undefined ? Number(q[1]) : q[3] === '' ? Infinity : Number(q[3]);
+    return n * most;
+  };
+  return alternatives();
+}
+
+test('one list of patterns: the publish scan runs every pattern lib/secret-patterns.mjs has, as it is there', () => {
+  const kept = ALL_PATTERNS.filter(([kind]) => kind !== 'JSON web token');
+  assert.deepEqual(
+    SECRET_PATTERNS.map(([kind, re]) => [kind, re.source]),
+    kept.map(([kind, re]) => [kind, re.source]),
+  );
+  assert.ok(
+    ALL_PATTERNS.some(([kind]) => kind === 'JSON web token'),
+    'the JWT shape the kit replaces by name',
+  );
+});
+
+test("no pattern can match more than MAX_MATCH characters, and a piece of a big file reaches past the next one's start by more", () => {
+  assert.equal(longestMatch('ab{2,3}(?:c|de)?(?<!x)\\b[a-z]{4}'), 1 + 3 + 2 + 4);
+  assert.equal(longestMatch('a+'), Infinity);
+  for (const [kind, re] of ALL_PATTERNS) {
+    const n = longestMatch(re.source);
+    assert.ok(n <= MAX_MATCH, `${kind}: up to ${n} characters`);
+  }
+  assert.ok(SCAN_OVERLAP >= MAX_MATCH);
+});
+
+test('a text file is scanned whole, however big: a key past the first 4 MiB, and one across two pieces', () => {
+  const key = 'sk-' + 'proj-' + alnum(40);
+  const filler = 'let a = 1;\n'.repeat(Math.ceil((9 * 1048576) / 11)); // 9 MiB of ordinary code
+  const late = `${filler}const k = "${key}";\n`;
+  assert.deepEqual(scanFile('engine.js', bytes(late)), [
+    { path: 'engine.js', line: filler.split('\n').length, kind: 'OpenAI or Anthropic key' },
+  ]);
+  // a key cut by every line between two pieces, small pieces so there are many
+  const chunk = 70_000;
+  const lines = 'x\n'.repeat(chunk / 2 - 3);
+  for (const shift of [0, 1, 7, 20, 40, 44, 45, 60, 505, 509, 510, 511, 515]) {
+    const text = `${lines.slice(0, lines.length - shift * 2)}${'.'.repeat(shift % 2)}"${key}"\n${'y = 2;\n'.repeat(30_000)}`;
+    const hits = scanFile('big.js', bytes(text), { chunk, overlap: 1024 });
+    const at = text.slice(0, text.indexOf(key)).split('\n').length;
+    assert.deepEqual(hits, [{ path: 'big.js', line: at, kind: 'OpenAI or Anthropic key' }], `shifted ${shift}`);
+  }
+  // the default pieces too: a key across the 4 MiB line
+  const edge = 'z'.repeat(4 * 1048576 - 20) + ` "${key}" ` + 'q'.repeat(100);
+  assert.equal(scanFile('edge.js', bytes(edge)).length, 1);
+  // a multi-byte character cut between two pieces is read whole, and the line count stays right
+  const wide = `${'é\n'.repeat(chunk)}"${key}"`;
+  assert.deepEqual(
+    scanFile('wide.js', bytes(wide), { chunk: chunk + 1, overlap: 1024 }).map(h => h.line),
+    [chunk + 1],
+  );
+});
+
+test('a run of base58 letters cut by the end of a piece is not taken for a key: the next piece sees it go on', () => {
+  // base64 data whose letters, from a "/" on, are base58 for longer than a key: one key-length run ends at the cut
+  const run = alnum(32).replace(/0/g, '1').repeat(5); // 160 base58 letters, no + / = in them
+  const data = `"data:image/png;base64,${'A'.repeat(5000)}/${run}"`;
+  const chunk = 5000 + 23 + 1 + 87; // the piece ends 87 letters into the run
+  assert.deepEqual(kinds('art.js', data), []);
+  assert.deepEqual(
+    scanFile('art.js', bytes(data), { chunk, overlap: 1024 }).map(h => h.kind),
+    [],
+  );
 });

@@ -250,16 +250,22 @@ to 64 KB) in collections:
 
 ```js
 const level = (await GamesFun.db.add('levels', { name: 'Moon', tiles })).data; // {id, owner, value, updatedAt}
-const mine = (await GamesFun.db.list('levels', { owner: 'me' })).data;
 await GamesFun.db.put('levels', level.id, { name: 'Moon 2', tiles });
+const page = await GamesFun.db.list('levels'); // page.data: the newest 50; page.after: the next page's place
+const next = await GamesFun.db.list('levels', { after: page.after }); // page.after is null on the last page
 ```
 
-Anyone reads; a signed-in player writes only their own documents. `RULES` at the top of `server/database.js` changes
-that per collection (`read: 'owner'` keeps a collection private to each player; `write: 'server'` lets only the game's
-own server code write, through `dataOf(env)`, for anything players must not set themselves). A game with a server of
-its own keeps it: the database is added beside it, with the two lines to route it. On this machine the page keeps
-documents in the browser instead. Its calls count toward the game server's requests (600 a minute from one player, 6,000 a
-minute shared by all its players): read and write when something happens, not every frame.
+**Each player has a space of their own** in every collection: a document is found by its collection, its owner and
+its id, so two players can both have a `main`, and nobody can take an id in another player's space. By default a
+signed-in player reads and writes only their own documents. `RULES` at the top of `server/database.js` changes that
+per collection: `read: 'anyone'` lets everyone read it (another player's document by its owner,
+`GamesFun.db.get('levels', id, { owner: playerId })`, and their list with `{ owner: playerId }`), and
+`write: 'server'` lets only the game's own server code write, through `dataOf(env)`, for anything players must not set
+themselves. The page reads what the server wrote in such a collection with no owner named (or `{ owner: 'server' }`
+anywhere). A game with a server of its own keeps it: the database is added beside it, with the two lines to route it.
+On this machine the page keeps documents in the browser instead. Its calls count toward the game server's requests
+(600 a minute from one player, 6,000 a minute shared by all its players): read and write when something happens, not
+every frame.
 
 ### Multiplayer: `xcore add multiplayer`
 

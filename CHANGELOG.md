@@ -4,6 +4,25 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 
 ## Unreleased
 
+The database is safe by default, and the secret scan reads every byte:
+
+- `xcore add database`: a collection is private by default (`RULES` `'*': { read: 'owner', write: 'owner' }`); a
+  `RULES` an older xcore wrote and nobody changed becomes the new default on the next `xcore add database`, which says
+  so.
+- Each player has a space of their own in every collection: documents are keyed by collection, owner and id, so no
+  player can take an id in another player's space (or the server's, `owner: "server"`, which only the server writes).
+  A page reads another player's document in a `read: 'anyone'` collection by its owner
+  (`gf.db.get(c, id, {owner})`, `GET api/db/<c>/<id>?owner=<id>`); without an owner it is the player's own, or the
+  server's in a `write: 'server'` collection. `dataOf(env)` reads and writes the server's own space by default, a
+  player's with `{owner: sub}`. A table an older `server/database.js` made moves to the new one on its first start,
+  every document kept under its owner.
+- Lists page with a cursor: `gf.db.list(c, {after})` and `GET api/db/<c>?after=` answer `after` (the next page's
+  place, `null` on the last) and `more`. `offset` is gone and refused in words; Unity's `DbList` takes `after` in its
+  place, Godot's `db_get` and Unity's `DbGet` take an owner.
+- The publish scan reads a text file whole, however big, in 4 MiB pieces that overlap by more than any key it looks
+  for can be long; it read only the first 4 MiB before. The patterns are one list, `lib/secret-patterns.mjs`, which
+  the publish scan and the kit both read; each has an upper bound, so the overlap is enough.
+
 Every lifecycle the commands report now has one named state, one place that decides it, and the same answer for a
 person and for `--json`.
 

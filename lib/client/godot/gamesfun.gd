@@ -168,8 +168,9 @@ func scores_mine(board: String):
 	return await _run("scores.mine", [board])
 
 
-func db_get(collection: String, id: String):
-	return await _run("db.get", [collection, id])
+## opts: {"owner": "me" | "server" | a player's id}; without it, the player's own
+func db_get(collection: String, id: String, opts := {}):
+	return await _run("db.get", [collection, id, opts])
 
 
 func db_put(collection: String, id: String, value):
@@ -180,7 +181,8 @@ func db_add(collection: String, value):
 	return await _run("db.add", [collection, value])
 
 
-## opts: {"owner": "me", "limit": 50, "offset": 0, "order": "new" | "old"}
+## opts: {"owner": "me" | "server" | a player's id, "limit": 50, "after": the last answer's "after", "order": "new" | "old"}
+## The answer's "after" is null on the last page.
 func db_list(collection: String, opts := {}):
 	return await _run("db.list", [collection, opts])
 
