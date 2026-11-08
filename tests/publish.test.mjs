@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { adopt } from '../lib/publish/adopt.mjs';
-import { logout, savedLogin } from '../lib/publish/client.mjs';
+import { credentialKey, logout, savedLogin } from '../lib/publish/client.mjs';
 import { preflight, publishGame } from '../lib/publish/index.mjs';
 import { fixture, passing, run, signIn, standIn, tempDir } from './helpers.mjs';
 
@@ -122,4 +122,9 @@ test('a timeout on the last step says the game may be published, and publishing 
   g.state.calls.length = 0;
   await publishGame(dir, { origin: g.origin, env, check: passing });
   assert.deepEqual(g.state.lastBegin?.projectId ?? g.state.beganWith, 'g1', 'the retry names the same game');
+});
+
+test("the sign-in's storage key never changes: 0.1.0 and the kit keep the token under it", () => {
+  // renaming the platform to xgames.fun once changed it, which signed everyone out and orphaned their tokens
+  assert.equal(credentialKey('https://xgames.fun'), 'games.fun https://xgames.fun');
 });
