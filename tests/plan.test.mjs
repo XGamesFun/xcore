@@ -101,7 +101,7 @@ test('plan in words: the tier, the month, the limits, capped and the slots', () 
   assert.match(words, /^Moth: Free, capped for the rest of the month/);
   assert.match(words, /this month: \$1\.30 of \$1\.00 included/);
   assert.match(words, /50 ms of CPU a request, 600 requests a minute \(120 from one player\)/);
-  assert.match(words, /game slots: 1 of 2 in use/);
+  assert.match(words, /paid slots: 1 of 2 in use/);
   const account = describeAccount({
     slots: 0,
     used: 0,
@@ -123,8 +123,20 @@ test('plan in words: the tier, the month, the limits, capped and the slots', () 
   });
   assert.match(
     paid,
-    /Game slots: 1 of 2 in use, paid through 2026-12-01 \(buy or renew on xgames.fun: Studio → Plans, in SOL or USDC\)/,
+    /Game slots: 1 of 2 in use, paid through 2026-12-01 \(buy or renew on xgames.fun: your console → Plans, in SOL or USDC\)/,
   );
+  // xgames.fun from 2026-11-08 answers gameSlots: 2 free slots for everyone, any more paid.
+  const slots = describeAccount({
+    slots: 1,
+    used: 1,
+    billing: false,
+    payments: { on: true, cluster: 'mainnet-beta', currencies: ['SOL'] },
+    monthCents: 0,
+    games: [],
+    gameSlots: { free: { slots: 2, used: 2 }, paid: { slots: 1, used: 1 }, granted: 0, open: 0 },
+  });
+  assert.match(slots, /^Free slots: 2 of 2 in use \(their games run on Free\); a new game needs one/);
+  assert.match(slots, /\nPaid slots: 1 of 1 in use \(their games run on Creator\)/);
   assert.match(paid, /usage credit \$5\.00/);
   assert.match(account, /Scale {3}Showground {2}\$9\.99 {2}\(granted\)/);
 });

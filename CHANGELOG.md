@@ -165,6 +165,10 @@ The database is safe by default, and the secret scan reads every byte:
   for can be long; it read only the first 4 MiB before. The patterns are one list, `lib/secret-patterns.mjs`, which
   the publish scan and the kit both read; each has an upper bound, so the overlap is enough.
 
+- Slots (xgames.fun 2026-11-08): every game sits in a slot; everyone gets 2 free slots (games on Free), any more are
+  paid (games on Creator). `xcore plan --all` shows free and paid slots; `xcore publish` names the commands that open a
+  free slot when a new game is refused (`no-free-slot`); paid slots are bought on your console (xgames.fun/console).
+
 Every lifecycle the commands report now has one named state, one place that decides it, and the same answer for a
 person and for `--json`.
 

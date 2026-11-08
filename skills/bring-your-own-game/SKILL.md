@@ -165,9 +165,10 @@ nothing checked (their gameplay, their backend's own behaviour).
 
 A game with a `server/`, saves or scores runs under its **plan** (`xcore plan <folder>`): Free by default (50 ms of CPU
 and 600 requests a minute, $1 of use a month, then capped and slow until the month ends). When the game needs more
-(a server that replays play, many players at once), tell them: a paid game slot makes it Creator
-(`xcore plan activate <folder>` once they have a slot), and the slot moves between their games at any time. Never
-activate or deactivate a game without asking.
+(a server that replays play, many players at once), tell them: a paid slot makes it Creator
+(`xcore plan activate <folder>` once they have one), and the paid slot moves between their games at any time. Everyone
+has 2 free slots: a third game is refused on publish (`no-free-slot`) until they archive one on their console
+(xgames.fun/console) or move one to a paid slot. Never activate, deactivate or archive a game without asking.
 
 Their own website can show the game (`xcore embed add https://theirsite.com <folder>` prints the `<iframe>`), and on
 Creator or Scale it can play at their own domain (`xcore domain add play.theirsite.com <folder>` prints two DNS records
