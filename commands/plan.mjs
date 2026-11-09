@@ -12,17 +12,18 @@ const usage = `Usage: xcore plan [dir] [--json]
 What a game's backend may use on xgames.fun (its server, saves and scores), and what it used this month.
   Free       every game, by default: a small server (50 ms of CPU a request, 600 requests a minute) and $1 of use a
              month; past that its server is capped (slow) until the month ends
-  Creator    a game in one of your paid game slots: 200 ms a request, 6,000 requests a minute, 1 GB of saves, and
-             $10 of use a month per slot, shared by your Creator games
+  Creator    a game in one of your paid slots: 200 ms a request, 6,000 requests a minute, 1 GB of saves, and
+             $10 of use a month per paid slot, shared by your Creator games
   Scale      granted by xgames.fun for a game that needs more
 Every plan lets sites of yours embed the game (Free 3, Creator 10, Scale 25: ${CMD} embed); Creator and Scale serve
 it on domains of your own (1 and 5: ${CMD} domain).
-A slot is $15 for 30 days, prepaid in SOL or USDC on xgames.fun (Studio → Plans; no automatic renewal), and moves
-between your games at any time without changing the bill. Usage credit, bought the same way, lets Creator games go
-past what their slots include (at twice what xgames.fun pays) instead of slowing down.
-  activate     put this folder's game in a free slot
-  deactivate   take it out (it goes back to Free and the slot is free for another game)
-  --all        your slots and every game's plan`;
+Every game sits in a slot. Everyone gets 2 free slots, whose games run on Free; any more games need a paid slot,
+$15 for 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans; no automatic renewal), whose game runs on
+Creator. A paid slot moves between your games at any time without changing the bill. Usage credit, bought the same way,
+lets Creator games go past what their slots include (at twice what xgames.fun pays) instead of slowing down.
+  activate     move this folder's game to a paid slot (its free slot opens for another game)
+  deactivate   move it back to a free slot (one must be open; its paid slot opens for another game)
+  --all        your free and paid slots and every game's plan`;
 
 export default {
   name: 'plan',
@@ -57,7 +58,9 @@ export default {
       const r = await setActive(dir, verb === 'activate').catch(e => {
         if (e?.status === 409)
           throw new Error(
-            `${e.message} Free one with ${CMD} plan deactivate <another game>, or buy a slot on xgames.fun (Studio → Plans, in SOL or USDC).`,
+            e.code === 'no-free-slot'
+              ? `${e.message} Archive a game you no longer need on your console (xgames.fun/console), or move another game to a paid slot.`
+              : `${e.message} Open one with ${CMD} plan deactivate <another game>, or buy a paid slot on xgames.fun (your console → Plans, in SOL or USDC).`,
           );
         return plain(e);
       });
@@ -66,11 +69,11 @@ export default {
         const what =
           verb === 'activate'
             ? r.changed
-              ? 'In a slot: Creator from its next request.'
-              : 'Already in a slot.'
+              ? 'In a paid slot: Creator from its next request; its free slot is open for another game.'
+              : 'Already in a paid slot.'
             : r.changed
-              ? 'Out of its slot: Free from its next request, and the slot is free.'
-              : 'It was not in a slot.';
+              ? 'Back in a free slot: Free from its next request, and its paid slot is open for another game.'
+              : 'It was not in a paid slot.';
         console.log(`${what}\n${describeGame(r)}`);
       }
       return 0;

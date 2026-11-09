@@ -523,24 +523,28 @@ games. `GAMESFUN_STUDIO=<origin>` publishes to another xgames.fun (a Studio on y
 
 ### Its plan: `xcore plan`
 
-Hosting the page is free. What the game's server, saves and scores may use is the game's plan:
+Every game sits in a **slot**. Everyone gets **2 free slots**, whose games run on Free; any more games need a **paid
+slot** ($15 for 30 days), whose game runs on Creator. A new game is refused while both free slots are taken: archive one
+you no longer need (on your console, xgames.fun/console; unpublish it first) or move one to a paid slot. Archived games
+free their slot unless their link is still live. What the game's server, saves and scores may use is its plan:
 
-|                      | Free                                                               | Creator                                                   | Scale                   |
-| -------------------- | ------------------------------------------------------------------ | --------------------------------------------------------- | ----------------------- |
-| For                  | every game, by default                                             | a game in one of your paid game slots (per game, a month) | granted by xgames.fun   |
-| Server               | 50 ms of CPU a request; 600 requests a minute, 120 from one player | 200 ms; 6,000 a minute, 600 from one player               | 1,000 ms; 30,000, 1,200 |
-| Saves and scores     | 10 MB of saves; 8 boards of 10,000 entries                         | 1 GB; 16 boards of 1,000,000                              | 10 GB; 16 of 1,000,000  |
-| Use included a month | $1                                                                 | $10 a slot, shared by your Creator games                  | as granted              |
-| Sites that embed it  | 3 (`xcore embed`)                                                  | 10                                                        | 25                      |
-| Domains of your own  | none                                                               | 1 (`xcore domain`)                                        | 5                       |
+|                      | Free                                                               | Creator                                              | Scale                   |
+| -------------------- | ------------------------------------------------------------------ | ---------------------------------------------------- | ----------------------- |
+| For                  | a game in one of your 2 free slots                                 | a game in one of your paid slots (per game, a month) | granted by xgames.fun   |
+| Server               | 50 ms of CPU a request; 600 requests a minute, 120 from one player | 200 ms; 6,000 a minute, 600 from one player          | 1,000 ms; 30,000, 1,200 |
+| Saves and scores     | 10 MB of saves; 8 boards of 10,000 entries                         | 1 GB; 16 boards of 1,000,000                         | 10 GB; 16 of 1,000,000  |
+| Use included a month | $1                                                                 | $10 a slot, shared by your Creator games             | as granted              |
+| Sites that embed it  | 3 (`xcore embed`)                                                  | 10                                                   | 25                      |
+| Domains of your own  | none                                                               | 1 (`xcore domain`)                                   | 5                       |
 
 Past what is included, a game is **capped** until the month ends: its server answers at most 60 requests a minute (20
-from one player) and saves and scores slow down, but nothing is lost and the game keeps working. Slots are $15 for 30
-days, prepaid in SOL or USDC in xgames.fun Studio (Plans; no automatic renewal, 7 days' grace after the period ends).
+from one player) and saves and scores slow down, but nothing is lost and the game keeps working. Paid slots are $15 for
+30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans; no automatic renewal, 7 days' grace after the period
+ends; when they end, their games go back to free slots and nothing is taken down).
 Usage credit, bought the same way, lets Creator games go past what their slots include, at twice what xgames.fun pays,
-instead of slowing down. A slot moves between your games at any time
+instead of slowing down. A paid slot moves between your games at any time
 (`xcore plan deactivate <one>`, `xcore plan activate <another>`) without changing the bill. `xcore plan [folder]`
-shows a game's plan, its limits and this month's use; `--all` your slots and every game. A game's server sees a 429
+shows a game's plan, its limits and this month's use; `--all` your free and paid slots and every game. A game's server sees a 429
 with `scope` (`"player"` or `"game"`) and `plan` when it goes past a rate.
 
 ### Your own site and your own domain: `xcore embed`, `xcore domain`

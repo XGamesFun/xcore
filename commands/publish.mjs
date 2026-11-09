@@ -132,6 +132,16 @@ export function publishCommand({
           newGame: values.new,
           title: values.title ?? null,
           progress: values.json ? () => {} : l => console.error(l),
+        }).catch(e => {
+          // A new game needs one of the account's 2 free slots (xgames.fun's words say so); name the commands that free one.
+          if (e?.code === 'no-free-slot')
+            throw Object.assign(
+              new Error(
+                `${e.message}\n  ${CMD} plan activate <another game's folder>   moves that game to a paid slot\n  ${CMD} plan --all   your slots and games; archive one on ${origin}/console`,
+              ),
+              { status: e.status, code: e.code },
+            );
+          throw e;
         });
         if (values.json) printJson(r);
         else
