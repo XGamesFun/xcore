@@ -249,7 +249,16 @@ test('xcore db export and import round-trip: a dump goes back in over the tables
   assert.match(dump, /^PRAGMA defer_foreign_keys=TRUE;/);
   assert.match(dump, /CREATE TABLE IF NOT EXISTS players/);
   assert.match(dump, /CREATE INDEX IF NOT EXISTS log_by_what/);
-  assert.match(dump, /INSERT OR REPLACE INTO "log" \("rowid", "what"\) VALUES \(1, 'a'\);/, 'no key: its rowid');
+  assert.match(
+    dump,
+    /INSERT INTO "log" \("rowid", "what"\) VALUES \(1, 'a'\) ON CONFLICT \("rowid"\) DO UPDATE SET "what" = excluded\."what";/,
+    'no key: its rowid',
+  );
+  assert.match(
+    dump,
+    /INSERT INTO "players" \("id", "gold"\) VALUES \('p1', 3\) ON CONFLICT \("id"\) DO UPDATE SET "gold" = excluded\."gold";/,
+  );
+  assert.doesNotMatch(dump, /REPLACE/, 'never REPLACE, which deletes the row first');
   assert.doesNotMatch(dump, /INSERT[^\n]*_gf_migrations|CREATE TABLE[^\n]*_gf_migrations/);
   // into another database with the same migrations, twice: every row once
   const into = fakeD1();
@@ -278,6 +287,11 @@ test('xcore db export and import round-trip: a dump goes back in over the tables
   assert.deepEqual(rows("SELECT gold FROM players WHERE id = 'p1'"), [{ gold: 9 }]);
   assert.deepEqual(rows('SELECT sha256 FROM _gf_migrations'), [{ sha256: sha(text) }]);
   assert.match(d1.sql, /^PRAGMA defer_foreign_keys=TRUE;\nCREATE TABLE IF NOT EXISTS players/);
+  assert.match(
+    d1.sql,
+    /INSERT INTO "players" VALUES\('p1',9\) ON CONFLICT \("id"\) DO UPDATE SET "gold" = excluded\."gold";/,
+  );
+  assert.equal(d1.statements[0], 'PRAGMA defer_foreign_keys=TRUE', 'here as live, the PRAGMA goes first');
   // SQL of your own runs as written, and may not change the record
   assert.deepEqual(importPlan("INSERT INTO log VALUES ('c');").statements, ["INSERT INTO log VALUES ('c')"]);
   assert.throws(
@@ -285,6 +299,121 @@ test('xcore db export and import round-trip: a dump goes back in over the tables
     /record of its migrations/,
   );
 });
+
+// players, and items that point at them with ON DELETE CASCADE: the shape a REPLACE wipes (it deletes each player,
+// and the cascade its items), and that an import into an empty database breaks unless foreign keys wait for the end
+const FK_SCHEMA = [
+  'CREATE TABLE players (id TEXT PRIMARY KEY, name TEXT);',
+  'CREATE TABLE items (id INTEGER PRIMARY KEY, player TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE, what TEXT);',
+  'CREATE TABLE badges (player TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE, badge TEXT NOT NULL, PRIMARY KEY (player, badge)) WITHOUT ROWID;',
+].join('\n');
+const FK_ROWS =
+  "INSERT INTO players VALUES ('p1', 'Ada'), ('p2', 'Bo'); INSERT INTO items VALUES (1, 'p1', 'sword'), (2, 'p1', 'shield'), (3, 'p2', 'map'); INSERT INTO badges VALUES ('p1', 'first');";
+
+test('a dump with foreign keys and ON DELETE CASCADE round-trips: over the same database, into a fresh one, into an empty one', async () => {
+  const { dumpDatabase, importPlan, applyMigrations } = await import('../lib/dev/d1.mjs');
+  const migrations = [{ name: '0001_init.sql', text: FK_SCHEMA, sha256: sha(FK_SCHEMA), bytes: FK_SCHEMA.length }];
+  const from = fakeD1();
+  assert.equal(from.db.prepare('PRAGMA foreign_keys').get().foreign_keys, 1, 'foreign keys enforced, as on D1');
+  await applyMigrations(null, from, migrations);
+  from.db.exec(FK_ROWS);
+  const dump = await dumpDatabase(from);
+  assert.ok(dump.indexOf('INSERT INTO "items"') < dump.indexOf('INSERT INTO "players"'), 'items come before players');
+  assert.match(
+    dump,
+    /INSERT INTO "badges" \("player", "badge"\) VALUES \('p1', 'first'\) ON CONFLICT \("player", "badge"\) DO NOTHING;/,
+  );
+  const run = async (db, plan) => db.batch(plan.statements.map(st => db.prepare(st)));
+  const all = db => ({
+    players: db.db
+      .prepare('SELECT id, name FROM players ORDER BY id')
+      .all()
+      .map(r => ({ ...r })),
+    items: db.db
+      .prepare('SELECT id, player, what FROM items ORDER BY id')
+      .all()
+      .map(r => ({ ...r })),
+    badges: db.db
+      .prepare('SELECT player, badge FROM badges')
+      .all()
+      .map(r => ({ ...r })),
+  });
+  const want = all(from);
+  assert.equal(want.items.length, 3);
+  // over the database it came from, twice: the rows updated where they are, nothing deleted, nothing doubled
+  from.db.exec("UPDATE players SET name = 'changed' WHERE id = 'p1'");
+  await run(from, importPlan(dump));
+  await run(from, importPlan(dump));
+  assert.deepEqual(all(from), want, 'the items kept, and the name put back');
+  // into a fresh database its migrations made: the items go in before the players they point at
+  const fresh = fakeD1();
+  await applyMigrations(null, fresh, migrations);
+  await run(fresh, importPlan(dump));
+  assert.deepEqual(all(fresh), want);
+  // into an empty database: the dump makes the tables itself
+  const empty = fakeD1();
+  await run(empty, importPlan(dump));
+  assert.deepEqual(all(empty), want);
+  // D1's own export (INSERT INTO … VALUES, no columns named, a child table first) goes in the same way
+  const d1 = [
+    'PRAGMA defer_foreign_keys=TRUE;',
+    ...FK_SCHEMA.split('\n'),
+    `INSERT INTO "items" VALUES(1,'p1','sword');`,
+    `INSERT INTO "items" VALUES(2,'p1','shield');`,
+    `INSERT INTO "items" VALUES(3,'p2','map');`,
+    `INSERT INTO "players" VALUES('p1','Ada');`,
+    `INSERT INTO "players" VALUES('p2','Bo');`,
+    `INSERT INTO "badges" VALUES('p1','first');`,
+  ].join('\n');
+  const plan = importPlan(d1);
+  assert.doesNotMatch(plan.sql, /REPLACE/);
+  await run(from, plan);
+  assert.deepEqual(all(from), want, "D1's dump over the same database");
+  const fresh2 = fakeD1();
+  await applyMigrations(null, fresh2, migrations);
+  await run(fresh2, plan);
+  assert.deepEqual(all(fresh2), want, "D1's dump into a fresh database");
+  // an INSERT OR REPLACE in a dump is made an upsert too, so it cannot fire the cascade either
+  const replaced = importPlan(
+    `PRAGMA defer_foreign_keys=TRUE;\n${FK_SCHEMA}\nINSERT OR REPLACE INTO players (id, name) VALUES ('p1', 'Ada');\nREPLACE INTO "players" VALUES('p2','Bo');`,
+  );
+  assert.doesNotMatch(replaced.sql, /REPLACE/);
+  await run(from, replaced);
+  assert.deepEqual(all(from), want);
+});
+
+test(
+  'xcore db export and import with foreign keys on a local D1: over the same database and into a fresh one, nothing lost',
+  { skip: noMiniflare, timeout: 120_000 },
+  async t => {
+    const { dbExport, dbImport, dbQuery } = await import('../lib/db.mjs');
+    const tmp = await tempDir();
+    t.after(tmp.cleanup);
+    const dir = await game(tmp, { database: {} }, { 'server/migrations/0001_init.sql': FK_SCHEMA });
+    for (const st of FK_ROWS.split('; ')) await dbQuery(dir, st, { write: true });
+    const count = async (d, table) => (await dbQuery(d, `SELECT count(*) AS n FROM ${table}`)).results[0].n;
+    const dump = await dbExport(dir);
+    const back = await dbImport(dir, dump.file);
+    assert.equal(back.dump, true);
+    assert.deepEqual([await count(dir, 'players'), await count(dir, 'items'), await count(dir, 'badges')], [2, 3, 1]);
+    // a fresh game: its migrations made the tables, empty
+    const fresh = await game(tmp, { database: {} }, { 'server/migrations/0001_init.sql': FK_SCHEMA });
+    await dbImport(fresh, dump.file);
+    assert.deepEqual(
+      [await count(fresh, 'players'), await count(fresh, 'items'), await count(fresh, 'badges')],
+      [2, 3, 1],
+    );
+    // a game whose migrations made none of them: the dump makes them
+    const other = 'CREATE TABLE other (x TEXT);\n';
+    const empty = await game(tmp, { database: {} }, { 'server/migrations/0001_init.sql': other });
+    await dbImport(empty, dump.file);
+    assert.deepEqual((await dbQuery(empty, 'SELECT player, what FROM items ORDER BY id')).results, [
+      { player: 'p1', what: 'sword' },
+      { player: 'p1', what: 'shield' },
+      { player: 'p2', what: 'map' },
+    ]);
+  },
+);
 
 test('splitSql: statements as SQLite reads them (quotes, comments, a trigger’s BEGIN … END)', () => {
   assert.deepEqual(
@@ -979,7 +1108,7 @@ test(
     assert.match(await readFile(path.join(dir, '.gamesfun', '.gitignore'), 'utf8'), /^\*$/m, 'exports kept out of git');
     assert.match(
       await readFile(dump.file, 'utf8'),
-      /INSERT OR REPLACE INTO "players" \("id", "gold"\) VALUES \('p1', 0\);/,
+      /INSERT INTO "players" \("id", "gold"\) VALUES \('p1', 0\) ON CONFLICT \("id"\) DO UPDATE SET "gold" = excluded\."gold";/,
     );
     // the dump goes back in over the same database: nothing doubled, and its migrations' record left as it was
     const back = await dbImport(dir, dump.file);

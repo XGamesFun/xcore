@@ -33,9 +33,13 @@ After an audit of the storage work, and as settled with the platform (STORAGE.md
 - **`xcore db query`** uses a copy of xgames.fun's rule (its statement splitting, the statements it allows, its
   params), so it takes and refuses the same queries here and live; a `null` param is refused (write `NULL` in the
   SQL).
-- **`xcore db export` and `import` round-trip**: a dump is `CREATE … IF NOT EXISTS` and `INSERT OR REPLACE` (with the
-  rowid for a table without a key) and leaves out `_gf_migrations`; a dump (xcore's or D1's) goes in over the
-  database as it is. Before, a local import of a local export always failed ("table already exists").
+- **`xcore db export` and `import` round-trip**: a dump makes its tables first (`CREATE … IF NOT EXISTS`), then
+  writes each row as an upsert on the table's key (`INSERT … ON CONFLICT (key) DO UPDATE SET …`, the rowid for a
+  table without a key), after `PRAGMA defer_foreign_keys`, and leaves out `_gf_migrations`. A dump (xcore's or D1's,
+  whose `INSERT`s and any `REPLACE` are made upserts the same way) goes in over the database as it is, or into an
+  empty one, here and live: a row is updated where it is and never deleted, so a table whose rows point at another's
+  with `ON DELETE CASCADE` keeps them, and a row may come before the one it points at. Before, a local import of a
+  local export always failed ("table already exists").
 - **Live owner routes:** `db import --live` and `files put --live` are held to Studio's 4.5 MB a request before
   anything is sent, with the way that takes more (`GF.files.put` from the game's server), and a bare 413 is
   explained. `import --live` and `query --write --live` need `--yes` or the word typed, as `restore` does, and are
