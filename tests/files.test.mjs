@@ -141,6 +141,16 @@ test('.gamesfun/ gets a .gitignore of its own (*) the first time xcore writes th
   await writeFile(path.join(dir, '.gamesfun', '.gitignore'), 'exports/\n');
   await stateFolder(dir);
   assert.equal(await readFile(path.join(dir, '.gamesfun', '.gitignore'), 'utf8'), 'exports/\n');
+  // what its words say works: deleted, it comes back; changed (even emptied), it is kept as written
+  const { rm } = await import('node:fs/promises');
+  assert.doesNotMatch(STATE_GITIGNORE, /delete this file/);
+  assert.match(STATE_GITIGNORE, /deleting it does not\n# let anything in: change it instead/);
+  await rm(path.join(dir, '.gamesfun', '.gitignore'));
+  await stateFolder(dir);
+  assert.equal(await readFile(path.join(dir, '.gamesfun', '.gitignore'), 'utf8'), STATE_GITIGNORE);
+  await writeFile(path.join(dir, '.gamesfun', '.gitignore'), '');
+  await stateFolder(dir);
+  assert.equal(await readFile(path.join(dir, '.gamesfun', '.gitignore'), 'utf8'), '');
 });
 
 test('public files on an origin of their own: the files domain’s headers, types, ETag and ranges (§8.7)', async t => {

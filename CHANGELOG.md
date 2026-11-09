@@ -101,7 +101,8 @@ After an audit of the storage work, and as settled with the platform (STORAGE.md
   characters and a `*_SECRET` literal up to 16,384 (`MAX_MATCH` 32 KiB, under the 64 KiB overlap); before, a
   service-role JWT with a payload over 1,000 characters went through.
 - **`.gamesfun/` keeps itself out of git**: xcore writes `.gamesfun/.gitignore` (`*`) when it writes there and finds
-  none, so `db export`'s dumps of players' data are not committed.
+  none, so `db export`'s dumps of players' data are not committed. It comes back when deleted, so its own words say
+  to change it instead (`!publish.json` commits that file); one you changed is left as you wrote it.
 - **0.1.0's server code over the new `database.js`:** `xcore add database`, bringing a 0.1.0 `server/database.js` up
   to date, and then every publish list each `dataOf(env)` call in the server's code whose `get`, `put`, `add` or
   `delete` names no owner (it now means the server's own space) and each `list` that passes an `offset`, as
