@@ -141,6 +141,38 @@ test('JWTs: a Supabase anon key passes, a service-role key and any other signed 
   assert.match(kinds('x.js', `"${jwt({ role: 'authenticated' })}"`).join(), /role "authenticated"/);
 });
 
+test('a long key is still a key: a service-role JWT with a big payload, a long *_SECRET literal (1,132 characters and more)', () => {
+  /** A token whose payload is `n` characters of base64url: its claims padded to that length. */
+  const sized = (claims, n) => {
+    let pad = '';
+    while (b64url({ ...claims, pad }).length < n) pad += 'x';
+    return jwt({ ...claims, pad });
+  };
+  for (const n of [1132, 1500, 4000, 10_000, 16_000]) {
+    const token = sized({ iss: 'supabase', role: 'service_role' }, n);
+    assert.ok(token.split('.')[1].length >= n);
+    assert.match(kinds('admin.js', `const key = "${token}";`).join(), /service-role/, `payload ${n}`);
+    // and across the line between two pieces of a big file
+    const text = `${'let a = 1;\n'.repeat(9000)}const key = "${token}";\n${'let b = 2;\n'.repeat(9000)}`;
+    const at = text.indexOf(token) + 37;
+    for (const chunk of [at, at + Math.floor(n / 2)])
+      assert.match(
+        scanFile('big.js', bytes(text), { chunk, overlap: MAX_MATCH })
+          .map(h => h.kind)
+          .join(),
+        /service-role/,
+        `payload ${n}, cut at ${chunk}`,
+      );
+    const value = alnum(32)
+      .repeat(Math.ceil(n / 32))
+      .slice(0, n);
+    assert.ok(
+      kinds('config.js', `const GAME_SECRET = "${value}";`).includes('secret assigned a literal'),
+      `literal ${n}`,
+    );
+  }
+});
+
 test("a Firebase web config's apiKey passes; the same Google key shape anywhere else (Gemini) is refused", () => {
   const key = 'AIza' + 'Sy' + alnum(33);
   const config = `const firebaseConfig = {\n  apiKey: "${key}",\n  authDomain: "my-game.firebaseapp.com",\n  projectId: "my-game",\n  appId: "1:1234567890:web:abcdef123456"\n};`;
