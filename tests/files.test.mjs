@@ -107,6 +107,29 @@ test('the files store: put, get, head, list a page at a time, delete, usage, and
   assert.equal((await createFileStore({ dir }).usage()).files, 7);
 });
 
+test('the files store: a path named __proto__, constructor or toString is a file like any other', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await game(tmp);
+  const store = createFileStore({ dir });
+  for (const name of ['__proto__', 'constructor', 'toString', 'hasOwnProperty'])
+    assert.equal((await store.head(name)).code, 'not-found', `${name} before it is put`);
+  for (const name of ['__proto__', 'constructor', 'toString', 'levels/constructor'])
+    assert.deepEqual(await store.put(name, name, { public: true }), { ok: true, path: name, bytes: name.length });
+  assert.equal((await store.get('__proto__')).body.toString(), '__proto__');
+  assert.deepEqual(await store.usage(), { ok: true, bytes: 9 + 11 + 8 + 18, files: 4, cap: FILES.capBytes });
+  // kept on disk and read back the same by another store
+  const again = createFileStore({ dir });
+  assert.deepEqual(
+    (await again.list()).items.map(f => f.path),
+    ['__proto__', 'constructor', 'levels/constructor', 'toString'],
+  );
+  assert.equal((await again.served('toString'))?.meta.public, true);
+  assert.deepEqual(await again.delete('constructor'), { ok: true, deleted: true });
+  assert.deepEqual(await again.delete('valueOf'), { ok: true, deleted: false });
+  assert.equal((await again.usage()).files, 3);
+});
+
 test('public files on an origin of their own: the files domain’s headers, types, ETag and ranges (§8.7)', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);

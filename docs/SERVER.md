@@ -213,8 +213,9 @@ if (world.ok) state = new Uint8Array(await new Response(world.body).arrayBuffer(
 - **From your machine:** `xcore files put <file> [path] [--public]`, `ls`, `get`, `rm`, `usage`; with `--live`, the
   game's files on xgames.fun.
 - **Locally**, `xcore dev` keeps them in `.gamesfun/dev/files/` (never published) and serves the public ones on a port
-  of their own (`project files: … http://127.0.0.1:8788`), so the browser treats them as another site, as it will
-  live. `xcore files` without `--live` reads and writes the same ones.
+  of their own (`project files: … http://127.0.0.1:8788`), another origin to the page, as live. (Here it is the same
+  site, both being `127.0.0.1`; live, `xgamesusercontent.com` is another site too, so cookies and the like keep apart
+  there in a way they may not on this machine.) `xcore files` without `--live` reads and writes the same ones.
 - Publish refuses a server that uses `env.GF.files` while xgames.fun does not keep project files yet (its
   `GET /api/kit/me` lists `"files"` once it does).
 

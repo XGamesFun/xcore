@@ -20,7 +20,7 @@ Without --live, the ones on this machine that ${CMD} dev gives the server (kept 
 published); with --live, the game's files on xgames.fun (each call kept in the game's audit log).
   ls [prefix/]       the files, or those in one folder ("replays/")
   put <file> [path]  a file from this machine, at [path] (default: its name). --public serves it at
-                     https://<slug>.xgamesusercontent.com/<path>, a site of its own (here: the files origin xcore dev
+                     https://<slug>.xgamesusercontent.com/<path>, another site (here: the files origin xcore dev
                      prints); without it only the game's server reads it. Up to 25 MB a file
   get <path>         a file's bytes, into --out <file> (default: its name here; --force writes over one)
   rm <path>          delete one
