@@ -49,6 +49,8 @@ function standIn() {
           window.asked = [];
           addEventListener('message', e => {
             if (e.data?.type === 'gf:host-ready') e.source.postMessage({ type: 'gf:host', v: 1, auth: true }, '*');
+            if (e.data?.type === 'gf:fullscreen') { window.fullAsked = (window.fullAsked ?? []).concat(e.data.on);
+              e.source.postMessage({ type: 'gf:fullscreen-state', v: 1, on: e.data.on, native: false }, '*'); }
             if (e.data?.type === 'gf:auth-signin') { asked.push(e.data);
               e.source.postMessage({ type: 'gf:auth', v: 1, level: 3, wallet: '', x: { handle: 'page_fan' }, token: 'tok-page', expires: Date.now() + 3600e3, status: 'signed-in' }, '*'); }
           });</script>`,
@@ -361,6 +363,83 @@ test(
     assert.equal((await frame.evaluate(() => window.signedIn)).id, 'x:42');
   },
 );
+
+test(
+  'full screen: the play page around the game is asked, and says when it changed',
+  { skip, timeout: 60_000 },
+  async t => {
+    const g = await standIn();
+    t.after(g.close);
+    const browser = await chrome();
+    t.after(() => browser.close());
+    const page = await browser.newPage();
+    await page.goto(`http://xgames.test:${g.port}/play/moth`);
+    const frame = await (await page.waitForSelector('#g')).contentFrame();
+    await frame.waitForFunction(() => window.GamesFun);
+    await frame.evaluate(() => GamesFun.ready);
+    await frame.evaluate(() => {
+      window.fulls = [];
+      GamesFun.onFullscreen(on => window.fulls.push(on));
+    });
+    assert.deepEqual((await frame.evaluate(() => GamesFun.fullscreen())).data, { on: true, how: 'page' });
+    assert.equal(await frame.evaluate(() => GamesFun.isFullscreen), true);
+    assert.deepEqual(
+      (await frame.evaluate(() => GamesFun.fullscreen())).data,
+      { on: false, how: 'page' },
+      'again: back',
+    );
+    assert.deepEqual(await page.evaluate(() => window.fullAsked), [true, false]);
+    assert.deepEqual(await frame.evaluate(() => window.fulls), [true, false]);
+  },
+);
+
+test(
+  'full screen in a frame that allows none (a post on X): the game opens in a tab of its own',
+  { skip, timeout: 60_000 },
+  async t => {
+    const g = await standIn();
+    t.after(g.close);
+    const browser = await chrome();
+    t.after(() => browser.close());
+    const page = await browser.newPage();
+    await page.goto(`http://xgames.test:${g.port}/xpost`);
+    const frame = await (await page.waitForSelector('#g')).contentFrame();
+    await frame.waitForFunction(() => window.GamesFun);
+    await frame.evaluate(() => GamesFun.ready);
+    const popup = page.waitForEvent('popup');
+    // a click in the game, as a button would (full screen needs one)
+    await frame.evaluate(() => {
+      const b = document.createElement('button');
+      b.id = 'full';
+      b.onclick = () => (window.full = GamesFun.fullscreen());
+      document.body.append(b);
+    });
+    await frame.click('#full');
+    const win = await popup;
+    assert.equal(new URL(win.url()).host, `moth-play.xgames.test:${g.port}`, "the game's own link");
+    assert.deepEqual((await frame.evaluate(() => window.full)).data, { on: false, how: 'tab' });
+  },
+);
+
+test('full screen on its own link: the browser goes full screen, and back', { skip, timeout: 60_000 }, async t => {
+  const g = await standIn();
+  t.after(g.close);
+  const browser = await chrome();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(`http://moth-play.xgames.test:${g.port}/`);
+  await page.evaluate(() => {
+    const b = document.createElement('button');
+    b.id = 'full';
+    b.onclick = () => (window.full = GamesFun.fullscreen());
+    document.body.append(b);
+  });
+  await page.click('#full');
+  assert.deepEqual((await page.evaluate(() => window.full)).data, { on: true, how: 'browser' });
+  assert.equal(await page.evaluate(() => GamesFun.isFullscreen), true);
+  assert.deepEqual((await page.evaluate(() => GamesFun.fullscreen(false))).data, { on: false, how: 'browser' });
+  await page.waitForFunction(() => !GamesFun.isFullscreen);
+});
 
 test('inside a post on X (a frame no page answers): it signs in by itself', { skip, timeout: 60_000 }, async t => {
   const g = await standIn();

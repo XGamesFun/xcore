@@ -22,6 +22,7 @@ test('plain static files are their own published folder', async t => {
   assert.equal(r.files, 4, 'gamesfun.json is not one of the published files');
   assert.equal(await resolveGame(dir), dir);
   assert.equal(pageTitle(dir), 'Dot Catch');
+  assert.match(r.warn.map(w => w.what).join('\n'), /it has no way to go full screen/);
   assert.match(
     reportLines(r).join('\n'),
     /plain static files[\s\S]*Next: (npx -y @xgamesfun\/xcore|xcore|npx xcore|node bin\/xcore\.mjs) check/,
@@ -40,6 +41,17 @@ test('plain static files are their own published folder', async t => {
     next(() => '.'),
     / check \(.* publish\.$/,
   );
+});
+
+test('a game with a full screen button (its own, or GamesFun.fullscreen()) is not told to add one', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  for (const call of ['document.body.requestFullscreen()', 'GamesFun.fullscreen()', 'el.webkitRequestFullscreen()']) {
+    const dir = await fixture(tmp, 'static');
+    await writeFile(path.join(dir, 'full.js'), `button.onclick = () => ${call};\n`);
+    const r = await adopt(dir);
+    assert.doesNotMatch(r.warn.map(w => w.what).join('\n'), /no way to go full screen/, call);
+  }
 });
 
 test('a project with a build is built; its output is published and its public folder takes the files gamesfun adds', async t => {

@@ -57,6 +57,17 @@ stays on their host as a backend (README, "A game with its own Node server"). Su
 Never edit their build tool's output by hand (it is made again on every build): change the source or the config.
 Adopt again after the fixes; the list should be empty.
 
+**Full screen.** Most players meet a game in a post on X or on a phone, where it first shows in a small frame. When adopt
+warns that the game has no way to go full screen, offer the person a button for it (their game, their call): a small
+button in a corner of the first screen, big enough for a thumb, that calls `GamesFun.fullscreen()` from the click
+(`gamesfun.js`, loaded by `xcore add signin`; Godot `await GamesFun.fullscreen()`; Unity `Screen.fullScreen`).
+Pressed again it comes back. It answers `{on, how}`: on xgames.fun the page around the game goes full screen, or fills
+the screen in an app's own browser (X's on a phone among them); on the game's own link the browser does; in a frame
+that allows none (a post on X on a computer) the game opens in a tab of its own (`how: 'tab'`); an iPhone's Safari has
+no full screen for a page (`how: 'none'`): there the button can hide, or say "Add to Home Screen".
+`GamesFun.onFullscreen(on => …)` follows it (Esc, the browser's own controls). A game that goes full screen already
+(its own button, or its engine's) needs nothing.
+
 ## 3. Check
 
 ```bash

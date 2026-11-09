@@ -15,6 +15,11 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
   refuses `kind: 'ban'` itself. `xcore dev` always answers `banned: null`.
 - `xcore dev` answers `/platform/v1/live` from the game's `.gamesfun/live.json`, and with maintenance on there serves
   the holding page for the game's pages and `503 maintenance` for its `api/` and platform calls, as hosted.
+- Full screen: `GamesFun.fullscreen()` (and `GamesFun.fullscreen()` in Godot): from a click,
+  the play page around the game goes full screen (or fills the screen in an app's own browser, X's among them), the
+  browser does on the game's own link, and a frame that allows none (a post on X) opens the game in a tab of its own;
+  `GamesFun.onFullscreen` follows it. `xcore adopt` warns when a game has no way to go full screen, and the
+  bring-your-own-game skill offers the button.
 
 ## 0.2.1 — 2026-11-09
 

@@ -218,6 +218,14 @@ each, 16 a player), leaderboards (submit, top, the player's own), the game's dat
 (`api`). Every call answers `{data, error, status}` and none throws, so a game plays on as a guest wherever xgames.fun is
 not there.
 
+**Full screen.** Most players meet a game in a post on X or on a phone, where it shows in a small frame first; `xcore
+adopt` warns when a game has no way to go full screen. A button that calls `GamesFun.fullscreen()` from the click
+(`await GamesFun.fullscreen()` in Godot; `Screen.fullScreen` in Unity) does it wherever the game is: in xgames.fun's
+play page the page around the game goes full screen (or fills the screen in an app's own browser, X's among them), on
+its own link the browser does, and in a frame that allows none (a post on X on a computer) the game opens in a tab of
+its own. It answers `{on, how: 'page' | 'browser' | 'tab' | 'none'}` (`none`: an iPhone's Safari, which has no full
+screen for a page); pressed again it comes back, and `GamesFun.onFullscreen(on => …)` follows every change.
+
 **A leaderboard is the player's own word until the server takes it.** A signed-in player submits their own scores
 from the page, so anyone can submit any score for themselves from the browser's console. A game with its own server
 makes a board nobody can write that way: `env.GF.scores.setup('ranked', {writer: 'server'})` (or a pattern for boards

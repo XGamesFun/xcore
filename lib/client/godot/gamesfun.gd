@@ -10,6 +10,7 @@
 #   await GamesFun.saves_put("main", {"level": 3}) # this player's saves (JSON, 64 KB each, 16 a player)
 #   var r = await GamesFun.saves_get("main")       # r.data is the value, or null
 #   await GamesFun.scores_submit("best", 1200)     # leaderboards: r.data {improved, best, rank}
+#   await GamesFun.fullscreen()                    # from a button: full screen (again: back)
 #   var top = await GamesFun.scores_top("best")    # top.data: [{rank, player, name, score, at}]
 #   await GamesFun.db_add("levels", {"name": "Moon"})  # the game's own database (xcore add database)
 #   multiplayer.multiplayer_peer = await GamesFun.join_room(code)  # Godot's multiplayer over xgames.fun (xcore add multiplayer)
@@ -132,6 +133,14 @@ func sign_in(how := "x"):
 func sign_out():
 	await _run("signOut", [])
 	_set_player(null)
+
+
+## Full screen, from a button press: on xgames.fun the page around the game goes full screen (or fills the screen in an
+## app's own browser, X's among them); elsewhere the browser's own, or the game's link in a tab of its own (a post on X).
+## on: true, false, or null (the other way). -> {"on": bool, "how": "page" | "browser" | "tab" | "none"}
+func fullscreen(on = null):
+	var r = await _run("fullscreen", [] if on == null else [on])
+	return r.get("data") if r is Dictionary and r.get("data") != null else {"on": false, "how": "none"}
 
 
 func is_signed_in() -> bool:
