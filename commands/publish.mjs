@@ -8,6 +8,7 @@ import { studioOrigin } from '../lib/publish/client.mjs';
 import { gate } from '../lib/publish/gate.mjs';
 import { buildFailure, pageRoots, runBuild } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
+import { reviewNudge } from '../lib/review.mjs';
 
 const usage = `Usage: xcore publish [dir] [--draft] [--new] [--title <name>] [--status] [--check [--verify [--port <n>]]] [--json]
 
@@ -68,6 +69,9 @@ export function publishCommand({
         );
         const dir = await resolveGame(positionals[0]);
         const origin = studioOrigin();
+        // a game that pays results through vouchers, changed since its last security review: one line, never a refusal
+        const nudge = values.status || values.json ? null : reviewNudge(dir);
+        if (nudge) console.error(nudge);
         if (values.status) {
           const s = await publishStatus(dir, { origin });
           if (values.json) printJson(s);

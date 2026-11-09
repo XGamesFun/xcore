@@ -938,6 +938,10 @@ test('add vouchers: refused without an economy; the server, the signer copy, the
     r.steps.some(s => /gf\.loot\.link\(\)/.test(s)),
     'the page links its wallet',
   );
+  assert.ok(
+    r.steps.some(s => /"trust": "decides", "replays" or "bounds"/.test(s) && / review: what a cheater gets/.test(s)),
+    'it says to declare trust and run the review',
+  );
   assert.doesNotMatch(JSON.stringify(r), new RegExp(seed), 'the seed is never in what it says');
   const cfg = JSON.parse(await readFile(path.join(dir, 'gamesfun.json'), 'utf8'));
   assert.deepEqual(cfg.server.objects, [{ class: 'GameVouchers', binding: 'GAME_VOUCHERS' }]);

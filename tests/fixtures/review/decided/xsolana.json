@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "network": "devnet",
+  "name": "Reef Keeper",
+  "items": [
+    {
+      "key": "whale",
+      "name": "Whale",
+      "id": 1
+    }
+  ],
+  "grants": [
+    {
+      "key": "discover-whale",
+      "name": "Discover a Whale",
+      "prize": {
+        "gives": "item",
+        "item": "whale"
+      },
+      "vouchers": [
+        "24sDWzHodVNPzTuAt5wNqtrHzxNuaxQiCHLaUcDLrkUF"
+      ],
+      "limits": {
+        "perWallet": 1,
+        "perPerson": 1,
+        "perDay": 100
+      },
+      "trust": "decides",
+      "id": 1
+    }
+  ],
+  "live": {
+    "program": "9cwqM1TXytPnFZsLfmUyv2dg4uW6Ch9C6UJVPns7NFQ",
+    "project": "ReefKeeper111111111111111111111111111111111"
+  }
+}

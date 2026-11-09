@@ -9,10 +9,11 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { guard, parse, printJson } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
-import { ECONOMY_FILE, solanaCommand } from '../lib/economy.mjs';
+import { ECONOMY_FILE, solanaCommand, solanaHas } from '../lib/economy.mjs';
 import { addLoot } from '../lib/publish/adopt.mjs';
 import { solanaRpc } from '../lib/solana-rpc.mjs';
 import { CMD } from '../lib/command.mjs';
+import { NO_REVIEW } from '../lib/review.mjs';
 
 const usage = `Usage: xcore loot <command> [options]
 
@@ -21,6 +22,8 @@ A game's economy on loot, one shared Solana program (devnet only until it is aud
   xcore loot add [game]            where the game's economy (${ECONOMY_FILE}) and its page client (gf/loot/) go, and the
                                    copy once the economy is there (a brought game: the folder its build copies as it is)
   xcore loot check|simulate|cost|explain [file]   refusals and warnings; where the money goes; what it costs; in words
+  xcore loot review [file]         what a cheater gets from each route that pays, and the trade-offs in words (xcore
+                                   review adds the game's server and, with --live, the published game)
   xcore loot approve [file]        in a game's folder: put its economy live, approved in your own wallet
   xcore loot help                  everything else xsolana does (its help says \`xsolana <command>\`: run each as
                                    \`xcore loot <command>\`)
@@ -35,7 +38,7 @@ copy: never edit it; publish brings it up to date). A brought game with a build 
 copies as it is (gamesfun.json page.static), so every build carries them. It prints the next steps.`;
 
 /** xsolana's commands that read an economy file ([file], default xsolana.json). */
-const ON_FILE = new Set(['check', 'simulate', 'cost', 'explain', 'publish', 'status', 'approve']);
+const ON_FILE = new Set(['check', 'simulate', 'cost', 'explain', 'review', 'publish', 'status', 'approve']);
 
 export default {
   name: 'loot',
@@ -70,6 +73,11 @@ export default {
       );
       return 1;
     }
+    // an installed package from before `review`: what to do, instead of its help
+    if (args[0] === 'review' && !solanaHas('review')) {
+      console.error(`xcore: ${NO_REVIEW}.`);
+      return 1;
+    }
     // a game made before the file was named xsolana.json keeps loot.json: given to the command when it names no file
     const named = args.slice(1).some(a => a.endsWith('.json'));
     let rest =
@@ -99,9 +107,10 @@ export default {
 };
 
 /** xsolana's commands a person runs as `xcore loot <command>`. */
-const COMMANDS = 'guide|examples|check|simulate|cost|explain|publish|approve|status|connect|mcp|tool|version|help';
+const COMMANDS =
+  'guide|examples|check|simulate|cost|explain|review|publish|approve|status|connect|mcp|tool|version|help';
 /** Its tools an agent calls (xsolana_check …) that are also a command here. */
-const TOOLS = 'guide|examples|check|simulate|cost|explain|publish|status';
+const TOOLS = 'guide|examples|check|simulate|cost|explain|review|publish|status';
 
 /**
  * xsolana's text as xcore's: its pinned npx forms and its `xsolana <command>` become `xcore loot <command>`, and the
