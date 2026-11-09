@@ -3,8 +3,7 @@
 import { createInterface } from 'node:readline/promises';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
-import { existsSync } from 'node:fs';
-import { dbExport, dbImport, dbInfo, dbQuery, dbRestore, queryProblem } from '../lib/db.mjs';
+import { dbExport, dbImport, dbInfo, dbQuery, dbRestore, importOf, queryProblem } from '../lib/db.mjs';
 import { economyFile } from '../lib/economy.mjs';
 import { pageRoots } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -155,7 +154,8 @@ export default {
       }
       if (verb === 'import') {
         if (live && !values.yes) {
-          if (!existsSync(arg)) throw new Error(`${arg} is not there`);
+          // what would be refused anyway (not there, too big to send) is refused before anyone is asked
+          await importOf(arg, { live });
           console.error(
             `This runs ${arg} on ${where}, which your players use: rows can change or go, and while it runs the database answers nothing else. ${CMD} db export --live keeps a copy first; ${CMD} db restore --live puts it back.`,
           );

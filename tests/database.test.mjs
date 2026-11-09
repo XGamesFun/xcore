@@ -1046,6 +1046,11 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
   assert.equal(r.status, 1);
   assert.match(r.stderr, /this import is 4\.6 MB as sent.*at most 4\.5 MB: split it/);
   assert.equal(seen.at(-1)[2].sql, 'INSERT INTO players VALUES (1);', 'not sent');
+  // without --yes, the size is said before the word is asked for: nobody types "import" for what cannot go
+  r = await xc(['import', path.join(tmp.dir, 'big.sql'), '--live']);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /this import is 4\.6 MB as sent/);
+  assert.doesNotMatch(r.stderr, /add --yes|Type import/);
   await writeFile(path.join(tmp.dir, 'huge.sql'), "INSERT INTO players VALUES ('huge');");
   r = await xc(['import', path.join(tmp.dir, 'huge.sql'), '--live', '--yes']);
   assert.equal(r.status, 1);

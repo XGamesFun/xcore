@@ -88,7 +88,8 @@ After an audit of the storage work, and as settled with the platform (STORAGE.md
 - **Live owner routes:** `db import --live` and `files put --live` are held to Studio's 4.5 MB a request before
   anything is sent, with the way that takes more (`GF.files.put` from the game's server), and a bare 413 is
   explained. `import --live` and `query --write --live` need `--yes` or the word typed, as `restore` does, and are
-  refused with no terminal to ask in. `restore` prints `restored.previous` and the command that undoes it, and its
+  refused with no terminal to ask in; what would be refused anyway (an import too big to send, a query the route
+  refuses) is said before the word is asked for. `restore` prints `restored.previous` and the command that undoes it, and its
   preview shows the migrations it rolls back and its warning. `db export --live` picks up an `export-pending` with
   its bookmark, and prints the answer's `note`. A GitHub Actions credential's 403 on export, import, restore, write
   queries, `files put` and `rm` says these need the owner's own login. An answer over 4 MB, which Studio sends as
