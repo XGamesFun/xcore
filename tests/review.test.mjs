@@ -144,6 +144,23 @@ test('PAY.check: the template pays nothing; one that pays from the request alone
   assert.equal(JSON.parse(c.stdout).findings[0].id, 'pay-from-request');
 });
 
+test("a server that checks players' tokens itself must name the game's audience", async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'decided');
+  const own = path.join(dir, 'server', 'auth.js');
+  await writeFile(
+    own,
+    "import { createRemoteJWKSet, jwtVerify } from 'jose';\nconst keys = createRemoteJWKSet(new URL('https://xgames.fun/api/player/v1/key'));\nexport const who = t => jwtVerify(t, keys, { issuer: 'xgames.fun' });\n",
+  );
+  assert.ok(ids(await review(dir)).includes('high token-any-game'));
+  await writeFile(
+    own,
+    "import { createRemoteJWKSet, jwtVerify } from 'jose';\nconst keys = createRemoteJWKSet(new URL('https://xgames.fun/api/player/v1/key'));\nexport const who = t => jwtVerify(t, keys, { issuer: 'xgames.fun', audience: 'game:moth' });\n",
+  );
+  assert.ok(!ids(await review(dir)).includes('high token-any-game'));
+});
+
 test('PAY.check read from the code: comments left out, env read or not', () => {
   const code = `// export const PAY = { check() { return { grant: 1 } } }
 export const PAY = {
