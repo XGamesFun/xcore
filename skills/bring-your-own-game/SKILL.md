@@ -1,6 +1,6 @@
 ---
 name: bring-your-own-game
-description: Help someone bring a web game they already made without this kit (plain HTML/JS, or a Vite, Next.js static export, Astro, SvelteKit, Nuxt, Create React App or Parcel project) to xgames.fun - adopt it, fix what does not fit the hosting (server-side rendering, paths from the root, CDN scripts and fonts, undeclared backend origins, secrets, size limits), check it with the page check, connect their own backend or a server/ Worker, add a loot economy, and publish it. Use when the person has an existing game folder or repository and wants web3, xgames.fun hosting, or the kit's checks for it; never rebuild such a game through the creation loop.
+description: Help someone bring a web game they already made without this kit (plain HTML/JS, or a Vite, Next.js static export, Astro, SvelteKit, Nuxt, Create React App or Parcel project) to xgames.fun - adopt it, fix what does not fit the hosting (server-side rendering, paths from the root, CDN scripts and fonts, undeclared backend origins, secrets, size limits), check it with the page check, connect their own backend or a server/ Worker, add a loot economy, review what a cheater gets from it, and publish it. Use when the person has an existing game folder or repository and wants web3, xgames.fun hosting, or the kit's checks for it; never rebuild such a game through the creation loop.
 ---
 
 # Bring your own game
@@ -12,7 +12,7 @@ here is `@xgamesfun/xcore` (the `xcore` command: `npx -y @xgamesfun/xcore …`, 
 @xgamesfun/xcore`; never a bare `npx xcore`, which is another package), which needs no kit; with the kit, its MCP tools
 (`gamesfun_adopt` and the rest, named below) do the same.
 
-The order: **adopt → fix the list → check → (backend) → (economy) → publish when they ask.**
+The order: **adopt → fix the list → check → (backend) → (economy) → (review, when it pays) → publish when they ask → (review --live).**
 
 ## 1. Adopt
 
@@ -164,7 +164,35 @@ your server can check". A bounded result earns small capped amounts; entry fees 
 replayed one. Without a server,
 offer what the player pays for or the chain decides (a shop, boxes, raffles, staking, perks), and say why.
 
-## 6. Publish (only when they ask)
+## 6. Review (a game whose server pays results)
+
+Before publishing a game that pays results, read it as a cheater would:
+
+```bash
+xcore review <folder>           # evidence/review-N/review.md and review.json; exits 1 on a high finding
+xcore loot review               # the economy's part alone (@xgamesfun/solana's xsolana_review)
+```
+
+- **Fix every high finding** (a `PAY.check` that pays from the request alone, a route anyone can call, a seed in the
+  page, `.dev.vars` in git…), and run it again. Mediums are the person's to decide with you: say each one plainly.
+- **Declare `trust` honestly** on every grant a voucher pays: `"decides"` (the server runs the game; the page sends
+  only inputs), `"replays"` (the server runs the page's inputs again) or `"bounds"` (the page plays and reports; the
+  server checks its clock, order and caps). It is what `PAY.check` really does, not what you hope it does: a server
+  that times a run the page simulated is `bounds`, whatever it is called. (The field needs the `@xgamesfun/solana`
+  that has `review`: 0.25.0's `xcore loot check` refuses it, so with that one leave it out and still tell the person
+  the level in words.)
+- **Tell the person**, in plain words, from the end of `review.md`: for each paid route, the level it uses, what a
+  cheater gets (a bounded result pays a script that waits and reports, without playing; a decided one pays what a bot
+  that plays well wins), and what the stronger level would cost to build (replaying: a deterministic step and about
+  3 ms of CPU a second played; deciding: the rules moved to the server, a request each step). Let them choose: a
+  smaller prize and tighter caps, or the stronger level. Never call a bounded result safe.
+
+After publishing, `xcore review <folder> --live` asks the published game as a stranger (no sign-in, a forged one;
+nothing it sends can spend or sign) and checks its voucher key and economy against the folder. Under `xcore dev`,
+give its address: `--live http://127.0.0.1:<port>/game/`. `xcore publish` reminds you when the economy or `server/`
+changed since the last review.
+
+## 7. Publish (only when they ask)
 
 ```bash
 xcore publish <folder> --check  # the offline part: what goes up, what refuses it

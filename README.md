@@ -31,6 +31,7 @@ xcore add multiplayer ./my-game            # rooms players share (Godot's own mu
 xcore backend use custom ./my-game --url https://api.my-game.example   # only if it calls a backend you run
 xcore loot add ./my-game                   # only if it gets an economy (a Solana economy on loot)
 xcore add vouchers ./my-game               # its server pays results it checked from a grant, with its own key
+xcore review ./my-game                     # the security review: what a cheater gets (--live once published)
 xcore login && xcore publish ./my-game
 xcore embed add https://mygame.com ./my-game     # your own site may show it (an <iframe>)
 xcore domain add play.mygame.com ./my-game       # Creator or Scale: it plays at your own domain
@@ -521,6 +522,29 @@ theirs (signed in with it, or linked with `gf.loot.link()`), and since a wallet 
 only to players signed in with X (`VOUCHERS.payOnly`). A grant names up to three keys, so the keeper and your own can
 pay the same grant while you move from one to the other.
 [docs/SERVER.md](docs/SERVER.md), "Paying a result", has both, side by side.
+
+### Review: `xcore review`
+
+A game that pays is read the way a cheater reads it before players are paid. `xcore review <folder>` writes
+`evidence/review-N/review.md` and `review.json`, prints what it found, and exits 1 on any high finding:
+
+- **The economy**: `@xgamesfun/solana`'s own review (`xcore loot review`): each route that pays, what it trusts, its
+  ceiling, and the trade-offs in words. An installed version without it says so in one line, and the rest goes on.
+- **The server**: `PAY.check` still the template (it pays nothing) or one that pays from the request alone (it never
+  reads `env`, so nothing the server keeps); `VOUCHERS.payOnly` against the grants (`'any'` with `perPerson`, whose
+  claims fail; `'any'` on a grant worth farming); a voucher key and the grants that name it; `trust` on every grant a
+  voucher pays; `.dev.vars` in git or in the published folder; a seed or key in the page's files; the test key in a
+  grant; every `api/` route the code names.
+- **Live** (`--live`, after publishing; `--live <origin>` for another, such as `xcore dev`'s
+  `http://127.0.0.1:<port>/game/`): each of those routes asked with no sign-in and with a forged one, GET and POST (a
+  route that pays gets an empty body: nothing it sends can spend or sign); `api/vouchers/key` against the grants' keys;
+  the published economy's `live` against the folder's.
+
+Each grant a voucher pays says how much its server checks before signing: `"trust": "decides"`, `"replays"` or
+`"bounds"` (docs/SERVER.md, "How much your server can check"; the field needs the `@xgamesfun/solana` that has
+`review`: 0.25.0 refuses it). `review.md` ends with the trade-offs for the person: for each paid route, its level,
+what a cheater gets, and what the stronger level would cost. `xcore publish` says when a game that pays through
+vouchers changed since its last review (it never refuses for it).
 
 ## 5. Publish
 

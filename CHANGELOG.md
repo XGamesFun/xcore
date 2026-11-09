@@ -27,6 +27,18 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 'wallet'` signs in with X; `player.google` and the player's name (no @ for a Google name).
 - `server/vouchers.js`: `VOUCHERS.payOnly` may be `'account'` (players signed in with X or Google); a Google account
   with no X counts as one person (`g:<id>`) for `perPerson`.
+- `xcore review [game] [--live [origin]] [--json]`: the security review of a game, read as a cheater would. The
+  economy by `@xgamesfun/solana`'s own review (`xsolana review`; an installed version without it is said in one line);
+  the server by xcore's reading (`PAY.check` still the template, or paying from the request alone; `VOUCHERS.payOnly`
+  against the grants; the voucher key and the grants that name it; `trust` on each voucher grant; `.dev.vars` in git
+  or in the published folder; a seed in the page; the test key in a grant; every `api/` route); with `--live`, the
+  published game asked with no sign-in and a forged one, its voucher key and its economy's `live`. It writes
+  `evidence/review-N/review.md` (ending with the trade-offs for the person) and `review.json`, and exits 1 on a high
+  finding.
+- `xcore loot review` runs `xsolana review` on the economy file.
+- `xcore publish` says when a game that pays through vouchers changed since its last review (it never refuses for it);
+  `xcore add vouchers` says to declare each grant's `trust` and run `xcore review`.
+- The bring-your-own-game skill has a review step before publishing, and `review --live` after.
 
 ## 0.2.1 — 2026-11-09
 

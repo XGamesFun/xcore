@@ -284,6 +284,17 @@ A result is worth paying only as far as the server can tell it happened. Stronge
   milliseconds must not add up). A script that plays at human speed still gets through: this limits what a cheater
   earns, it does not stop one.
 
+Say which one in the grant: `"trust": "decides"`, `"replays"` or `"bounds"` on every grant a voucher pays (what the
+server holding its key checks before it signs, as `PAY.check` really does it; it needs the `@xgamesfun/solana` that has
+`xcore loot review`, since 0.25.0 refuses the field). `xcore review` then reads the economy and the server as a cheater
+would: what a script gets from each paid route without playing, a `PAY.check` that pays from the request alone, a
+`payOnly` that lets one person claim from every wallet they make, and, with `--live`, each `api/` route asked with no
+sign-in and with a forged one. Its `review.md` ends with the trade-offs to tell the person. The full guide, with
+Solana's own exploit checklist, is `@xgamesfun/solana`'s skill reference
+`skills/xsolana-economy/references/trust-and-cheating.md`; in short: a bounded result pays a script that waits and
+reports, a replayed one pays the best run a script can find (unless randomness is revealed as the run goes), a decided
+one pays what a bot that plays well wins.
+
 Even a result the server decided is worth what a good bot can earn: a bot that plays well wins what a player who
 plays well wins. Pay a bounded or replayed result only what you would accept losing to a patient script (small
 amounts, capped a day), and keep entry fees and prize pools for results the server decided and chance (the oracle).
@@ -379,6 +390,7 @@ voucher code into `server/gf-loot/` (bundled with the server, never a public fil
    the result's own id, any text, used once; amount: base units, or `'grant'` for the grant's own amount, always
    named so a forgotten amount never pays the most) or `{why}` to refuse. Until you write it, nothing is paid. Count a
    player's daily total in `PAY.paid` (it runs once a round, after its voucher is signed; again only if it threw), not in `check`.
+   Then give the grant its `trust` (what that check does: `decides`, `replays` or `bounds`) and run `xcore review`.
 4. Who is paid: set `VOUCHERS.payOnly` to `'x'` or `'account'` for rewards worth farming (above, "Who gets paid"); the grant's
    `perDay` total caps the rest.
 5. `xcore loot approve` (the grant's change goes live), then `xcore publish`. `api/vouchers/key` answers the live
