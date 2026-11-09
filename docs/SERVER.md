@@ -498,6 +498,12 @@ stock server served keeps its documents and rules when it gets a server of its o
 the rules it had into `collections`, and `server/gf-docs.js` serves them. Publish refuses a game whose block has
 `collections` while its server does not route `api/db/` (every `gf.db` call would answer 404), and says how.
 
+That check reads the text of the files in `server/` only (not `server/gf-docs.js` or `server/database.js`): a call
+to `handleDocs(` (or `handleDatabase(`) there, or `api/db` in the code. A router kept outside `server/` (a `src/router.js` the server
+imports) is not read, so a game whose `api/db/` is routed only there is refused all the same. Keep xcore's route in
+`server/`: the three lines above, first thing in `fetch` of `server/index.js` (or of another file in `server/`),
+before the request reaches the router.
+
 ### With no server: the stock server
 
 A game with the block and no `server/` gets **xcore's stock server** as its server: publish bundles it
@@ -548,6 +554,11 @@ xcore db restore 2026-11-08T12:00:00Z --live      # back in time, up to 30 days 
 `--live` goes through xgames.fun's owner routes with your sign-in (`xcore login`), and each call is kept in the
 game's audit log. Without `--write`, a query is only `SELECT`, `EXPLAIN`, `PRAGMA table_info` or `table_list`, here
 and live. `restore` says what it would go back to first, and goes on only with `--yes` or when you type `restore`.
+It prints the command that undoes it, `xcore db restore <the moment before it> --live`. That moment is this
+machine's clock, read just before the restore is asked for, because xgames.fun's restore takes a time, not a
+bookmark: `restored.previous` (the bookmark from before it) is printed too, but cannot be passed back. A clock that
+is off by more than the restore took to start puts the undo a little before or after the true moment; check it with
+the preview (`xcore db restore <time> --live`, without `--yes`) before you go on.
 **A game with an economy:** a restore puts back the database only. Loot balances, items and payouts on chain stay
 as they are, so a player can keep what they won while the database forgets it; export first. An export holds your
 players' data: keep it out of git and off shared drives.
