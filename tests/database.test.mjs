@@ -168,6 +168,63 @@ test('append only: the migrations applied must come first, each the same bytes',
   assert.equal(migrationsChanged([applied[0], applied[1]], applied), null);
 });
 
+test("a statement over D1's 100,000 bytes: refused before publish and by xcore dev, with nothing of the new migrations applied", async t => {
+  const { applyMigrations, readApplied } = await import('../lib/dev/d1.mjs');
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const init = 'CREATE TABLE notes (id INTEGER PRIMARY KEY, text TEXT);\n';
+  const big = `-- seed\nINSERT INTO notes (text) VALUES ('a');\nINSERT INTO notes (text) VALUES ('${'x'.repeat(100_000)}');\n`;
+  // a migration may still be up to 1 MB of many statements, and a comment is not sent, so it does not count
+  const many = `-- ${'c'.repeat(60_000)}\n${Array.from({ length: 12 }, () => `INSERT INTO notes (text) VALUES ('${'y'.repeat(60_000)}');`).join('\n')}\n`;
+  const dir = await game(
+    tmp,
+    { database: {} },
+    {
+      'server/migrations/0001_init.sql': init,
+      'server/migrations/0002_many.sql': many,
+      'server/migrations/0003_seed.sql': big,
+    },
+  );
+  const cfg = await readServerConfig(dir);
+  assert.equal(cfg.problems.length, 1, cfg.problems.join('\n'));
+  assert.match(
+    cfg.problems[0],
+    /^server\/migrations\/0003_seed\.sql: Statement 2 of 0003_seed\.sql \(INSERT INTO notes \(text\) VALUES \('x+…\) is 100,036 bytes, and D1 runs at most 100,000 bytes in one statement\. Split it \(an INSERT of many rows into several INSERTs, each under the limit\)\. xgames\.fun would refuse it \(migration-failed\)$/,
+  );
+  // SQL that never ends is refused the same way
+  await writeFile(path.join(dir, 'server/migrations/0003_seed.sql'), "INSERT INTO notes (text) VALUES ('open);\n");
+  assert.match(
+    (await readServerConfig(dir)).problems.join('\n'),
+    /0003_seed\.sql has a string, a quoted name or a comment that never ends/,
+  );
+  // xcore dev (applyMigrations): every new migration measured before the first runs
+  const m = (name, text) => ({ name, text, sha256: sha(text), bytes: Buffer.byteLength(text) });
+  const db = fakeD1();
+  assert.deepEqual(await applyMigrations(null, db, [m('0001_init.sql', init)]), {
+    ok: true,
+    applied: ['0001_init.sql'],
+  });
+  const r = await applyMigrations(null, db, [
+    m('0001_init.sql', init),
+    m('0002_many.sql', many),
+    m('0003_seed.sql', big),
+  ]);
+  assert.equal(r.ok, false);
+  assert.equal(r.code, 'migration-failed');
+  assert.equal(r.name, '0003_seed.sql');
+  assert.match(
+    r.why,
+    /^Statement 2 of 0003_seed\.sql .* is 100,036 bytes, and D1 runs at most 100,000 bytes in one statement\. .*Nothing of the new migrations was applied; fix 0003_seed\.sql$/,
+  );
+  assert.deepEqual(
+    (await readApplied(db)).map(a => a.name),
+    ['0001_init.sql'],
+    '0002_many.sql, which fits, waits for 0003 to be fixed',
+  );
+  const fixed = await applyMigrations(null, db, [m('0001_init.sql', init), m('0002_many.sql', many)]);
+  assert.deepEqual(fixed, { ok: true, applied: ['0002_many.sql'] });
+});
+
 test('the database records its migrations in _gf_migrations, in the batch with their statements', async t => {
   const { applyMigrations, readApplied } = await import('../lib/dev/d1.mjs');
   const tmp = await tempDir();
@@ -236,7 +293,7 @@ test('the database records its migrations in _gf_migrations, in the batch with t
 });
 
 test('xcore db export and import round-trip: a dump goes back in over the tables its migrations made', async () => {
-  const { dumpDatabase, importPlan, applyMigrations } = await import('../lib/dev/d1.mjs');
+  const { dumpDatabase, importPlan, applyMigrations, internalTable } = await import('../lib/dev/d1.mjs');
   const text =
     'CREATE TABLE players (id TEXT PRIMARY KEY, gold INT);\nCREATE TABLE log (what TEXT);\nCREATE INDEX log_by_what ON log (what);';
   const migrations = [{ name: '0001_init.sql', text, sha256: sha(text), bytes: text.length }];
@@ -245,7 +302,12 @@ test('xcore db export and import round-trip: a dump goes back in over the tables
   from.db.exec(
     "INSERT INTO players VALUES ('p1', 3), ('it''s', NULL); INSERT INTO log VALUES ('a'), ('a'), ('b'); CREATE TABLE gf_docs (k TEXT PRIMARY KEY); INSERT INTO gf_docs VALUES ('x')",
   );
+  // xgames.fun's progress of a migration batch, as one that failed part-way leaves it: machinery, not the game's
+  from.db.exec(
+    "CREATE TABLE _gf_migration_steps (name TEXT PRIMARY KEY, began INTEGER NOT NULL, done INTEGER NOT NULL, total INTEGER NOT NULL); INSERT INTO _gf_migration_steps VALUES ('0002_x.sql', 5, 1, 3)",
+  );
   const dump = await dumpDatabase(from);
+  assert.doesNotMatch(dump, /_gf_migration_steps/);
   assert.match(dump, /^PRAGMA defer_foreign_keys=TRUE;/);
   assert.match(dump, /CREATE TABLE IF NOT EXISTS players/);
   assert.match(dump, /CREATE INDEX IF NOT EXISTS log_by_what/);
@@ -278,11 +340,15 @@ test('xcore db export and import round-trip: a dump goes back in over the tables
   assert.deepEqual(rows('SELECT what FROM log ORDER BY rowid'), [{ what: 'a' }, { what: 'a' }, { what: 'b' }]);
   assert.deepEqual(rows('SELECT k FROM gf_docs'), [{ k: 'x' }]);
   assert.deepEqual(rows('SELECT name FROM _gf_migrations'), [{ name: '0001_init.sql' }]);
+  assert.equal(
+    into.db.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = '_gf_migration_steps'").get().n,
+    0,
+  );
   // D1's own export (CREATE TABLE, INSERT INTO … VALUES, its _gf_migrations) goes in the same way
   const d1 = importPlan(
-    "PRAGMA defer_foreign_keys=TRUE;\nCREATE TABLE players (id TEXT PRIMARY KEY, gold INT);\nINSERT INTO \"players\" VALUES('p1',9);\nCREATE TABLE _gf_migrations (name TEXT PRIMARY KEY, sha256 TEXT NOT NULL, applied_at INTEGER NOT NULL);\nINSERT INTO \"_gf_migrations\" VALUES('0001_init.sql','x',1);",
+    "PRAGMA defer_foreign_keys=TRUE;\nCREATE TABLE players (id TEXT PRIMARY KEY, gold INT);\nINSERT INTO \"players\" VALUES('p1',9);\nCREATE TABLE _gf_migrations (name TEXT PRIMARY KEY, sha256 TEXT NOT NULL, applied_at INTEGER NOT NULL);\nINSERT INTO \"_gf_migrations\" VALUES('0001_init.sql','x',1);\nCREATE TABLE _gf_migration_steps (name TEXT PRIMARY KEY, began INTEGER NOT NULL, done INTEGER NOT NULL, total INTEGER NOT NULL);\nINSERT INTO \"_gf_migration_steps\" VALUES('0002_x.sql',5,1,3);",
   );
-  assert.equal(d1.left, 2, 'its record of migrations left out');
+  assert.equal(d1.left, 4, 'its record of migrations and their progress left out');
   await run(d1);
   assert.deepEqual(rows("SELECT gold FROM players WHERE id = 'p1'"), [{ gold: 9 }]);
   assert.deepEqual(rows('SELECT sha256 FROM _gf_migrations'), [{ sha256: sha(text) }]);
@@ -298,6 +364,10 @@ test('xcore db export and import round-trip: a dump goes back in over the tables
     () => importPlan("DELETE FROM _gf_migrations WHERE name = '0001_init.sql'"),
     /record of its migrations/,
   );
+  assert.throws(() => importPlan('DROP TABLE IF EXISTS _gf_migration_steps'), /record of its migrations/);
+  assert.equal(internalTable('_gf_migration_steps'), true);
+  assert.equal(internalTable('_gf_migrations'), true);
+  assert.equal(internalTable('players'), false);
 });
 
 // players, and items that point at them with ON DELETE CASCADE: the shape a REPLACE wipes (it deletes each player,
@@ -481,6 +551,11 @@ test("xcore db query: the rule of xgames.fun's query route, the same cases taken
   assert.equal(queryProblem('DELETE FROM t', { write: true }), null);
   assert.match(queryProblem('DELETE FROM t; DELETE FROM u', { write: true }), /one statement/);
   assert.deepEqual(sqlStatements("SELECT 'a;b'; -- c;\nSELECT [x;y] /* ; */"), ["SELECT 'a;b'", 'SELECT [x;y]']);
+  // as Studio sends a migration: a trigger's BEGIN … END is one statement
+  const trig =
+    'CREATE TABLE a (x);\nCREATE TRIGGER t AFTER INSERT ON a BEGIN UPDATE a SET x = 1; DELETE FROM a WHERE 0; END;';
+  assert.equal(sqlStatements(trig, { triggers: true }).length, 2);
+  assert.equal(sqlStatements(trig).length, 4, 'the query route reads it without triggers');
   // readOnlyProblem is the same rule without write
   assert.equal(readOnlyProblem('PRAGMA table_info(players)'), null);
   assert.ok(readOnlyProblem(''));

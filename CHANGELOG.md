@@ -66,7 +66,11 @@ After an audit of the storage work, and as settled with the platform (STORAGE.md
 - **Migrations are recorded in the database**, in `_gf_migrations (name, sha256, applied_at)`, in the same batch as
   the migration (its row as started, the statements, its row finished), as xgames.fun records them; `xcore dev` reads
   what is applied from there (the file beside the local database is read in once and removed). A row left as
-  started, a file partly applied, is refused with how to undo it; an empty migration (0 bytes) is refused.
+  started, a file partly applied, is refused with how to undo it; an empty migration (0 bytes) is refused. A
+  statement over D1's 100,000 bytes (UTF-8, comments left out, as xgames.fun sends it) or SQL that never ends is
+  refused before publish and by `xcore dev`, in xgames.fun's words, with nothing of the new migrations applied; a
+  migration may still be 1 MB of many statements. xgames.fun's progress table `_gf_migration_steps` is left out of
+  dumps, imports and `db info`, as `_gf_migrations` is.
   `xcore add database` writes `server/migrations/.gitattributes` (`*.sql -text`), so git cannot change a migration's
   line endings.
 - **Publish** says `migration-busy` (another publish is applying them: try again in a minute) and
