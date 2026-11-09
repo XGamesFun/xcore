@@ -1,6 +1,6 @@
 // `xcore embed` and `xcore domain` (lib/publish/site.mjs, commands/embed.mjs, commands/domain.mjs): the names checked
-// here first, then the commands as a person runs them against a stand-in games.fun: the routes and bodies it takes, the
-// DNS records as a table, a plan's refusal and an older games.fun said plainly, and the warning for an old gamesfun.js.
+// here first, then the commands as a person runs them against a stand-in xgames.fun: the routes and bodies it takes, the
+// DNS records as a table, a plan's refusal and an older xgames.fun said plainly, and the warning for an old gamesfun.js.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -13,7 +13,7 @@ import { credentialKey } from '../lib/publish/client.mjs';
 import { domainName, embedOrigin, embedSnippet, recordsTable } from '../lib/publish/site.mjs';
 import { BIN, ROOT, tempDir } from './helpers.mjs';
 
-/** The command, run as a person runs it (async: the stand-in games.fun answers from this same process). */
+/** The command, run as a person runs it (async: the stand-in xgames.fun answers from this same process). */
 const run = (args, { env = {} } = {}) =>
   new Promise(resolve => {
     const child = spawn(process.execPath, [BIN, ...args], {
@@ -27,7 +27,7 @@ const run = (args, { env = {} } = {}) =>
     child.on('close', status => resolve({ status, stdout, stderr }));
   });
 
-test('embed sites and domains: what games.fun would take, checked before any call', () => {
+test('embed sites and domains: what xgames.fun would take, checked before any call', () => {
   assert.deepEqual(embedOrigin('mygame.com'), { origin: 'https://mygame.com' });
   assert.deepEqual(embedOrigin('https://MyGame.com/'), { origin: 'https://mygame.com' });
   assert.deepEqual(embedOrigin('http://localhost:5173'), { origin: 'http://localhost:5173' });
@@ -57,7 +57,7 @@ test('embed sites and domains: what games.fun would take, checked before any cal
   assert.match(apex, /bare domain: a CNAME there needs your DNS provider's CNAME flattening or ALIAS/);
 });
 
-/** games.fun in miniature: the site routes for game g-9 (slug moth), the plan as `state.tier`. */
+/** xgames.fun in miniature: the site routes for game g-9 (slug moth), the plan as `state.tier`. */
 function standIn(state) {
   const site = () => ({
     ok: true,
@@ -105,7 +105,7 @@ function standIn(state) {
         status: 'pending',
         url: `https://${json.hostname}/`,
         records: [
-          { type: 'CNAME', name: json.hostname, value: 'domains.xgames.fun', why: 'points the domain at games.fun' },
+          { type: 'CNAME', name: json.hostname, value: 'domains.xgames.fun', why: 'points the domain at xgames.fun' },
           {
             type: 'TXT',
             name: `_cf-custom-hostname.${json.hostname}`,
@@ -180,7 +180,7 @@ test('xcore embed and xcore domain, as a person runs them', async t => {
   );
   const before = state.calls.length;
   r = await xc(['domain', 'add', 'moth-play.xgames.fun', dir]);
-  assert.match(r.stderr, /games.fun's own/);
+  assert.match(r.stderr, /xgames.fun's own/);
   assert.equal(state.calls.length, before, 'refused here: nothing sent');
 
   state.tier = 'creator';
@@ -194,7 +194,7 @@ test('xcore embed and xcore domain, as a person runs them', async t => {
     r.stdout,
   );
   assert.ok(
-    out.some(l => /^\s+CNAME\s+play\.mygame\.com\s+domains\.xgames\.fun\s+points the domain at games\.fun$/.test(l)),
+    out.some(l => /^\s+CNAME\s+play\.mygame\.com\s+domains\.xgames\.fun\s+points the domain at xgames\.fun$/.test(l)),
     r.stdout,
   );
   assert.ok(
@@ -237,7 +237,7 @@ test('xcore embed and xcore domain, as a person runs them', async t => {
   ]) {
     r = await xc(args);
     assert.equal(r.status, 1);
-    assert.match(r.stderr, /this games\.fun does not offer embedding and custom domains yet/);
+    assert.match(r.stderr, /this xgames\.fun does not offer embedding and custom domains yet/);
   }
   r = await run(['domain', 'add'], { env });
   assert.equal(r.status, 2);

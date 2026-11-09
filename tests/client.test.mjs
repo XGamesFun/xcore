@@ -1,5 +1,5 @@
-// gamesfun.js (lib/client/gamesfun.js) in real Chrome, against a stand-in games.fun: the game on its own link (a
-// sign-in request answered on games.fun, by window or by code), inside games.fun's play page (the page above hands it
+// gamesfun.js (lib/client/gamesfun.js) in real Chrome, against a stand-in xgames.fun: the game on its own link (a
+// sign-in request answered on xgames.fun, by window or by code), inside xgames.fun's play page (the page above hands it
 // a token), inside a post on X (a frame nobody answers), and on this machine (a local player). Chrome resolves
 // *.xgames.test to this machine, so the page sits at <slug>-play.<site> as a published game does.
 import { test } from 'node:test';
@@ -19,7 +19,7 @@ const GAME = `<!doctype html><html><head><script src="./gamesfun.js"></script></
 <script>window.codes = []; GamesFun.onCode(c => codes.push(c)); window.changes = []; GamesFun.onChange(p => changes.push(p));</script>
 </body></html>`;
 
-/** games.fun, in miniature: the play host's sign-in request, the platform's page calls, a game server's api/db. */
+/** xgames.fun, in miniature: the play host's sign-in request, the platform's page calls, a game server's api/db. */
 function standIn() {
   const s = { requests: [], approved: false, saves: {}, boards: {}, docs: [], seen: [] };
   const players = { 'tok-own': 'x:42', 'tok-page': 'x:43' };
@@ -166,7 +166,7 @@ async function chrome() {
 }
 
 test(
-  'on its own link: a window on games.fun signs the player in, then saves, scores and the database go signed in',
+  'on its own link: a window on xgames.fun signs the player in, then saves, scores and the database go signed in',
   { skip, timeout: 60_000 },
   async t => {
     const g = await standIn();
@@ -186,7 +186,7 @@ test(
     const code = await page.evaluate(() => codes[0]);
     assert.equal(code.code, 'ABCD-EFGH');
     assert.equal(code.window, true);
-    g.s.approved = true; // the player signed in on games.fun
+    g.s.approved = true; // the player signed in on xgames.fun
     const player = await page.evaluate(() => window.signedIn);
     assert.equal(player.id, 'x:42', "the platform's id for the player");
     assert.equal(await page.evaluate(() => GamesFun.token), 'tok-own');
@@ -238,7 +238,7 @@ test(
 );
 
 test(
-  "inside games.fun's play page: the page above signs the player in and hands over its token",
+  "inside xgames.fun's play page: the page above signs the player in and hands over its token",
   { skip, timeout: 60_000 },
   async t => {
     const g = await standIn();
@@ -262,7 +262,7 @@ test(
 );
 
 test(
-  'on its own domain (play.mygame.test): the edge says which game and where games.fun is; sign-in goes there',
+  'on its own domain (play.mygame.test): the edge says which game and where xgames.fun is; sign-in goes there',
   { skip, timeout: 60_000 },
   async t => {
     const g = await standIn();
@@ -277,7 +277,7 @@ test(
     const popup = page.waitForEvent('popup');
     await page.click('#in');
     const win = await popup;
-    // games.fun's own sign-in page, not mygame.test's (a host starting with play. is not games.fun's play host here)
+    // xgames.fun's own sign-in page, not mygame.test's (a host starting with play. is not xgames.fun's play host here)
     await win.waitForURL(new RegExp(`^http://xgames\\.test:${g.port}/go/ABCD-EFGH\\?with=x$`));
     assert.deepEqual(g.s.requests, [{ slug: 'moth', with: 'x' }]);
     g.s.approved = true;
@@ -312,7 +312,7 @@ test(
       window.signedIn = GamesFun.signIn();
     });
     await frame.waitForFunction(() => codes.length > 0);
-    assert.deepEqual(g.s.requests, [{ slug: 'moth', with: 'x' }], 'its own request on games.fun, not the page above');
+    assert.deepEqual(g.s.requests, [{ slug: 'moth', with: 'x' }], 'its own request on xgames.fun, not the page above');
     g.s.approved = true;
     assert.equal((await frame.evaluate(() => window.signedIn)).id, 'x:42');
   },

@@ -1,4 +1,4 @@
-// `xcore check [dir]`: the page check (../lib/check.mjs) on a game you brought: it builds, fits games.fun's hosting,
+// `xcore check [dir]`: the page check (../lib/check.mjs) on a game you brought: it builds, fits xgames.fun's hosting,
 // starts clean in Chrome as the play host serves it, and stays inside its origins. publish runs the same check first.
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
@@ -7,7 +7,7 @@ import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore check [dir] [--no-build] [--out <dir>] [--port <n>] [--json]
 
-The page check, as games.fun hosts the game: 1 it builds (gamesfun.json page.build), 2 it fits the hosting (what
+The page check, as xgames.fun hosts the game: 1 it builds (gamesfun.json page.build), 2 it fits the hosting (what
 publish would refuse, and what breaks once hosted: paths from the root, scripts, styles, fonts or frames from other
 sites), 3 it starts clean in Chrome at a phone's size and a desktop's under the play host's page policy, 4 it stays
 inside its origins (its own files, the host's own paths, backend.json's origins). It does not check that the game plays
@@ -19,7 +19,7 @@ as it should: that is your own game's tests. Run ${CMD} adopt <dir> first.
 
 export default {
   name: 'check',
-  summary: 'the page check: it builds, fits games.fun hosting, starts clean, stays inside its origins',
+  summary: 'the page check: it builds, fits xgames.fun hosting, starts clean, stays inside its origins',
   usage,
   run: args =>
     guard(async () => {

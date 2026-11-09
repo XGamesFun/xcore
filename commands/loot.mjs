@@ -25,7 +25,7 @@ A game's economy on loot, one shared Solana program (devnet only until it is aud
   xcore loot help                  everything else xsolana does (its help says \`xsolana <command>\`: run each as
                                    \`xcore loot <command>\`)
 The file is ${ECONOMY_FILE} (loot.json in a game made before it was named so). Its RPC is XSOLANA_RPC_URL (in .env),
-else games.fun's shared devnet RPC. Published, the page uses the shared relay, which counts every call toward the game's
+else xgames.fun's shared devnet RPC. Published, the page uses the shared relay, which counts every call toward the game's
 plan, unless the game brings its own RPC: ${CMD} add rpc (docs/SERVER.md, "The economy's own RPC").`;
 
 const ADD_USAGE = `Usage: xcore loot add [game] [--json]

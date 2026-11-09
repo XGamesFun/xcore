@@ -1,4 +1,4 @@
-// A room's seats while a hello waits on games.fun's sign-in check (lib/client/server/rooms.js): the room is read again
+// A room's seats while a hello waits on xgames.fun's sign-in check (lib/client/server/rooms.js): the room is read again
 // after it, so two players hosting one code at once never both get seat 1, and a room never passes ROOM.maxPlayers.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -33,7 +33,7 @@ class Socket {
   }
 }
 
-/** A room whose sign-in check answers only when `release()` is called (games.fun's, over the network). */
+/** A room whose sign-in check answers only when `release()` is called (xgames.fun's, over the network). */
 function slowRoom() {
   const store = new Map();
   const waiting = [];

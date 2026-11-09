@@ -1,5 +1,5 @@
 // `xcore dev` (lib/dev/): the page as the play host serves it with its marker, the platform's sign-in, saves and scores,
-// the economy's RPC forwarded (and what games.fun's relay would refuse, said), the game's server under workerd when
+// the economy's RPC forwarded (and what xgames.fun's relay would refuse, said), the game's server under workerd when
 // Miniflare is here (GAMESFUN_SERVER_DEPS), and gamesfun.js in Chrome using all of it, GamesFun.loot included.
 /* global GamesFun -- the page's, inside page.evaluate */
 import { test } from 'node:test';
@@ -35,7 +35,7 @@ test('the marker goes first in <head>, once, and into a page without one', () =>
   assert.equal(markPage(once), once);
 });
 
-test("what games.fun's shared relay refuses, said in words (and what it takes, passed)", () => {
+test("what xgames.fun's shared relay refuses, said in words (and what it takes, passed)", () => {
   assert.equal(relayRefuses({ jsonrpc: '2.0', id: 1, method: 'getSlot' }), null);
   assert.equal(relayRefuses({ method: 'getProgramAccounts', params: [LOOT, { filters: [{ memcmp: {} }] }] }), null);
   assert.match(relayRefuses([{ method: 'getSlot' }]), /batch/);
@@ -80,7 +80,7 @@ test("the platform's store: its own tokens only, for this game, and the hosted l
   assert.equal(
     s.verifyPlayer('eyJhbGciOiJFZERTQSJ9.e30.sig').code,
     'bad',
-    'a games.fun token is checked only when hosted',
+    'an xgames.fun token is checked only when hosted',
   );
   assert.equal((await s.run('saves.put', [player.id, 'main', { level: 3 }])).ok, true);
   assert.deepEqual((await s.run('saves.get', [player.id, 'main'])).value, { level: 3 });

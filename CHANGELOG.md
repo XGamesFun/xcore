@@ -32,16 +32,16 @@ person and for `--json`.
 
 ## 0.1.0 (2026-11-08)
 
-The first release: games.fun from the command line, the one place to start: a web game you already made is brought,
+The first release: xgames.fun from the command line, the one place to start: a web game you already made is brought,
 checked, given a backend and an economy, and published; an idea for a game goes to the kit.
 
 - `adopt`: reads the game's shape (plain files, or a Vite, Next.js static export, Astro, SvelteKit, Nuxt, Create React
   App, Parcel or Gatsby build, in its own folder or a monorepo's workspace), builds it, writes its record (`gamesfun.json` → `page`) and lists everything that does
-  not fit games.fun's hosting, each with its fix. An engine's export that cannot start there is named with the setting
+  not fit xgames.fun's hosting, each with its fix. An engine's export that cannot start there is named with the setting
   that fixes it: a Unity build compressed for Content-Encoding (Compression Format or Decompression Fallback), a Godot
   export built with Thread Support. A Unity or Godot project (its sources) is read as one: its web export is the page,
   or adopt says how to make it; an entry page that loads files the folder lacks is said before publishing.
-- `check`: the page check, as games.fun hosts the game: it builds, fits the hosting, starts clean in Chrome at a phone's
+- `check`: the page check, as xgames.fun hosts the game: it builds, fits the hosting, starts clean in Chrome at a phone's
   and a desktop's size under the play host's page policy, and stays inside its origins.
 - `@xgamesfun/solana` 0.25.0, for loot 0.25.0 (on devnet since 2026-11-08, slot 519,994,814). No account of an
   earlier program carries over: an economy that went live before then goes live again (`xcore loot approve`), and the
@@ -58,8 +58,8 @@ checked, given a backend and an economy, and published; an idea for a game goes 
   Unity `LootLink()`); a wallet the page names is refused. `VOUCHERS.payOnly: 'x'` pays only players signed in with X,
   a grant with `perPerson` pays only them, and `VOUCHERS.perMinute` limits a player's requests. It makes a test key
   for `xcore dev` (`VOUCHER_SEED` in `.dev.vars`, kept out of git); `xcore secret set VOUCHER_SEED --new-key` makes the
-  live key, sends it only to games.fun and never keeps it on the machine, and prints its address for the grant.
-- Paying a result, in docs/SERVER.md, the README and the skill: games.fun's keeper (`env.GF.loot.report`) for prizes
+  live key, sends it only to xgames.fun and never keeps it on the machine, and prints its address for the grant.
+- Paying a result, in docs/SERVER.md, the README and the skill: xgames.fun's keeper (`env.GF.loot.report`) for prizes
   fixed by place, the server's own key for amounts it works out, replayed or bounded runs, entry fees and prize pools,
   or more than 120 results an hour. A grant names up to three keys, so both can pay it while a game moves over.
 - docs/SERVER.md, "How much your server can check" and "Who gets paid": never hand the page a run's whole seed (a script
@@ -79,13 +79,13 @@ checked, given a backend and an economy, and published; an idea for a game goes 
   prints the `<iframe>`; every plan: 3, 10 or 25 sites), and on Creator (1) or Scale (5) it is served on a domain of
   your own (`xcore domain add play.mygame.com` prints the CNAME and TXT records as a table; `check` and `list` say its
   state). `gamesfun.js` 1.2.0 asks the play edge which game it is on a host of its own (`/platform/v1/site`), and takes
-  a sign-in from the page above only when that page is games.fun's own, so a site that embeds the game can't sign
+  a sign-in from the page above only when that page is xgames.fun's own, so a site that embeds the game can't sign
   players in for it; `domain add` says when the folder's copy is older.
 - `add rpc`: an economy game's Solana calls through its own devnet RPC (`server/rpc.js` at `api/rpc`, the URL a secret
-  of its server, its origin added to `backend.json`) instead of games.fun's shared relay, which counts every call toward
+  of its server, its origin added to `backend.json`) instead of xgames.fun's shared relay, which counts every call toward
   the game's plan; the page client asks `api/rpc` once and keeps the relay until the secret is set. Publish says which
   one an economy game uses.
-- `add signin`: games.fun's player sign-in (X first, or a wallet), saves and leaderboards from a web game, a Godot 4
+- `add signin`: xgames.fun's player sign-in (X first, or a wallet), saves and leaderboards from a web game, a Godot 4
   project (an autoload) or a Unity project (a WebGL plugin), with one page client (`gamesfun.js`): signed in by the play
   page, by a window or a typed code on the game's own link and inside a post on X, and a local player on this machine.
   The code is shown plainly only when no window opened (`window: false`); with a window open, at most as a quiet line
@@ -96,24 +96,24 @@ checked, given a backend and an economy, and published; an idea for a game goes 
   at `api/rooms/<CODE>`, a relay with a host (id 1) that passes on when the host leaves. Godot's high-level
   multiplayer runs over it through a `MultiplayerPeer` (`GamesFun.join_room`; a local ENet game in the editor); Unity
   and web games get a room with send and events; tabs of one browser share a room on this machine; room links
-  (`?room=CODE`) open the game in its room on games.fun and in a post on X. A frame's messages go to the room as one
+  (`?room=CODE`) open the game in its room on xgames.fun and in a post on X. A frame's messages go to the room as one
   (at most about 60 a second at any frame rate), so a Godot game's MultiplayerSynchronizers stay under the room's
   limit; Host and Join buttons can ask for a new room only or an existing one only; a refused message reaches the
   game (Godot's `room_error`, Unity's `OnError`); running `add` again keeps the settings at the top of `server/`'s files.
-- `plan [dir]`, `plan activate|deactivate [dir]`, `plan --all`: a game's backend plan on games.fun (Free by default,
-  Creator in one of the account's paid game slots, Scale when games.fun grants it), its limits and this month's use;
+- `plan [dir]`, `plan activate|deactivate [dir]`, `plan --all`: a game's backend plan on xgames.fun (Free by default,
+  Creator in one of the account's paid game slots, Scale when xgames.fun grants it), its limits and this month's use;
   a slot moves between games at any time.
-- `secret set|list|delete`: a game server's own secrets on games.fun, read by the server as `env.<NAME>` (a
+- `secret set|list|delete`: a game server's own secrets on xgames.fun, read by the server as `env.<NAME>` (a
   voucher-signing key, an outside API's key): kept only on the server's host, never shown again, never given to the
   page, live from the server's next request with no publish. `dev` reads the same names from `.dev.vars`.
 - Leaderboards a server owns: `env.GF.scores.setup(board, {writer: 'server'})` (or `writer` in the server's `submit`)
   refuses the page's submits to that board (`server-only`); the page still reads it. A board that becomes the
   server's starts empty; a pattern (`'daily-*'`, `'*'`) owns boards to come; `scores.drop(board)` frees a board's
-  place. The same under `dev`. The page client's refusals carry games.fun's `code`.
-- `dev`: the game on this machine as games.fun hosts it, with everything behind it: its files under `/game/` with the
+  place. The same under `dev`. The page client's refusals carry xgames.fun's `code`.
+- `dev`: the game on this machine as xgames.fun hosts it, with everything behind it: its files under `/game/` with the
   play host's headers, its `server/` under workerd (Durable Objects, WebSockets, a local `env.GF`; reloaded on change;
   Miniflare installed once on first use), a local sign-in a tab with saves and scores at `/platform/v1/*`, and the
-  economy's `/loot/v1/rpc` forwarded to games.fun's relay or `XSOLANA_RPC_URL` (a call the relay would refuse is said).
+  economy's `/loot/v1/rpc` forwarded to xgames.fun's relay or `XSOLANA_RPC_URL` (a call the relay would refuse is said).
   `gamesfun.js` uses all of it under `xcore dev`, from any engine. The local server has no limits, so its log says when the
   page's requests to it would pass a published plan's (more than Free's 60 a minute from one player, or Creator's 600)
   and when a request takes longer than Free's 50 ms of CPU, before players find out.
@@ -127,7 +127,7 @@ checked, given a backend and an economy, and published; an idea for a game goes 
 - `adopt` on a game with a Node server (Express, Socket.IO) names both ways: its work moved into `server/`, or the
   server kept on its own host; once the game has `server/`, it no longer says to keep the Node server.
 - docs/SERVER.md: a server that pays results with loot vouchers (its key made and kept in a Durable Object, the
-  grant's incarnation read through games.fun's relay, the go-live order), run as written under `xcore dev`.
+  grant's incarnation read through xgames.fun's relay, the go-live order), run as written under `xcore dev`.
 - `adopt` on a Godot project with no Web export writes its Web preset (Thread Support off, into `build/web/`, xcore's
   folders left out of the package, `build/` kept from the editor's imports) and says the one command that exports it.
 - `check` on a Godot project says when the project changed after its Web export (with no build, the export on disk is

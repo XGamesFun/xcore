@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The `xcore` command (@xgamesfun/xcore): games.fun's own (sign in, bring a game, check it as the host serves it, its
+// The `xcore` command (@xgamesfun/xcore): xgames.fun's own (sign in, bring a game, check it as the host serves it, its
 // backend and economy, publish). Each command is a module in ../commands/<name>.mjs exporting `default { name,
 // summary, usage, run(args) }`, and optionally `helpFor(args)`, the --help text of a subcommand. Everything else is the
 // kit's (@xgamesfun/kit: create, verify, the build loop and the rest): when the kit is here, those go to it as
@@ -82,7 +82,7 @@ const NO_KIT = `That is the kit's (@xgamesfun/kit): it makes games, the studio p
 not released yet; with a checkout of it, run xcore inside that folder, or set GAMESFUN_KIT=<folder> to use it from anywhere.`;
 
 function help(commands, kit) {
-  const lines = ['Usage: xcore <command> [options]', '', 'games.fun:'];
+  const lines = ['Usage: xcore <command> [options]', '', 'xgames.fun:'];
   for (const c of commands.values()) lines.push(`  ${c.name.padEnd(10)} ${c.summary}`);
   lines.push(
     '',
@@ -124,7 +124,7 @@ export async function main([name, ...args]) {
     console.error(
       own
         ? `${NO_KIT}\n\n${own.usage ?? ''}`
-        : `"${name}" is not a games.fun command. ${NO_KIT}\n\n${help(commands, null)}`,
+        : `"${name}" is not an xgames.fun command. ${NO_KIT}\n\n${help(commands, null)}`,
     );
     return 1;
   }

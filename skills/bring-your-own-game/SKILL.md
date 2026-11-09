@@ -1,11 +1,11 @@
 ---
 name: bring-your-own-game
-description: Help someone bring a web game they already made without this kit (plain HTML/JS, or a Vite, Next.js static export, Astro, SvelteKit, Nuxt, Create React App or Parcel project) to games.fun - adopt it, fix what does not fit the hosting (server-side rendering, paths from the root, CDN scripts and fonts, undeclared backend origins, secrets, size limits), check it with the page check, connect their own backend or a server/ Worker, add a loot economy, and publish it. Use when the person has an existing game folder or repository and wants web3, games.fun hosting, or the kit's checks for it; never rebuild such a game through the creation loop.
+description: Help someone bring a web game they already made without this kit (plain HTML/JS, or a Vite, Next.js static export, Astro, SvelteKit, Nuxt, Create React App or Parcel project) to xgames.fun - adopt it, fix what does not fit the hosting (server-side rendering, paths from the root, CDN scripts and fonts, undeclared backend origins, secrets, size limits), check it with the page check, connect their own backend or a server/ Worker, add a loot economy, and publish it. Use when the person has an existing game folder or repository and wants web3, xgames.fun hosting, or the kit's checks for it; never rebuild such a game through the creation loop.
 ---
 
 # Bring your own game
 
-The person already has a game. Your job is to make it fit games.fun's hosting with the smallest changes to _their_
+The person already has a game. Your job is to make it fit xgames.fun's hosting with the smallest changes to _their_
 files, never to remake it. The whole story, with every rule of the hosting, is xcore's README
 (github.com/XGamesFun/xcore; on npm, @xgamesfun/xcore's page); read its "What the hosting takes" table once. Everything
 here is `@xgamesfun/xcore` (the `xcore` command: `npx -y @xgamesfun/xcore …`, or `xcore …` once installed with `npm i -g
@@ -67,7 +67,7 @@ Four checks: it builds, it fits the hosting, the page starts (phone and desktop,
 console errors, nothing missing, nothing from the root, something on screen), it stays inside its origins. Open the two
 screenshots in `evidence/verify-N/` and look at them. A failing check 4 names the origin and why: declare it in
 `backend.json` if the game really calls it, or remove the call. The page check does not say the game plays well:
-that is the person's own game; ask them what to try, and try it with `xcore dev <folder>` (the game as games.fun
+that is the person's own game; ask them what to try, and try it with `xcore dev <folder>` (the game as xgames.fun
 hosts it, with its server, sign-in, saves, rooms and economy RPC) or their own.
 
 ## 4. Players, a database, a backend (only when the game has or needs them)
@@ -96,7 +96,7 @@ await GamesFun.join_room(code)` and `multiplayer.multiplayer_peer = peer`; keep 
   answer CORS for the game's origin. Never put their secret keys in the game.
 - **They want one**: Supabase or Railway, connected by the game-making kit (`@xgamesfun/kit`: `xcore backend connect
 supabase|railway` with the kit installed). Without the kit, they set one up themselves and you declare it as above.
-- **Server logic games.fun runs for them**: `server/index.js` and `gamesfun.json` → `server`
+- **Server logic xgames.fun runs for them**: `server/index.js` and `gamesfun.json` → `server`
   ([docs/SERVER.md](../../docs/SERVER.md)): a Worker on `/api/*`, Durable Objects for rooms, `env.GF` for sign-in, saves
   and scores. Their page calls it with a relative address (`fetch('api/scores')`): `/api/*` at the published origin,
   `/game/api/*` under `xcore dev`, which runs it under workerd with a local `env.GF`. A Node-only server stays on
@@ -126,14 +126,14 @@ Unity). A browser with no wallet is told so, with the game still playable. `xcor
 SOL: an economy approved to try it is one the person can approve again later). Going live is the person's own
 `xcore loot approve`, in their wallet: never yours.
 
-Paying a result has two signers (docs/SERVER.md, "Paying a result", has the rule): games.fun's keeper, when the
+Paying a result has two signers (docs/SERVER.md, "Paying a result", has the rule): xgames.fun's keeper, when the
 server already decides who won and the prize is fixed by place (the server calls `env.GF.loot.report`; the owner
 certifies the host key in Studio once, and nobody keeps a key), or the server's own key, when the amount depends on
 the result, when the server replays or bounds runs, for entry fees or a prize pool, or past 120 results an hour. For
 the own key, run `xcore add vouchers <folder>`: it writes `server/vouchers.js` and a test key for `xcore dev` (its
 seed in `.dev.vars`, kept out of git). Then, in order: write `PAY.check` with the person (what their server checks
 before it pays; nothing is paid until it is written) and count payouts in `PAY.paid`; they publish; they run `xcore
-secret set VOUCHER_SEED --new-key` (the live key: made here, sent to games.fun only and never kept on their machine; it prints the address);
+secret set VOUCHER_SEED --new-key` (the live key: made here, sent to xgames.fun only and never kept on their machine; it prints the address);
 that address goes in the grant's `vouchers` (`xcore loot check`); they approve and publish again. Never read the seed
 out of `.dev.vars` or repeat it.
 

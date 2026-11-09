@@ -7,16 +7,16 @@ import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore login [--code] [--status] [--json]
 
-Sign in to games.fun so you can publish your games (${CMD} publish). Your browser opens games.fun: sign in
+Sign in to xgames.fun so you can publish your games (${CMD} publish). Your browser opens xgames.fun: sign in
 there and approve this computer. xcore never sees your password; it keeps a publish token for 30 days in
 ${storeName()} (never in a game or in this folder). ${CMD} logout ends it.
   --code     no browser on this machine (SSH, a container): open the printed link anywhere and paste the code it shows
   --status   who this computer is signed in as, and where the token is kept
-GAMESFUN_STUDIO=<origin> signs in to another games.fun (a local Studio while developing).`;
+GAMESFUN_STUDIO=<origin> signs in to another xgames.fun (a local Studio while developing).`;
 
 export default {
   name: 'login',
-  summary: 'sign in to games.fun so you can publish your games',
+  summary: 'sign in to xgames.fun so you can publish your games',
   usage,
   run: args =>
     guard(async () => {

@@ -26,7 +26,7 @@ test('nothing outside the package, and no package it does not declare', () => {
   const out = [];
   for (const f of shipped()) {
     if (f.includes(`${path.sep}loot-page${path.sep}`)) continue; // wallets.js runs in a game's page, beside gf/loot/
-    // the database xcore writes into a game's server/ runs on games.fun's Workers, where cloudflare:workers is the runtime's
+    // the database xcore writes into a game's server/ runs on xgames.fun's Workers, where cloudflare:workers is the runtime's
     if (f.includes(`${path.sep}lib${path.sep}client${path.sep}server${path.sep}`)) continue;
     // xcore dev's env.GF stand-in runs inside workerd beside the game's server, where cloudflare:workers is the runtime's
     if (f.endsWith(`${path.sep}lib${path.sep}dev${path.sep}gf-local.js`)) continue;

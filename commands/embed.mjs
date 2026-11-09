@@ -9,13 +9,13 @@ const usage = `Usage: xcore embed [list] [dir] [--json]
        xcore embed add <site> [dir] [--json]
        xcore embed remove <site> [dir] [--json]
 
-The sites of your own that may show the published game in a frame (an <iframe> in your page), besides games.fun
+The sites of your own that may show the published game in a frame (an <iframe> in your page), besides xgames.fun
 and posts on X. A site is its origin: https://mygame.com (http://localhost:<port> while you build it). It applies
 within about a minute, with no publish. Free allows 3 sites, Creator 10, Scale 25.
   list            the sites, and where the game plays
   add <site>      allow one, and print the <iframe> to put in its page
   remove <site>   take one off
-Framed on your site, the game signs players in by itself (a small games.fun window, or a code), as it does in a post
+Framed on your site, the game signs players in by itself (a small xgames.fun window, or a code), as it does in a post
 on X: your page can't sign them in for it.`;
 
 export default {

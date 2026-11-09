@@ -1,4 +1,4 @@
-// `xcore adopt [folder]`: bring a web game made anywhere, to check it, add an economy and publish it on games.fun
+// `xcore adopt [folder]`: bring a web game made anywhere, to check it, add an economy and publish it on xgames.fun
 // (../lib/publish/adopt.mjs; README.md).
 import { guard, parse, printJson } from '../lib/cli.mjs';
 import path from 'node:path';
@@ -11,7 +11,7 @@ const usage = `Usage: xcore adopt [folder] [--build "<command>"] [--out <dir>] [
 Bring a web game you already made (plain static files, or a project whose build makes them: Vite, Next.js static
 export, Astro, SvelteKit's static adapter, Nuxt generate, Create React App, Parcel, Gatsby, any build script). It reads
 the folder's shape, builds it, writes its record (gamesfun.json → page: how it builds and what is published; never
-published itself) and lists everything that does not fit games.fun's hosting, each with its fix: no static index.html
+published itself) and lists everything that does not fit xgames.fun's hosting, each with its fix: no static index.html
 (server-side rendering, a Node server as the frontend), secrets, .env files, links, files over the limits, paths from
 the root, scripts, styles, fonts or frames from other sites, sites the code names that backend.json does not list.
 Then: ${CMD} check (the page in Chrome as the host serves it), ${CMD} backend use custom (a backend you
@@ -27,7 +27,7 @@ The folder (default: the one you are in) may be anywhere: in games/ or outside i
 
 export default {
   name: 'adopt',
-  summary: 'bring a web game you already made: its record, and what to fix for games.fun hosting',
+  summary: 'bring a web game you already made: its record, and what to fix for xgames.fun hosting',
   usage,
   run: args =>
     guard(async () => {

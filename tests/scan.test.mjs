@@ -1,6 +1,6 @@
 // The publish scan (lib/publish/scan.mjs): every kind of key it promises to refuse is refused, the keys made to be
 // public pass, and ordinary game data is not mistaken for a key. Every fake key is assembled at run time, so this file
-// holds nothing a secret scanner (GitHub's push protection, games.fun's own) would stop.
+// holds nothing a secret scanner (GitHub's push protection, xgames.fun's own) would stop.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { scanFile, secretsMessage, isPublicKey } from '../lib/publish/scan.mjs';
@@ -56,7 +56,7 @@ test('every kind of key the scan promises to refuse is refused', () => {
     ['Stripe secret key', `${'rk_' + 'test_' + alnum(24)}`],
     ['Supabase secret key', `${'sb_' + 'secret_' + alnum(24)}`],
     ['database address with a password', `const db = "${'postgres://' + 'app:hunter2pass@db.example.net:5432/x'}";`],
-    ['games.fun publish token', `${'gfk_' + alnum(40)}`],
+    ['xgames.fun publish token', `${'gfk_' + alnum(40)}`],
     ['secret assigned a literal', `const CLIENT_SECRET = "${alnum(24)}";`],
     ['secret assigned a literal', `{"apiKey": "${alnum(32)}"}`],
   ];

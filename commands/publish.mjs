@@ -1,4 +1,4 @@
-// `xcore publish`: a game to games.fun at a link anyone can play (../lib/publish/index.mjs). publishCommand makes the
+// `xcore publish`: a game to xgames.fun at a link anyone can play (../lib/publish/index.mjs). publishCommand makes the
 // command: this package's own, which checks a game by the page check, and the kit's (@xgamesfun/kit), which passes its
 // six gates, its name, its upkeep and its own way of finding a game. A game the kit made goes to the kit's (../bin).
 import { guard, parse, printJson } from '../lib/cli.mjs';
@@ -11,27 +11,27 @@ import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore publish [dir] [--draft] [--new] [--title <name>] [--status] [--check [--verify [--port <n>]]] [--json]
 
-Put a game on games.fun at a link anyone can play: games.fun hosts it, you need no server. Sign in first
+Put a game on xgames.fun at a link anyone can play: xgames.fun hosts it, you need no server. Sign in first
 (${CMD} login). The game's checks gate it: they must pass on the files you publish (they run now unless nothing
 changed since they last passed; a game you brought: the page check, a game the kit made: its six gates). A game whose
 checks fail goes up as a private draft only, and you are told which checks failed. Files that look like keys, .env
 files and links refuse it; evidence/, hidden files and the makers' notes at the top (README.md, NOTES.md, LAUNCH.md…)
-are left out. Only files games.fun does not have yet are uploaded. The link is unlisted: only people you give it to
+are left out. Only files xgames.fun does not have yet are uploaded. The link is unlisted: only people you give it to
 find it. Publishing the same folder again makes a new version at the same link. A game with its own server code
-(server/, a gf-server-v1 Worker) sends it bundled as one file, when games.fun takes server code; server/ is never a
+(server/, a gf-server-v1 Worker) sends it bundled as one file, when xgames.fun takes server code; server/ is never a
 public file.
 In a GitHub Actions job with permissions id-token: write, the job's own OIDC token signs it in place of a login.
 A brought game (${CMD} adopt) is built first when it has a build; its published folder (gamesfun.json page.out)
 goes up, with its server/ bundle when it has one.
-  --draft        a private version in your games.fun Studio, no public link
+  --draft        a private version in your xgames.fun Studio, no public link
   --new          publish as a new game (a new link), not an update of this folder's game
-  --title <name> the game's name on games.fun (default: its title)
+  --title <name> the game's name on xgames.fun (default: its title)
   --status       this folder's link and the account it is published from; publishes nothing
   --check        the offline checks only (files, secrets, backend origins, the server bundle); publishes nothing
   --verify       with --check: also run the publish gate's checks on these files and remember a pass, so the
                  publish after it does not run them again (the GitHub Action's check step)
   --port <n>     with --verify: the port its page check serves on (default: any free one)
-GAMESFUN_STUDIO=<origin> publishes to another games.fun (a local Studio while developing).`;
+GAMESFUN_STUDIO=<origin> publishes to another xgames.fun (a local Studio while developing).`;
 
 /**
  * The publish command. check, label, prepare, rpcFile: as publishGame takes them (the kit's six gates, its name, its
@@ -49,7 +49,7 @@ export function publishCommand({
   const own = { check, label, ...(prepare ? { prepare } : {}), ...(rpcFile ? { rpcFile } : {}) };
   return {
     name: 'publish',
-    summary: 'put a game on games.fun at a link anyone can play (unlisted)',
+    summary: 'put a game on xgames.fun at a link anyone can play (unlisted)',
     usage,
     run: args =>
       guard(async () => {
@@ -155,7 +155,7 @@ const failedNames = failed => failed.map(c => `${c.n} ${c.name}`).join('; ');
 /** `publish --status`: where this folder's game is published, and whether it is live. */
 function statusLine(where, origin, s) {
   let live = '';
-  if (s.live?.error) live = ` games.fun says: ${s.live.error}`;
+  if (s.live?.error) live = ` xgames.fun says: ${s.live.error}`;
   else if (s.live) live = s.live.published ? ` Live: version ${s.live.version?.number}.` : ' Not live now.';
   const own = s.known?.gameUrl ? `\n  the game itself: ${s.known.gameUrl}` : '';
   const v = s.known?.lastVersion;
@@ -177,7 +177,7 @@ function statusLine(where, origin, s) {
 function checkLines(where, out, p) {
   const talks = p.backend.length ? ` It may talk to: ${p.backend.join(', ')}.` : '';
   const lines = [
-    `${where}: ${out.files} files${out.added?.length ? ` (with the ${plural(out.added.length, 'record')} games.fun keeps: ${out.added.join(', ')})` : ''}, ${(out.bytes / 1048576).toFixed(1)} MB, nothing refused.${talks} ` +
+    `${where}: ${out.files} files${out.added?.length ? ` (with the ${plural(out.added.length, 'record')} xgames.fun keeps: ${out.added.join(', ')})` : ''}, ${(out.bytes / 1048576).toFixed(1)} MB, nothing refused.${talks} ` +
       `Left out: ${out.skipped.join(', ') || 'nothing'}.`,
   ];
   const sv = out.server;
@@ -214,7 +214,7 @@ function publishedLines(where, r) {
     `  the game itself: ${r.gameUrl}`,
   ];
   if (r.friendsUrl) lines.push(`  play with friends: ${r.friendsUrl}`);
-  lines.push(`  uploaded ${r.uploaded} new files; games.fun already had ${r.alreadyThere}.`);
+  lines.push(`  uploaded ${r.uploaded} new files; xgames.fun already had ${r.alreadyThere}.`);
   if (r.server) {
     lines.push(
       r.server.sent
@@ -225,7 +225,7 @@ function publishedLines(where, r) {
   return lines;
 }
 
-/** A publish saved as a private draft: asked for with --draft, refused by games.fun, or its checks failed. */
+/** A publish saved as a private draft: asked for with --draft, refused by xgames.fun, or its checks failed. */
 function draftLines(where, r, folder = where) {
   const lines = [`Saved ${where} as a private draft (version ${r.version.number}): ${r.studioUrl}`];
   if (r.publishError) lines.push(`  not published: ${r.publishError}`);
