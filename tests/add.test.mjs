@@ -29,7 +29,7 @@ import { decodeBase58 } from '@xgamesfun/solana/chain/base58';
 import { decode, voucherBytes } from '@xgamesfun/solana/client';
 import { readProof } from '@xgamesfun/solana/results';
 import { bundleServer } from '../lib/server/bundle.mjs';
-import { OLD_DEFAULT_RULES } from '../lib/server/contract.mjs';
+import { OLD_DEFAULT_RULES, OWNER_SPACES } from '../lib/server/contract.mjs';
 import { fixture, ROOT, tempDir } from './helpers.mjs';
 
 // the database imports cloudflare:workers (a Durable Object's base class); here a stand-in
@@ -322,7 +322,7 @@ test("the database's routes: the page's token is checked by xgames.fun, and the 
   assert.equal((await server.list('levels', { owner: 'x:42' })).items.length, 1);
 });
 
-test('add database again: an untouched RULES from before 0.1.1 (anyone read) becomes the new default', async t => {
+test('add database again: an untouched RULES from 0.1.0 (anyone read) becomes the new default', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await fixture(tmp, 'static');
@@ -359,6 +359,82 @@ test('add database again: an untouched RULES from before 0.1.1 (anyone read) bec
   assert.doesNotMatch(open.warnings.join('\n'), /It keeps working/);
   await writeFile(file, before);
   assert.match((await bundleServer(dir)).warnings.join('\n'), /older database .*It keeps working/);
+});
+
+test("upgrading 0.1.0's database.js: each dataOf(env) call with no owner is said with its change, by add database and at publish", async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  await addDatabaseObject(dir);
+  const file = path.join(dir, 'server/database.js');
+  const now = await readFile(file, 'utf8');
+  const game = [
+    "import { dataOf } from './database.js';",
+    'export async function profile(env, sub, opts) {',
+    "  const { item } = await dataOf(env).get('profiles', sub);",
+    "  await dataOf(env).put('profiles', sub, { gold: 1 });",
+    "  await dataOf(env).put('profiles', sub, { gold: 1 }, { owner: sub });",
+    '  const data = dataOf(env);',
+    "  await data.delete('profiles', sub);",
+    "  await data.add('news', { at: 1 }, { owner: 'server' });",
+    "  await data.list('news', { limit: 10, offset: 20 });",
+    "  await data.list('news', { limit: 10, offset: 0 });",
+    "  await data.get('profiles', sub, opts);",
+    "  await data.add('news', { at: 2 });",
+    "  // dataOf(env).get('in', 'a comment') is not code",
+    `  const s = "dataOf(env).get('in', 'a string')";`,
+    '  return [item, s];',
+    '}',
+    '',
+  ].join('\n');
+  await writeFile(path.join(dir, 'server/game.js'), game);
+  await writeFile(
+    path.join(dir, 'server/index.js'),
+    "import { handleDatabase } from './database.js';\nimport { profile } from './game.js';\nexport { GameData } from './database.js';\nexport default {\n  async fetch(request, env) {\n    const r = await handleDatabase(request, env);\n    if (r) return r;\n    return Response.json(await profile(env, 'x'));\n  },\n};\n",
+  );
+  // database.js as 0.1.0 had it: one id a collection, no space of each player's own
+  await writeFile(file, now.replace(OWNER_SPACES, 'PRIMARY KEY (collection, id)'));
+  const want = [
+    ['server/game.js', 3, 'get', /server's own space .*answers 404.*\{owner: sub\}.*\{owner: 'server'\}/],
+    ['server/game.js', 4, 'put', /the server's own copy, which the player never sees/],
+    ['server/game.js', 7, 'delete', /deletes the server's own copy/],
+    ['server/game.js', 9, 'list', /offset is refused now: page with .*after/],
+    ['server/game.js', 12, 'add', /adds to the server's own space/],
+  ];
+  const r = await addDatabase(dir);
+  assert.equal(await readFile(file, 'utf8'), now, 'database.js brought up to date');
+  assert.deepEqual(
+    r.calls.map(c => [c.file, c.line, c.op]),
+    want.map(w => w.slice(0, 3)),
+  );
+  r.calls.forEach((c, i) => assert.match(c.fix, want[i][3]));
+  const step = r.steps.find(x => /was 0\.1\.0's/.test(x));
+  assert.ok(step, r.steps.join('\n'));
+  assert.match(step, /change these 5 calls before you publish/);
+  assert.match(step, /server\/game\.js:3 dataOf\(env\)\.get\(…\): without an owner/);
+  // again, the file already up to date: nothing upgraded, nothing said
+  assert.equal((await addDatabase(dir)).calls.length, 0);
+  // publish says them as long as they are there
+  const b = await bundleServer(dir);
+  const said = b.warnings.find(w => /dataOf\(env\) with no owner/.test(w));
+  assert.ok(said, b.warnings.join('\n'));
+  for (const [f, line, op] of want) assert.match(said, new RegExp(`${f}:${line} dataOf\\(env\\)\\.${op}\\(`));
+  assert.doesNotMatch(said, /game\.js:(5|8|10|11|13|14):/);
+  // each says whose space it means: nothing to say
+  await writeFile(
+    path.join(dir, 'server/game.js'),
+    game
+      .replace("get('profiles', sub)", "get('profiles', sub, { owner: sub })")
+      .replace('{ gold: 1 });', "{ gold: 1 }, { owner: 'server' });")
+      .replace("delete('profiles', sub)", "delete('profiles', sub, { owner: sub })")
+      .replace('offset: 20', "after: ''")
+      .replace('{ at: 2 })', "{ at: 2 }, { owner: 'server' })"),
+  );
+  assert.doesNotMatch((await bundleServer(dir)).warnings.join('\n'), /dataOf\(env\) with no owner/);
+  // a 0.1.0 database.js not upgraded yet: its calls still mean what they did, so publish says nothing of them
+  await writeFile(path.join(dir, 'server/game.js'), game);
+  await writeFile(file, now.replace(OWNER_SPACES, 'PRIMARY KEY (collection, id)'));
+  assert.doesNotMatch((await bundleServer(dir)).warnings.join('\n'), /dataOf\(env\) with no owner/);
 });
 
 test('signin for a web game: gamesfun.js beside the page and loaded first; again, nothing changes', async t => {

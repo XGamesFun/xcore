@@ -557,7 +557,11 @@ Publish refuses a game with a database while xgames.fun does not run databases y
 
 **The older database**, `server/database.js` (one Durable Object with SQLite storage, from xcore 0.1.0), keeps
 working for a game that has it, and `xcore add database` keeps it up to date; the check says it is the older way. It
-has the same owner spaces, rules and paging, with `RULES` at its top and `dataOf(env)` for the server's own code.
+has the same owner spaces, rules and paging, with `RULES` at its top and `dataOf(env)` for the server's own code:
+without an owner it is the server's own space (`dataOf(env).put('news', 'today', …)`), with one a player's
+(`dataOf(env).get('profiles', 'main', { owner: sub })`). In 0.1.0 a document was found by its id alone, whoever wrote
+it, so 0.1.0 code that reads or writes a player's document by id alone needs `{ owner }`: `xcore add database` and
+publish list each such call (the README's "Upgrading from 0.1.0").
 
 ## Running it locally
 
