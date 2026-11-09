@@ -35,7 +35,9 @@ async function sample(tmp, name, as = name) {
   return dir;
 }
 const review = (dir, o = {}) => reviewGame(dir, { env: INSTALLED, ...o });
-const ids = r => r.findings.map(f => `${f.severity} ${f.id}`);
+// xcore's own findings (the server, live); the economy's come from @xgamesfun/solana's review (`all` has them too)
+const ids = r => r.findings.filter(f => f.source !== 'economy').map(f => `${f.severity} ${f.id}`);
+const all = r => r.findings.map(f => `${f.severity} ${f.id}`);
 const edit = async (file, change) => writeFile(file, change(await readFile(file, 'utf8')));
 const editJson = (file, change) =>
   edit(file, t => {
@@ -44,7 +46,7 @@ const editJson = (file, change) =>
     return JSON.stringify(v, null, 2);
   });
 
-test('the two sample servers: no finding in either; the trade-offs say bounds and decides, and what a cheater gets', async t => {
+test('the two sample servers: no server finding in either; the economy review of the installed @xgamesfun/solana; the trade-offs say bounds and decides', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const bounded = await sample(tmp, 'bounded');
@@ -53,10 +55,13 @@ test('the two sample servers: no finding in either; the trade-offs say bounds an
   const d = await review(decided);
   assert.deepEqual(ids(b), []);
   assert.deepEqual(ids(d), []);
-  assert.equal(b.ok, true);
+  // @xgamesfun/solana 0.25.1 has `xsolana review`: the economy is read too. A "bounds" grant with no total is the
+  // trade-off the review names (medium); a "decides" one isn't.
+  assert.equal(b.economy.available, true);
+  assert.deepEqual(all(b), ['medium R-CLAIM-UNCAPPED', 'info R-VOUCHER-KEY', 'info R-AUTHORITY']);
+  assert.deepEqual(all(d), ['info R-VOUCHER-KEY', 'info R-AUTHORITY']);
+  assert.equal(b.ok, true, 'no high finding');
   assert.equal(b.outDir, path.join(bounded, 'evidence', 'review-1'));
-  assert.equal(b.economy.available, false);
-  assert.match(b.economy.why, /needs @xgamesfun\/solana with `review`/);
   assert.deepEqual(
     b.server.routes.map(r => r.path),
     ['api/tide/found', 'api/tide/start', 'api/vouchers/key', 'api/vouchers/link', 'api/vouchers/pay'],
@@ -84,9 +89,9 @@ test('the two sample servers: no finding in either; the trade-offs say bounds an
   assert.ok(md.trimEnd().endsWith('trust-and-cheating.md.'), 'it ends with the guide');
   assert.deepEqual(JSON.parse(await readFile(path.join(b.outDir, 'review.json'), 'utf8')).counts, {
     high: 0,
-    medium: 0,
+    medium: 1,
     low: 0,
-    info: 0,
+    info: 2,
   });
   // the next review is the next folder; the command says it all and exits 0
   const c = run(['review', bounded], { env: { GAMESFUN_SOLANA: '' } });
@@ -94,7 +99,7 @@ test('the two sample servers: no finding in either; the trade-offs say bounds an
   assert.match(c.stdout, /^review: PASS 0 high/);
   assert.match(c.stdout, /evidence .*review-2/);
   assert.match(c.stdout, /^paid route grant:found-whale: bounds$/m);
-  assert.match(c.stdout, /economy: xsolana\.json not reviewed: the economy review needs/);
+  assert.match(c.stdout, /economy: xsolana\.json, \d+ routes? reviewed by @xgamesfun\/solana 0\.25\.1/);
 });
 
 test('PAY.check: the template pays nothing; one that pays from the request alone is high, and the command exits 1', async t => {
@@ -238,8 +243,12 @@ test('payOnly, the voucher key and the grants, trust: each finding fires, and no
     delete s.grants[0].trust;
   });
   const u = await review(dir);
-  assert.deepEqual(ids(u), ['info trust-undeclared']);
-  assert.match(u.findings[0].fix, /0\.25\.0 refuses the field/);
+  // the installed @xgamesfun/solana (0.25.1) says it itself (R-TRUST-UNSAID), so this package's own line stays out
+  assert.deepEqual(ids(u), []);
+  assert.ok(
+    all(u).some(i => i.endsWith(' R-TRUST-UNSAID')),
+    all(u).join(', '),
+  );
   assert.equal(u.tradeoffs[0].trust, null);
   assert.match(u.tradeoffs[0].cheater, /^it rests on what PAY\.check checks/);
   await editJson(economy, s => (s.grants[0].trust = 'mostly'));
@@ -472,7 +481,7 @@ test("the economy's own review: its routes, findings and trade-offs in the recor
   assert.equal(r.economy.available, true);
   assert.equal(r.economy.version, '0.26.0');
   // its trust says nothing about the undeclared field, so this package's own line stays, at medium now
-  assert.deepEqual(ids(r), ['high bounded-feeds-farm', 'medium trust-undeclared']);
+  assert.deepEqual(all(r), ['high bounded-feeds-farm', 'medium trust-undeclared']);
   assert.equal(r.findings[0].source, 'economy');
   assert.equal(r.tradeoffs[0].trust, 'bounds', 'the level from its route when the grant does not say');
   assert.equal(r.tradeoffs[0].ceiling, '100 whales a day');
@@ -494,7 +503,7 @@ test("the economy's own review: its routes, findings and trade-offs in the recor
     fix: 'f',
   });
   const env2 = { ...process.env, GAMESFUN_SOLANA: await standInSolana(tmp, 'with2', theirs) };
-  assert.deepEqual(ids(await reviewGame(dir, { env: env2 })), ['high bounded-feeds-farm', 'medium trust-undeclared']);
+  assert.deepEqual(all(await reviewGame(dir, { env: env2 })), ['high bounded-feeds-farm', 'medium trust-undeclared']);
   assert.equal((await reviewGame(dir, { env: env2 })).findings[1].source, 'economy');
   // an installed one without review
   const without = { ...process.env, GAMESFUN_SOLANA: await standInSolana(tmp, 'without', null) };

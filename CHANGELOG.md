@@ -27,6 +27,7 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 'wallet'` signs in with X; `player.google` and the player's name (no @ for a Google name).
 - `server/vouchers.js`: `VOUCHERS.payOnly` may be `'account'` (players signed in with X or Google); a Google account
   with no X counts as one person (`g:<id>`) for `perPerson`.
+- `@xgamesfun/solana` 0.25.1 (its `xsolana review`).
 - `xcore review [game] [--live [origin]] [--json]`: the security review of a game, read as a cheater would. The
   economy by `@xgamesfun/solana`'s own review (`xsolana review`; an installed version without it is said in one line);
   the server by xcore's reading (`PAY.check` still the template, or paying from the request alone; `VOUCHERS.payOnly`

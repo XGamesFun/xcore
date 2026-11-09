@@ -2,6 +2,13 @@
   "version": 2,
   "network": "devnet",
   "name": "Reef Keeper",
+  "currency": "sol",
+  "tokens": [
+    {
+      "key": "sol",
+      "source": "sol"
+    }
+  ],
   "items": [
     {
       "key": "whale",

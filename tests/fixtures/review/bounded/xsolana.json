@@ -2,17 +2,42 @@
   "version": 2,
   "network": "devnet",
   "name": "Reef Watch",
-  "items": [{ "key": "whale", "name": "Whale", "id": 1 }],
+  "currency": "sol",
+  "tokens": [
+    {
+      "key": "sol",
+      "source": "sol"
+    }
+  ],
+  "items": [
+    {
+      "key": "whale",
+      "name": "Whale",
+      "id": 1
+    }
+  ],
   "grants": [
     {
       "key": "found-whale",
       "name": "Found a Whale",
-      "prize": { "gives": "item", "item": "whale" },
-      "vouchers": ["2LW2C9sZbxoizKZ9eXYrsiF8xLP8GajJpnjAyNYKTrh1"],
-      "limits": { "perWallet": 1, "perPerson": 1, "perDay": 100 },
+      "prize": {
+        "gives": "item",
+        "item": "whale"
+      },
+      "vouchers": [
+        "2LW2C9sZbxoizKZ9eXYrsiF8xLP8GajJpnjAyNYKTrh1"
+      ],
+      "limits": {
+        "perWallet": 1,
+        "perPerson": 1,
+        "perDay": 100
+      },
       "trust": "bounds",
       "id": 1
     }
   ],
-  "live": { "program": "9cwqM1TXytPnFZsLfmUyv2dg4uW6Ch9C6UJVPns7NFQ", "project": "ReefWatch1111111111111111111111111111111111" }
+  "live": {
+    "program": "9cwqM1TXytPnFZsLfmUyv2dg4uW6Ch9C6UJVPns7NFQ",
+    "project": "ReefWatch1111111111111111111111111111111111"
+  }
 }
