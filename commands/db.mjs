@@ -3,15 +3,16 @@
 import { createInterface } from 'node:readline/promises';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
-import { dbExport, dbImport, dbInfo, dbQuery, dbRestore } from '../lib/db.mjs';
+import { existsSync } from 'node:fs';
+import { dbExport, dbImport, dbInfo, dbQuery, dbRestore, queryProblem } from '../lib/db.mjs';
 import { economyFile } from '../lib/economy.mjs';
 import { pageRoots } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore db info [dir] [--live] [--json]
-       xcore db query "<sql>" [dir] [--params '<json list>'] [--write] [--live] [--json]
+       xcore db query "<sql>" [dir] [--params '<json list>'] [--write] [--live [--yes]] [--json]
        xcore db export [dir] [--out <file>] [--live] [--json]
-       xcore db import <file.sql> [dir] [--live] [--json]
+       xcore db import <file.sql> [dir] [--live [--yes]] [--json]
        xcore db restore <time> [dir] --live [--yes] [--json]
 
 The game's own database (${CMD} add database: gamesfun.json → database, one D1 database a game). Without --live,
@@ -22,8 +23,10 @@ the game's database on xgames.fun, which keeps every call in the game's audit lo
                      --write. --params '["moon", 3]' fills its ? marks
   export             the whole database as SQL, into --out <file> or .gamesfun/exports/ (hidden: never published;
                      it holds your players' data, so keep it out of git and off shared drives)
-  import <file.sql>  run a file of SQL statements, all of it or none; at most 5 MB. A dump from export (here, live
-                     or D1's) goes in over what is there: tables kept, rows with the same key replaced
+  import <file.sql>  run a file of SQL statements, all of it or none; at most 5 MB (live, 4.5 MB as sent). A dump
+                     from export (here, live or D1's) goes in over what is there: tables kept, rows replaced
+A change to the live database (query --write --live, import --live, restore) goes on only with --yes or when you
+type its word (write, import, restore); where there is no terminal to ask in, it needs --yes.
   restore <time>     live only: the database as it was at <time> (a date such as 2026-11-08T12:00:00Z, or unix
                      seconds; up to 30 days back). It says what it would go back to first, and goes on only with
                      --yes or when you type "restore". A game with an economy: what happened on chain (loot
@@ -51,12 +54,16 @@ function table(rows) {
   );
 }
 
-async function confirmed(question) {
+/**
+ * A change to the live database goes on only with --yes, or when the person types `word` at the terminal; with no
+ * terminal to ask in (a script, CI), it is refused. → true to go on
+ */
+async function confirmed(question, word, nothing) {
   if (!process.stdin.isTTY)
-    throw new UsageError(`nothing was restored: add --yes to go on (this is not a terminal to ask in)\n\n${usage}`);
+    throw new UsageError(`${nothing}: add --yes to go on (this is not a terminal to ask in)\n\n${usage}`);
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   try {
-    return (await rl.question(question)).trim().toLowerCase() === 'restore';
+    return (await rl.question(question)).trim().toLowerCase() === word;
   } finally {
     rl.close();
   }
@@ -116,6 +123,18 @@ export default {
             throw new UsageError(`--params is a JSON list, such as '["moon", 3]'\n\n${usage}`);
           }
         }
+        if (live && values.write && !values.yes) {
+          // what would be refused anyway is refused before anyone is asked
+          const why = queryProblem(arg, { write: true });
+          if (why) throw Object.assign(new Error(why), { code: 'bad-sql' });
+          console.error(
+            `This changes ${where}, which your players use: ${arg.length > 200 ? `${arg.slice(0, 199)}…` : arg}. Only ${CMD} db restore --live puts it back.`,
+          );
+          if (!(await confirmed('Type write to go on, anything else to stop: ', 'write', 'nothing was written'))) {
+            console.log('Nothing was written.');
+            return 1;
+          }
+        }
         const r = await dbQuery(dir, arg, { live, params, write: !!values.write, log });
         if (values.json) return printJson(r);
         console.log(table(r.results ?? []));
@@ -130,14 +149,26 @@ export default {
         const r = await dbExport(dir, { live, out: values.out ?? null, log });
         if (values.json) return printJson(r);
         console.log(`Exported ${where} (${kb(r.bytes)}) to ${r.file}. It holds your players' data: keep it private.`);
+        if (r.note) console.log(`  ${r.note}`);
         return 0;
       }
       if (verb === 'import') {
+        if (live && !values.yes) {
+          if (!existsSync(arg)) throw new Error(`${arg} is not there`);
+          console.error(
+            `This runs ${arg} on ${where}, which your players use: rows can change or go, and while it runs the database answers nothing else. ${CMD} db export --live keeps a copy first; ${CMD} db restore --live puts it back.`,
+          );
+          if (!(await confirmed('Type import to go on, anything else to stop: ', 'import', 'nothing was imported'))) {
+            console.log('Nothing was imported.');
+            return 1;
+          }
+        }
         const r = await dbImport(dir, arg, { live, log });
         if (values.json) return printJson(r);
         console.log(
-          `Imported ${arg} into ${where}${r.statements !== undefined ? ` (${plural(r.statements, 'statement')})` : ''}.${r.dump ? ' A dump goes in over what is there: its tables kept, its rows replacing those with the same key.' : ''}${r.left ? ` Its record of migrations (_gf_migrations, ${plural(r.left, 'statement')}) was left out: this database keeps its own.` : ''}`,
+          `Imported ${arg} into ${where}${r.meta?.queries !== undefined ? ` (${plural(r.meta.queries, 'statement')})` : ''}${r.statements !== undefined ? ` (${plural(r.statements, 'statement')})` : ''}.${r.dump ? ' A dump goes in over what is there: its tables kept, its rows replacing those with the same key.' : ''}${r.left ? ` Its record of migrations (_gf_migrations, ${plural(r.left, 'statement')}) was left out: this database keeps its own.` : ''}`,
         );
+        if (r.note) console.log(`  ${r.note}`);
         return 0;
       }
       // restore: what it would do, the chain's warning, then only on a yes
@@ -158,16 +189,28 @@ export default {
         console.log(
           `${where} would go back to how it was at ${at}${p.preview?.bookmark ? ` (bookmark ${p.preview.bookmark})` : ''}. Everything written after that is lost; ${CMD} db export --live keeps a copy first.`,
         );
+        const undone = p.preview?.migrations ?? [];
+        if (undone.length)
+          console.log(
+            `It rolls back ${plural(undone.length, 'migration')} applied after that time: ${undone.map(m => `${m.name}${m.at ? ` (${m.at})` : ''}`).join(', ')}.`,
+          );
+        if (p.preview?.warning) console.log(`Warning: ${p.preview.warning}`);
         if (warning) console.log(`Warning: ${warning}`);
-        if (!(await confirmed('Type restore to go on, anything else to stop: '))) {
+        if (!(await confirmed('Type restore to go on, anything else to stop: ', 'restore', 'nothing was restored'))) {
           console.log('Nothing was restored.');
           return 1;
         }
       } else if (warning && !values.json) console.error(`Warning: ${warning}`);
+      // the moment before the restore: going back to it undoes the restore (D1 Time Travel keeps that point too)
+      const before = new Date().toISOString();
       const r = await dbRestore(dir, arg, { live, confirm: true, log });
-      if (values.json) return printJson({ ...r, economy });
+      const undo = `${CMD} db restore ${before} --live`;
+      if (values.json) return printJson({ ...r, economy, undo: { at: before, command: undo } });
       console.log(
         `Restored ${where} to ${r.restored?.at ?? at}${r.restored?.bookmark ? ` (bookmark ${r.restored.bookmark})` : ''}.`,
+      );
+      console.log(
+        `  Before it, the database was at ${r.restored?.previous ? `bookmark ${r.restored.previous}` : before}. To undo this restore: ${undo} (the moment before it, by this machine's clock).`,
       );
       return 0;
     }, args),

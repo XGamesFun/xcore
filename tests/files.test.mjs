@@ -200,6 +200,19 @@ test('env.GF.files through the dev host: a file’s bytes go to the store as the
     (await (await host('files.put?path=big', { body: Buffer.alloc(FILES.fileBytes + 1) })).json()).code,
     'too-big',
   );
+  // a stream (as gf-local.js marks one): held to exactly its length; with none, read up to 1 MB
+  const stream = (q, body) => host(`files.put?path=s.bin&stream=1${q}`, { body }).then(r => r.json());
+  assert.deepEqual(await stream('&length=3', Buffer.from('abc')), { ok: true, path: 's.bin', bytes: 3 });
+  assert.match((await stream('&length=4', Buffer.from('abc'))).why, /fewer bytes than its length \(4\)/);
+  assert.match((await stream('&length=2', Buffer.from('abc'))).why, /more bytes than its length \(2\)/);
+  assert.equal((await stream('', Buffer.alloc(1024 * 1024))).ok, true, 'up to 1 MB with no length');
+  const unsized = await stream('', Buffer.alloc(1024 * 1024 + 1));
+  assert.deepEqual(
+    [unsized.code, /needs its length: put\(path, stream, \{length\}\)/.test(unsized.why)],
+    ['body', true],
+  );
+  assert.equal((await stream(`&length=${FILES.fileBytes + 1}`, Buffer.from('a'))).code, 'too-big');
+  assert.equal((await stream('&length=1048577', Buffer.alloc(1048577))).ok, true, 'a length: past 1 MB');
 });
 
 test('xcore files on this machine: put, ls, get, rm, usage', async t => {
@@ -254,6 +267,7 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
       url,
       type: req.headers['content-type'],
       pub: req.headers['x-gf-public'],
+      ...(method === 'PUT' ? { length: req.headers['x-gf-length'] } : {}),
       body: raw.toString(),
     });
     if (url === '/api/kit/games/g1/files-usage') return [200, { ok: true, bytes: 4, files: 1, cap: 104857600 }];
@@ -298,8 +312,16 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
     url: '/api/kit/games/g1/files/art/hero.png',
     type: 'image/png',
     pub: '1',
+    length: '4',
     body: 'PNG!',
   });
+  // over Studio's 4.5 MB (its host's limit on a request): refused here, with the way that takes it
+  await writeFile(path.join(dir, 'world.bin'), Buffer.alloc(4_600_000));
+  const before = seen.length;
+  r = await xc(['put', 'world.bin']);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /This file is 4\.6 MB\..*at most 4\.5 MB a request\. A bigger one .*env\.GF\.files\.put/s);
+  assert.equal(seen.length, before, 'not sent');
   r = await xc(['ls', 'art']);
   assert.match(r.stdout, /public\s+4 bytes\s+art\/hero\.png/);
   assert.equal(seen.at(-1).url, '/api/kit/games/g1/files?prefix=art%2F');
@@ -360,6 +382,11 @@ test(
         }
         if (u.pathname === '/api/list') return Response.json(await env.GF.files.list({ prefix: '' }));
         if (u.pathname === '/api/bad') return Response.json(await env.GF.files.put('../up', 'x'));
+        // a stream is held to its length; one without a length is read up to 1 MB
+        if (u.pathname === '/api/sized') {
+          const n = Number(u.searchParams.get('n')), length = u.searchParams.has('length') ? Number(u.searchParams.get('length')) : undefined;
+          return Response.json(await env.GF.files.put('s.bin', new Blob([new Uint8Array(n)]).stream(), { length }));
+        }
         return new Response('no', { status: 404 });
       } };\n`,
     });
@@ -382,6 +409,12 @@ test(
       ['keep/x.txt', 'replays/one.json'],
     );
     assert.equal((await (await fetch(`${dev.url}api/bad`)).json()).code, 'path');
+    const sized = async q => (await fetch(`${dev.url}api/sized?${q}`)).json();
+    assert.deepEqual(await sized('n=5&length=5'), { ok: true, path: 's.bin', bytes: 5 });
+    assert.match((await sized('n=5&length=6')).why, /fewer bytes than its length \(6\)/);
+    assert.match((await sized('n=7&length=6')).why, /more bytes than its length \(6\)/);
+    assert.equal((await sized('n=2000000&length=2000000')).ok, true);
+    assert.match((await sized('n=2000000')).why, /needs its length: put\(path, stream, \{length\}\)/);
     const page = await fetch(dev.url);
     assert.match(
       page.headers.get('content-security-policy'),

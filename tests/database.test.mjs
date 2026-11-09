@@ -206,6 +206,20 @@ test('the database records its migrations in _gf_migrations, in the batch with t
   // changed after it was applied: refused, from what the database itself recorded
   r = await applyMigrations(null, d1, [m('0001_init.sql', 'CREATE TABLE players (id TEXT);')]);
   assert.equal(r.code, 'migration-changed');
+  // a row left as started (negative applied_at: a batch that stopped part-way) is refused, with how to undo it
+  d1.db.exec(`INSERT INTO _gf_migrations VALUES ('0002_half.sql', 'x', -${Date.parse('2026-11-08T09:00:00Z')})`);
+  r = await applyMigrations(null, d1, [
+    one,
+    m('0002_half.sql', 'CREATE TABLE half (x);'),
+    m('0003_n.sql', 'SELECT 1;'),
+  ]);
+  assert.deepEqual([r.ok, r.code, r.name, r.partly, r.applied], [false, 'migration-failed', '0002_half.sql', true, []]);
+  assert.match(
+    r.why,
+    /0002_half\.sql was partly applied: it failed part-way \(it began at 2026-11-08T09:00:00\.000Z\)/,
+  );
+  assert.match(r.why, /DELETE FROM _gf_migrations WHERE name = '0002_half\.sql'/);
+  assert.equal(d1.db.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = 'half'").get().n, 0, 'not run');
   // the file an earlier xcore kept beside the database is read into the table once, then removed
   const dir = path.join(tmp.dir, 'old');
   const file = path.join(dir, '.gamesfun', 'dev', 'd1', 'gf-migrations.json');
@@ -664,6 +678,15 @@ test('publish: a database needs "d1" in server.features; with it, the migrations
     publish(),
     e => e.code === 'migration-changed' && /0001_init\.sql changed after xgames\.fun applied it/.test(e.message),
   );
+  g.state.refuse = { at: 'complete', status: 502, body: { code: 'database-unavailable', error: 'Cloudflare 503' } };
+  await assert.rejects(
+    publish(),
+    e =>
+      e.code === 'database-unavailable' &&
+      /could not reach the game's database .*Nothing is wrong with the migrations.*publish again in a minute/.test(
+        e.message,
+      ),
+  );
   g.state.refuse = { at: 'complete', status: 409, body: { code: 'migration-busy' } };
   await assert.rejects(
     publish(),
@@ -736,11 +759,26 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
       ];
     if (url.endsWith('/db/query')) return [200, { ok: true, results: [{ id: 'p1', gold: 3 }], meta: { rows_read: 1 } }];
     if (url.endsWith('/db/export')) return [200, { ok: true, url: `${g.origin}/dump/1.sql` }];
-    if (url.endsWith('/db/import')) return [200, { ok: true, meta: { changes: 1 } }];
+    if (url.endsWith('/db/import'))
+      return json.sql.includes('huge')
+        ? [413, Buffer.from('Request Entity Too Large'), { 'content-type': 'text/plain' }] // Studio's host, not xgames.fun
+        : [200, { ok: true, meta: { changes: 1 } }];
     if (url.endsWith('/db/restore'))
       return json.confirm
-        ? [200, { ok: true, restored: { bookmark: 'bm1', at: '2026-11-08T10:00:00Z' } }]
-        : [200, { ok: true, preview: { bookmark: 'bm1', at: '2026-11-08T10:00:00Z' }, economy: true }];
+        ? [200, { ok: true, restored: { bookmark: 'bm1', at: '2026-11-08T10:00:00Z', previous: 'bm0' } }]
+        : [
+            200,
+            {
+              ok: true,
+              preview: {
+                bookmark: 'bm1',
+                at: '2026-11-08T10:00:00Z',
+                migrations: [{ name: '0002_guilds.sql', at: '2026-11-08T11:00:00.000Z' }],
+                warning: 'This restore rolls back migration 0002_guilds.sql, applied after that time.',
+              },
+              economy: 'A restore rolls back this game’s database only.',
+            },
+          ];
     return [404, { error: 'no' }];
   };
   const xc = args => runAsync(['db', ...args], { env, cwd: dir });
@@ -752,15 +790,27 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /id\s+gold\n-+\s+-+\np1\s+3/);
   assert.deepEqual(seen.at(-1)[2], { sql: 'SELECT * FROM players WHERE gold > ?', params: [2], write: false });
-  // a write is refused here without --write, before anything is sent
+  // a write is refused here without --write, before anything is sent; so is a null param (D1's API takes text)
   const sent = seen.length;
+  r = await xc(['query', 'SELECT * FROM players WHERE id = ?', '--params', '[null]', '--live']);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /for a null, write NULL in the SQL itself/);
+  assert.equal(seen.length, sent);
   r = await xc(['query', 'DELETE FROM players', '--live']);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /a query may only read: SELECT, EXPLAIN.*Add --write/);
   assert.equal(seen.length, sent);
-  r = await xc(['query', 'DELETE FROM players', '--live', '--write', '--json']);
+  // a write live needs --yes (or the word typed): with no terminal to ask in, refused before anything is sent
+  r = await xc(['query', 'DELETE FROM players', '--live', '--write']);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /This changes .*database on xgames\.fun.*DELETE FROM players/);
+  assert.match(r.stderr, /nothing was written: add --yes/);
+  assert.equal(seen.length, sent);
+  r = await xc(['query', 'DELETE FROM players', '--live', '--write', '--yes', '--json']);
   assert.equal(JSON.parse(r.stdout).ok, true);
   assert.equal(seen.at(-1)[2].write, true);
+  // a write here (not live) needs no yes
+  assert.equal((await xc(['query', 'SELECT 1; SELECT 2', '--live', '--write'])).status, 1, 'refused first, unasked');
   // export downloads the dump into .gamesfun/exports/ (hidden: never published)
   r = await xc(['export', '--live', '--json']);
   assert.equal(r.status, 0, r.stderr);
@@ -768,9 +818,24 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
   assert.match(out.file, /\.gamesfun\/exports\/db-live-.*\.sql$/);
   assert.equal(await readFile(out.file, 'utf8'), dump.toString());
   await writeFile(path.join(tmp.dir, 'in.sql'), 'INSERT INTO players VALUES (1);');
+  const before = seen.length;
   r = await xc(['import', path.join(tmp.dir, 'in.sql'), '--live']);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /nothing was imported: add --yes/);
+  assert.equal(seen.length, before);
+  r = await xc(['import', path.join(tmp.dir, 'in.sql'), '--live', '--yes']);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(seen.at(-1)[2], { sql: 'INSERT INTO players VALUES (1);' });
+  // over 4.5 MB as sent: refused here, before it goes (Studio's host takes no more); a bare 413 is said in words
+  await writeFile(path.join(tmp.dir, 'big.sql'), `INSERT INTO players VALUES ('${'x'.repeat(4_600_000)}');`);
+  r = await xc(['import', path.join(tmp.dir, 'big.sql'), '--live', '--yes']);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /this import is 4\.6 MB as sent.*at most 4\.5 MB: split it/);
+  assert.equal(seen.at(-1)[2].sql, 'INSERT INTO players VALUES (1);', 'not sent');
+  await writeFile(path.join(tmp.dir, 'huge.sql'), "INSERT INTO players VALUES ('huge');");
+  r = await xc(['import', path.join(tmp.dir, 'huge.sql'), '--live', '--yes']);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /xgames\.fun answered 413: the request was too big .*Split the SQL/);
   // restore: not on this machine; live, a preview, the warning, and no yes (not a terminal): nothing restored
   r = await xc(['restore', '2026-11-08T10:00:00Z']);
   assert.equal(r.status, 2);
@@ -778,12 +843,21 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
   r = await xc(['restore', '2026-11-08T10:00:00Z', '--live']);
   assert.equal(r.status, 2, r.stdout + r.stderr);
   assert.match(r.stdout, /would go back to how it was at 2026-11-08T10:00:00Z \(bookmark bm1\)/);
+  assert.match(
+    r.stdout,
+    /It rolls back 1 migration applied after that time: 0002_guilds\.sql \(2026-11-08T11:00:00\.000Z\)/,
+  );
+  assert.match(r.stdout, /Warning: This restore rolls back migration 0002_guilds\.sql/);
   assert.match(r.stdout, /Warning: This game has an economy: .*Loot balances, items and payouts are not rolled back/);
   assert.match(r.stderr, /nothing was restored: add --yes/);
   assert.ok(!seen.some(s => s[2]?.confirm), 'never confirmed');
   r = await xc(['restore', '2026-11-08T10:00:00Z', '--live', '--yes']);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Restored .* to 2026-11-08T10:00:00Z \(bookmark bm1\)/);
+  assert.match(
+    r.stdout,
+    /Before it, the database was at bookmark bm0\. To undo this restore: .*?xcore(\.mjs)? db restore \d{4}-\d\d-\d\dT[\d:.]+Z --live/,
+  );
   assert.match(r.stderr, /not rolled back/);
   assert.deepEqual(seen.at(-1)[2], { timestamp: '2026-11-08T10:00:00.000Z', confirm: true });
   // unix seconds go up as the same ISO time: xgames.fun reads a bare number as milliseconds
@@ -793,6 +867,65 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
   r = await xc(['restore', 'yesterday', '--live', '--yes']);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /restore needs a time/);
+});
+
+test('db export --live picks up an export-pending with its bookmark; a CI credential refused is said in words', async t => {
+  const { dbExport } = await import('../lib/db.mjs');
+  const { OIDC_HEADER } = await import('../lib/publish/oidc.mjs');
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = { GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'), GAMESFUN_CREDENTIALS: 'file' };
+  await signIn(g, env);
+  const dir = await game(tmp, { database: {} });
+  await mkdir(path.join(dir, '.gamesfun'), { recursive: true });
+  await writeFile(path.join(dir, '.gamesfun', 'publish.json'), JSON.stringify({ [g.origin]: { projectId: 'g1' } }));
+  const b64 = v => Buffer.from(JSON.stringify(v)).toString('base64url');
+  const asked = [];
+  let pending = 2;
+  const NOTE = "While an export or an import runs, the game's database answers nothing else.";
+  g.state.handle = (method, url, json, { req }) => {
+    if (url === '/dump/1.sql') return [200, Buffer.from('SELECT 1;\n'), { 'content-type': 'application/sql' }];
+    if (url.startsWith('/oidc')) return [200, { value: `e30.${b64({ repository: 'o/r' })}.sig` }];
+    if (req.headers[OIDC_HEADER]) return [403, { error: 'A GitHub Actions run may not export the database.' }];
+    if (url !== '/api/kit/games/g1/db/export') return null;
+    asked.push(json);
+    if (pending-- > 0)
+      return [
+        504,
+        { error: 'The export is still running on D1.', code: 'export-pending', bookmark: `bm${asked.length}` },
+      ];
+    return [200, { ok: true, url: `${g.origin}/dump/1.sql`, note: NOTE }];
+  };
+  const said = [];
+  const r = await dbExport(dir, { live: true, origin: g.origin, env, wait: 1, log: m => said.push(m) });
+  assert.deepEqual(asked, [null, { bookmark: 'bm1' }, { bookmark: 'bm2' }], 'asked again with the bookmark each time');
+  assert.equal(r.note, NOTE);
+  assert.match(said[0], /still running on D1; asking again .*answers nothing else/);
+  assert.equal(await readFile(r.file, 'utf8'), 'SELECT 1;\n');
+  // still pending after the last try: said, with how to pick it up
+  pending = 9;
+  await assert.rejects(
+    dbExport(dir, { live: true, origin: g.origin, env, wait: 1, tries: 2 }),
+    e =>
+      e.code === 'export-pending' && /still running on D1 \(bookmark bm\d+\).*db export --live again/.test(e.message),
+  );
+  // GitHub Actions (an OIDC credential, no login): xgames.fun's plain 403 is said as what it is
+  const ci = {
+    GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'ci-config'),
+    GAMESFUN_CREDENTIALS: 'file',
+    ACTIONS_ID_TOKEN_REQUEST_URL: `${g.origin}/oidc`,
+    ACTIONS_ID_TOKEN_REQUEST_TOKEN: 't',
+  };
+  await assert.rejects(
+    dbExport(dir, { live: true, origin: g.origin, env: ci }),
+    e =>
+      e.code === 'ci' &&
+      /does not let a GitHub Actions run export the database.*login there\), not from CI/.test(e.message),
+  );
 });
 
 test(
