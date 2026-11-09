@@ -13,8 +13,8 @@ After an audit of the storage work, and as settled with the platform (STORAGE.md
   (read from `gamesfun.json` when the server is bundled). Publish refuses a server of its own that has `collections`
   and does not route `api/db/` (code `db-route`), and says the two lines to add.
 - **`offset` is refused in every client**, not dropped: `gf.db.list`, the browser's local list and Godot's
-  `db_list` answer an error (`code: 'offset'`), so 0.1.0 code that paged with it stops instead of reading page 1 for
-  ever. Page with `after`.
+  `db_list` answer an error (`code: 'offset'`) for any offset but 0, so 0.1.0 code that paged with it stops instead of
+  reading page 1 for ever; `offset: 0` (or none) is the first page, as it was. Page with `after`.
 - **Lists fail closed**: anything but `read: 'anyone'` lists only the player's own (a mistyped rule listed everything,
   even to guests), and `RULES` / `collections` are checked when the server starts.
 - **A document by id alone (0.1.0 pages):** in a `write: 'server'` collection a player's get by id alone looks in the

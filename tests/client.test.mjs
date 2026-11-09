@@ -226,6 +226,13 @@ test(
     assert.deepEqual([offset.data, offset.code, offset.status], [null, 'offset', 0]);
     assert.match(offset.error, /no offset any more: pass the last answer's after/);
     assert.equal(g.s.queries.length, 4, 'not sent');
+    // 0, or none, is the first page, as it always was: 0.1.0 code that passed offset: 0 reads it
+    for (const offset of [0, '0', null]) {
+      const zero = await page.evaluate(o => GamesFun.db.list('levels', { offset: o }), offset);
+      assert.ok(!zero.error, String(offset));
+      assert.equal(zero.data.length, 1);
+    }
+    assert.deepEqual(g.s.queries.slice(4), ['', '', '']);
     // another player's document by id alone: null as a missing one, its why kept and said once in the console
     g.s.docs.push({ id: 'd9', owner: 'x:7', value: { name: 'Theirs' }, updatedAt: 1 });
     const warned = [];
@@ -398,8 +405,10 @@ test(
       const p2 = await gf.db.list('runs', { limit: 3, after: p1.after });
       await gf.db.put('runs', 'x', 1);
       const offset = await gf.db.list('runs', { offset: 3 });
+      const zero = await gf.db.list('runs', { offset: 0, limit: 2 });
       return {
         offset: [offset.data, offset.code],
+        zero: [zero.code, zero.data.length],
         local: gf.local,
         before,
         player,
@@ -432,6 +441,7 @@ test(
       runs: [3, 1, true, null, 4],
       theServers: null,
       offset: [null, 'offset'],
+      zero: [undefined, 2],
     });
     await page.reload();
     assert.equal((await page.evaluate(() => GamesFun.ready)).id, 'local:player', 'still signed in after a reload');

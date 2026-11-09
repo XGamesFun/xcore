@@ -183,10 +183,10 @@ func db_add(collection: String, value):
 
 
 ## opts: {"owner": "me" | "server" | a player's id, "limit": 50, "after": the last answer's "after", "order": "new" | "old"}
-## The answer's "after" is null on the last page. "offset" is refused (it is gone: page with "after"), here as well, so
-## a loop that paged with it stops in the editor too.
+## The answer's "after" is null on the last page. An "offset" but 0 is refused (it is gone: page with "after"), here as
+## well, so a loop that paged with it stops in the editor too.
 func db_list(collection: String, opts := {}):
-	if opts.has("offset"):
+	if opts.has("offset") and opts["offset"] != null and str(opts["offset"]) != "" and float(str(opts["offset"])) != 0.0:
 		return {"data": null, "error": "db_list takes no offset any more: pass the last answer's after for the next page", "status": 0, "code": "offset"}
 	return await _run("db.list", [collection, opts])
 

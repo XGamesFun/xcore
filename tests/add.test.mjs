@@ -521,10 +521,12 @@ test('multiplayer beside the database: one server routes both, both objects decl
   assert.match(g.steps.join('\n'), /local ENet game/);
 });
 
-test('the Godot client refuses offset in db_list before it reaches the page (in the editor too), as gamesfun.js does', async () => {
+test('the Godot client refuses an offset but 0 in db_list before it reaches the page (in the editor too), as gamesfun.js does', async () => {
   const gd = await readFile(path.join(ROOT, 'lib', 'client', 'godot', 'gamesfun.gd'), 'utf8');
   const fn = /func db_list\(collection: String, opts := \{\}\):\n([\s\S]*?)\n\n/.exec(gd)?.[1] ?? '';
-  const refuse = fn.indexOf('if opts.has("offset"):');
+  const refuse = fn.indexOf('if opts.has("offset") and');
+  // a real offset only: 0 (or none) is the first page, as gamesfun.js takes it
+  assert.match(fn, /float\(str\(opts\["offset"\]\)\) != 0\.0/);
   assert.ok(refuse >= 0, fn);
   assert.ok(refuse < fn.indexOf('_run("db.list"'), 'refused before the bridge is asked');
   assert.match(fn, /"code": "offset"/);
