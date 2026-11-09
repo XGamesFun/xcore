@@ -14,9 +14,15 @@ export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '
 export const FIXTURES = path.join(ROOT, 'tests', 'fixtures', 'byo');
 export const BIN = path.join(ROOT, 'bin', 'xcore.mjs');
 
+// A workflow with `id-token: write` (release.yml) has GitHub's OIDC variables, and xcore signs in with them instead of
+// being signed out: the tests would publish as that workflow. Every test runs as on a person's machine; a test of the
+// OIDC sign-in passes them itself.
+delete process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+
 export async function tempDir(prefix = 'gamesfun-test-') {
   const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
-  return { dir, cleanup: () => rm(dir, { recursive: true, force: true }) };
+  return { dir, cleanup: () => rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }) };
 }
 
 /** A fixture copied into `tmp` (a project's packages counted as installed: node_modules/ is there). → its folder */
