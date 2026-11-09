@@ -2,7 +2,7 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.3.0 — 2026-11-09
 
 - **Live operations** (xgames.fun/console's Live tab): `gamesfun.js` 1.5.0 adds `GamesFun.live` (`get()`, `refresh()`,
   `onChange(fn)`, `banner(on)`, `value`) for the game's announcement, remote config and maintenance mode, which its
