@@ -75,6 +75,7 @@ test("the platform's store: its own tokens only, for this game, and the hosted l
   assert.equal(player.id, 'dev:abcdef12');
   assert.equal(player.name, 'Ana b');
   assert.equal(s.verifyPlayer(token).sub, 'dev:abcdef12');
+  assert.equal(s.verifyPlayer(token).banned, null, 'no bans in xcore dev; the field is there, as hosted');
   assert.equal(other.verifyPlayer(token).code, 'key', 'another dev host (another key) refuses it');
   assert.equal(s.verifyPlayer(token.slice(0, -2) + 'xx').code, 'key');
   assert.equal(

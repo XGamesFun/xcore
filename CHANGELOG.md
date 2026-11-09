@@ -2,6 +2,20 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.3.0 — 2026-11-09
+
+- **Live operations** (xgames.fun/console's Live tab): `gamesfun.js` 1.5.0 adds `GamesFun.live` (`get()`, `refresh()`,
+  `onChange(fn)`, `banner(on)`, `value`) for the game's announcement, remote config and maintenance mode, which its
+  owner changes with no republish (xgames.fun's play edge answers `GET /platform/v1/live` itself). A default banner
+  shows the announcement and a pause that starts while the game is open; `data-live-banner="off"`,
+  `GAMESFUN_LIVE_BANNER = false` or `GamesFun.live.banner(false)` turn it off. A refusal with code `maintenance` (from
+  `api/` or the platform while the game is paused) is passed on like any other code.
+- `env.GF.verifyPlayer` answers `banned` too: the creator's ban on the player from xgames.fun/console (`{kind, until}`
+  or null). A token made before the ban still verifies for its hour, so a game's server that keeps players (a room)
+  refuses `kind: 'ban'` itself. `xcore dev` always answers `banned: null`.
+- `xcore dev` answers `/platform/v1/live` from the game's `.gamesfun/live.json`, and with maintenance on there serves
+  the holding page for the game's pages and `503 maintenance` for its `api/` and platform calls, as hosted.
+
 ## 0.2.1 — 2026-11-09
 
 - Slots (xgames.fun 2026-11-08): every game sits in a slot; everyone gets 2 free slots (games on Free), any more are

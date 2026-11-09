@@ -191,6 +191,7 @@ has behind it, so the whole game runs before it is published:
 | `http://127.0.0.1:8787/game/` | the published files (it runs `page.build` first, unless `--no-build`), with the play host's headers                                                                                                                                                                                                                                                                                                                |
 | `/game/api/*`                 | the game's `server/` under workerd, the runtime xgames.fun runs it on: Durable Objects with their storage kept, WebSockets, `env.GF`, the game's database (a local D1 in `.gamesfun/dev/d1/`, its migrations applied), and its secrets from `.dev.vars`. A change under `server/` or to `.dev.vars` reloads it. Miniflare (with workerd, about 140 MB) is installed once, the first time a game with a server runs |
 | `/platform/v1/*`              | sign-in, saves and leaderboards: `gamesfun.js` signs in a local player (each tab its own, so two tabs play a room together), and `env.GF.verifyPlayer` accepts its token. Saves and scores are kept in `.gamesfun/dev-platform.json`, never published                                                                                                                                                              |
+| `/platform/v1/live`           | the game's live settings (`gf.live`, below): its announcement, config and maintenance, from `.gamesfun/live.json` (read again on each request, never published). With maintenance on there, the game's pages show the holding page and its `api/` and `/platform/v1/*` answer `503` with code `maintenance`, as hosted                                                                                             |
 | `http://127.0.0.1:8788/`      | the game's public project files (`env.GF.files`, `xcore files`), kept in `.gamesfun/dev/files/`: another origin, as `<slug>.xgamesusercontent.com` is to the published game                                                                                                                                                                                                                                        |
 | `/loot/v1/rpc`                | the economy's Solana devnet RPC: xgames.fun's shared relay (what a published page talks to unless the game brings its own: `xcore add rpc`), or your own with `XSOLANA_RPC_URL` in `.env` (its URL is never shown; a call the shared relay would refuse is said in the terminal). The economy's calls answer once it is live on devnet (`xcore loot approve`)                                                      |
 
@@ -245,6 +246,59 @@ The page calls the game's own server with `GamesFun.api(path, init)` (Godot `Gam
 published origin and under a folder alike), `init` is `fetch`'s (an object `body` goes as JSON), and a signed-in
 player's token goes with it as `Authorization: Bearer …`, which the server checks with `env.GF.verifyPlayer` before
 it trusts who is asking. It answers `{data, error, status}` like every other call.
+
+### Live: an announcement, a remote config and maintenance, with no republish (`gf.live`)
+
+On xgames.fun/console, a game's **Live** tab sets three things its players get within about 35 seconds, with no
+republish (xgames.fun's play edge answers them itself from one cached record a game):
+
+- **an announcement**: a short line of plain text (280 characters), `info` or `warning`, with an optional start and end;
+- **a remote config**: a small JSON object (8 KB) the game reads at run time: a difficulty, an event on or off. The
+  console keeps its last 10 versions and reverts with a click;
+- **maintenance**: the game paused with a message. Players who open it get a plain holding page from xgames.fun instead
+  of the game, its server's `api/*` (WebSockets too) and the page's saves and leaderboards answer `503` with code
+  `maintenance` (the server's code does not run), and turning it off brings the game back within about 35 seconds (up
+  to a minute). What is already running (an open WebSocket, an alarm) is not stopped.
+
+`gamesfun.js` (1.5.0) reads them:
+
+```js
+const { data: live } = await GamesFun.live.get(); // {announcement, config, version, maintenance}
+const hard = live.config.difficulty === 'hard';
+GamesFun.live.onChange(live => applyEvent(live.config.event)); // asked again every minute while the page is in view
+await GamesFun.live.refresh(); // ask now
+```
+
+`get()` answers what it knows if that is under a minute old, else asks; like every call it answers
+`{data, error, status}` and never throws (unreachable: the last value, else nothing live). `announcement` is null
+outside its start and end, `config` is `{}` when none is set, `maintenance` is null or `{message, since}`.
+
+**The banner.** By default `gamesfun.js` shows the announcement in a small closable line at the top of the page (each
+announcement until the player closes it), and a pause that starts while the game is open (any call answering
+`maintenance` shows it at once). A game that shows them its own way turns it off with `data-live-banner="off"` on its
+`<script src="gamesfun.js">`, `globalThis.GAMESFUN_LIVE_BANNER = false` before it loads, or
+`GamesFun.live.banner(false)` before the page has loaded. Without the banner and without `onChange`, nothing is asked
+until the game calls `get()`.
+
+**On this machine** nothing is live on a plain local server; under `xcore dev`, `.gamesfun/live.json` stands in for the
+console (read again on every request):
+
+```json
+{
+  "announcement": {
+    "text": "Double XP all weekend!",
+    "level": "info",
+    "startsAt": null,
+    "endsAt": "2026-11-12T00:00:00Z"
+  },
+  "config": { "difficulty": "hard", "event": true },
+  "maintenance": null
+}
+```
+
+`"maintenance": {"message": "Back at 7pm"}` (or `true`) pauses the game as hosted. Times are ms or ISO text; what the
+console would refuse (a config over 8 KB or not an object, an announcement over 280 characters) is said in the
+terminal. Godot and Unity reach `gf.live` only through their JavaScript bridge for now.
 
 ### A database of its own: `xcore add database`
 
