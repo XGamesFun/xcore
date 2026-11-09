@@ -313,7 +313,8 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
       url,
       type: req.headers['content-type'],
       pub: req.headers['x-gf-public'],
-      ...(method === 'PUT' ? { length: req.headers['x-gf-length'] } : {}),
+      // the length Studio's owner route reads; x-gf-length is Studio's own, to the platform
+      ...(method === 'PUT' ? { length: req.headers['content-length'], gfLength: req.headers['x-gf-length'] } : {}),
       body: raw.toString(),
     });
     if (url === '/api/kit/games/g1/files-usage') return [200, { ok: true, bytes: 4, files: 1, cap: 104857600 }];
@@ -359,6 +360,7 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
     type: 'image/png',
     pub: '1',
     length: '4',
+    gfLength: undefined,
     body: 'PNG!',
   });
   // over Studio's 4.5 MB (its host's limit on a request): refused here, with the way that takes it

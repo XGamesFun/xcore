@@ -95,7 +95,7 @@ After an audit of the storage work, and as settled with the platform (STORAGE.md
   next `db export --live` picks it up there instead of starting over. A GitHub Actions credential's 403 on export, import, restore, write
   queries, `files put` and `rm` says these need the owner's own login. An answer over 4 MB, which Studio sends as
   `{"$download": url}` (a signed address in its bucket), is fetched from there without the sign-in and read as the
-  answer, so a big `db query --live` prints its rows instead of nothing; a download that failed is said. `files put --live` sends `x-gf-length`.
+  answer, so a big `db query --live` prints its rows instead of nothing; a download that failed is said.
 - **`GF.files.put` under `xcore dev`** holds a stream to exactly its `{length}`, and reads one with none up to 1 MB,
   as the platform does. A missing local file answers `not-found`. A file named `__proto__`, `constructor` or
   `toString` is a file like any other.
