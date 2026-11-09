@@ -2,7 +2,7 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.2.0 — 2026-11-08
 
 ### Upgrading from 0.1.0
 
@@ -85,17 +85,17 @@ After an audit of the storage work, and as settled with the platform (STORAGE.md
   empty one, here and live: a row is updated where it is and never deleted, so a table whose rows point at another's
   with `ON DELETE CASCADE` keeps them, and a row may come before the one it points at. Before, a local import of a
   local export always failed ("table already exists").
-- **Live owner routes:** `db import --live` and `files put --live` are held to Studio's 4.5 MB a request before
-  anything is sent, with the way that takes more (`GF.files.put` from the game's server), and a bare 413 is
-  explained. `import --live` and `query --write --live` need `--yes` or the word typed, as `restore` does, and are
-  refused with no terminal to ask in; what would be refused anyway (an import too big to send, a query the route
-  refuses) is said before the word is asked for. `restore` prints `restored.previous` and the command that undoes it, and its
-  preview shows the migrations it rolls back and its warning. `db export --live` picks up an `export-pending` with
-  its bookmark, and prints the answer's `note`; one it gave up on is kept (`.gamesfun/export-pending.json`) and the
-  next `db export --live` picks it up there instead of starting over. A GitHub Actions credential's 403 on export, import, restore, write
-  queries, `files put` and `rm` says these need the owner's own login. An answer over 4 MB, which Studio sends as
-  `{"$download": url}` (a signed address in its bucket), is fetched from there without the sign-in and read as the
-  answer, so a big `db query --live` prints its rows instead of nothing; a download that failed is said.
+- **Live owner routes:** `db import --live` and `files put --live` are held to Studio's 4.5 MB a request before anything
+  is sent, with the way that takes more (`GF.files.put` from the game's server), and a bare 413 is explained.
+  `import --live` and `query --write --live` need `--yes` or the word typed, as `restore` does, and are refused with no
+  terminal to ask in; what would be refused anyway (an import too big to send, a query the route refuses) is said before
+  the word is asked for. `restore` prints `restored.previous` and the command that undoes it, and its preview shows the
+  migrations it rolls back and its warning. `db export --live` picks up an `export-pending` with its bookmark, and
+  prints the answer's `note`; one it gave up on is kept (`.gamesfun/export-pending.json`) and the next
+  `db export --live` picks it up there instead of starting over. A GitHub Actions credential's 403 on export, import,
+  restore, write queries, `files put` and `rm` says these need the owner's own login. An answer over 4 MB, which Studio
+  sends as `{"$download": url}` (a signed address in its bucket), is fetched from there without the sign-in and read as
+  the answer, so a big `db query --live` prints its rows instead of nothing; a download that failed is said.
 - **`GF.files.put` under `xcore dev`** holds a stream to exactly its `{length}`, and reads one with none up to 1 MB,
   as the platform does. A missing local file answers `not-found`. A file named `__proto__`, `constructor` or
   `toString` is a file like any other.
@@ -110,10 +110,11 @@ After an audit of the storage work, and as settled with the platform (STORAGE.md
   `delete` names no owner (it now means the server's own space) and each `list` that passes an `offset`, as
   `file:line` with the change to make. See "Upgrading from 0.1.0" above.
 - A `server/database.js` whose `RULES` are still 0.1.0's default is said to be open to anyone at publish, with
-  `xcore add database` to fix it. `xcore add database` over a `server/database.js` asks first whether there is room
-  for its Durable Object (8 a server), so a refusal leaves `database.js` as it was. The paging cursor's order is by when a document was last written (one written
-  between two pages can show twice or be skipped): said in `docs/SERVER.md` and `gf.db`'s comments. The local files
-  origin is cross-origin to the page but the same site (both `127.0.0.1`); live it is another site as well.
+  `xcore add database` to fix it. `xcore add database` over a `server/database.js` asks first whether there is room for
+  its Durable Object (8 a server), so a refusal leaves `database.js` as it was. The paging cursor's order is by when a
+  document was last written (one written between two pages can show twice or be skipped): said in `docs/SERVER.md` and
+  `gf.db`'s comments. The local files origin is cross-origin to the page but the same site (both `127.0.0.1`); live it
+  is another site as well.
 
 Project files (STORAGE.md §8.6–8.8):
 

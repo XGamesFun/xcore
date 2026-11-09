@@ -498,11 +498,11 @@ stock server served keeps its documents and rules when it gets a server of its o
 the rules it had into `collections`, and `server/gf-docs.js` serves them. Publish refuses a game whose block has
 `collections` while its server does not route `api/db/` (every `gf.db` call would answer 404), and says how.
 
-That check reads the text of the files in `server/` only (not `server/gf-docs.js` or `server/database.js`): a call
-to `handleDocs(` (or `handleDatabase(`) there, or `api/db` in the code. A router kept outside `server/` (a `src/router.js` the server
-imports) is not read, so a game whose `api/db/` is routed only there is refused all the same. Keep xcore's route in
-`server/`: the three lines above, first thing in `fetch` of `server/index.js` (or of another file in `server/`),
-before the request reaches the router.
+That check reads the text of the files in `server/` only (not `server/gf-docs.js` or `server/database.js`): a call to
+`handleDocs(` (or `handleDatabase(`) there, or `api/db` in the code. A router kept outside `server/` (a `src/router.js`
+the server imports) is not read, so a game whose `api/db/` is routed only there is refused all the same. Keep xcore's
+route in `server/`: the three lines above, first thing in `fetch` of `server/index.js` (or of another file in
+`server/`), before the request reaches the router.
 
 ### With no server: the stock server
 
