@@ -1083,6 +1083,45 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
   assert.match(r.stderr, /restore needs a time/);
 });
 
+test('a live answer over 4 MB comes as Studio\'s {"$download": url}: xcore fetches it, without the sign-in, and reads it', async t => {
+  const { dbQuery } = await import('../lib/db.mjs');
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = { GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'), GAMESFUN_CREDENTIALS: 'file' };
+  await signIn(g, env);
+  const dir = await game(tmp, { database: {} });
+  await mkdir(path.join(dir, '.gamesfun'), { recursive: true });
+  await writeFile(path.join(dir, '.gamesfun', 'publish.json'), JSON.stringify({ [g.origin]: { projectId: 'g1' } }));
+  // a result as big as Studio's jsonBody moves to its bucket (over 4,000,000 bytes of JSON)
+  const results = Array.from({ length: 4200 }, (_, i) => ({ id: i, text: 'x'.repeat(1000) }));
+  const big = { ok: true, results, meta: { rows_read: results.length } };
+  const downloads = [];
+  let where = '/downloads/a.json';
+  g.state.handle = (method, url, json, { req }) => {
+    if (url.startsWith('/downloads/')) {
+      downloads.push({ url, authorization: req.headers.authorization ?? null });
+      return url === '/downloads/a.json' ? [200, big] : [403, '<Error>Request has expired</Error>'];
+    }
+    if (url === '/api/kit/games/g1/db/query') return [200, { $download: `${g.origin}${where}` }];
+    return null;
+  };
+  const r = await dbQuery(dir, 'SELECT * FROM notes', { live: true, origin: g.origin, env });
+  assert.ok(JSON.stringify(big).length > 4_000_000);
+  assert.equal(r.results.length, 4200);
+  assert.deepEqual(r.results[4199], { id: 4199, text: 'x'.repeat(1000) });
+  assert.deepEqual(downloads, [{ url: '/downloads/a.json', authorization: null }], 'the sign-in never goes with it');
+  // a download that failed (its signature lapsed) is said, not printed as nothing
+  where = '/downloads/gone.json';
+  await assert.rejects(
+    dbQuery(dir, 'SELECT * FROM notes', { live: true, origin: g.origin, env }),
+    /answer was too big to send directly, and its download failed \(403\): try again/,
+  );
+});
+
 test('db export --live picks up an export-pending with its bookmark; a CI credential refused is said in words', async t => {
   const { dbExport } = await import('../lib/db.mjs');
   const { OIDC_HEADER } = await import('../lib/publish/oidc.mjs');
