@@ -12,6 +12,7 @@ import { pathToFileURL } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import {
   addDatabase,
+  addDatabaseObject,
   addMultiplayer,
   addRpc,
   addSignin,
@@ -28,6 +29,7 @@ import { decodeBase58 } from '@xgamesfun/solana/chain/base58';
 import { decode, voucherBytes } from '@xgamesfun/solana/client';
 import { readProof } from '@xgamesfun/solana/results';
 import { bundleServer } from '../lib/server/bundle.mjs';
+import { OLD_DEFAULT_RULES, OWNER_SPACES } from '../lib/server/contract.mjs';
 import { fixture, ROOT, tempDir } from './helpers.mjs';
 
 // the database imports cloudflare:workers (a Durable Object's base class); here a stand-in
@@ -41,73 +43,228 @@ const { createData, GameData, handleDatabase, dataOf } = await import('../lib/cl
 const { handleRpc, RPC } = await import('../lib/client/server/rpc.js');
 
 /** A Durable Object's ctx.storage.sql over node:sqlite: exec(query, ...bindings) → the rows. */
-function sqlite() {
-  const db = new DatabaseSync(':memory:');
+function sqlite(db = new DatabaseSync(':memory:')) {
   return {
+    db,
     exec(q, ...b) {
-      const st = db.prepare(q);
-      return /^\s*select/i.test(q) ? st.all(...b) : (st.run(...b), []);
+      return db.prepare(q).all(...b);
     },
   };
 }
+const execOf =
+  s =>
+  (q, ...b) =>
+    s.exec(q, ...b);
 
-test('the database: anyone reads, a player writes only their own, the rules and limits hold', () => {
+test('the database: each player reads and writes their own space; the rules and limits hold', async () => {
   let t = 1000;
-  const data = createData(sqlite(), {
-    rules: { '*': { read: 'anyone', write: 'owner' }, notes: { read: 'owner' }, prizes: { write: 'server' } },
-    limits: { valueBytes: 200, docsPerPlayer: 3, list: 2, offset: 100 },
+  const data = createData(execOf(sqlite()), {
+    rules: { levels: { read: 'anyone', write: 'owner' }, prizes: { read: 'anyone', write: 'server' } },
+    limits: { valueBytes: 200, docsPerPlayer: 3, list: 2 },
     now: () => t++,
   });
-  assert.equal(data.put('levels', 'moon', { name: 'Moon' }, '').code, 'player', 'a guest writes nothing');
-  const moon = data.put('levels', 'moon', { name: 'Moon' }, 'p1');
+  assert.equal((await data.put('levels', 'moon', { name: 'Moon' }, {}, '')).code, 'player', 'a guest writes nothing');
+  const moon = await data.put('levels', 'moon', { name: 'Moon' }, {}, 'p1');
   assert.deepEqual(moon, { ok: true, item: { id: 'moon', owner: 'p1', value: { name: 'Moon' }, updatedAt: 1000 } });
-  assert.deepEqual(data.get('levels', 'moon', '').item.value, { name: 'Moon' }, 'a guest reads');
-  assert.equal(data.put('levels', 'moon', { name: 'Mine now' }, 'p2').code, 'not-yours');
-  assert.equal(data.delete('levels', 'moon', 'p2').code, 'not-yours');
-  assert.equal(data.put('levels', 'moon', { name: 'Moon 2' }, 'p1').item.value.name, 'Moon 2', 'the owner replaces it');
-  assert.equal(
-    data.put('levels', 'moon', { name: 'by the game' }, 'server').item.owner,
-    'p1',
-    'the server keeps the owner',
-  );
-  assert.equal(data.put('levels', 'big', 'x'.repeat(300), 'p1').code, 'too-big');
-  assert.equal(data.put('levels', 'bad id!', 1, 'p1').code, 'bad');
-  assert.equal(data.put('levels', 'none', undefined, 'p1').code, 'bad');
-  // a player's quota per collection; the server has none
-  data.add('levels', { n: 2 }, 'p1');
-  data.add('levels', { n: 3 }, 'p1');
-  assert.equal(data.add('levels', { n: 4 }, 'p1').code, 'full');
-  assert.ok(data.add('levels', { n: 5 }, 'server').ok);
-  // lists: newest first, paged, by owner
-  const page1 = data.list('levels', { limit: 2 }, '');
-  assert.equal(page1.items.length, 2);
-  assert.equal(page1.more, true);
-  assert.equal(page1.items[0].owner, 'server', 'newest first');
-  assert.equal(data.list('levels', { owner: 'me' }, '').code, 'player');
+  assert.equal((await data.get('levels', 'moon', {}, '')).code, 'player', 'a guest names whose it is');
+  assert.deepEqual((await data.get('levels', 'moon', { owner: 'p1' }, '')).item.value, { name: 'Moon' });
+  // p2's own space has no moon; p1's has: by id alone that is said, with how to name the owner
+  const elsewhere = await data.get('levels', 'moon', {}, 'p2');
+  assert.deepEqual([elsewhere.status, elsewhere.code], [400, 'owner']);
+  assert.match(elsewhere.why, /not in your own space.*\{owner\}/);
+  assert.equal((await data.get('levels', 'moon', { owner: 'me' }, 'p2')).code, 'unknown', 'named: simply not there');
+  assert.equal((await data.put('levels', 'moon', 1, { owner: 'p1' }, 'p2')).code, 'not-yours');
+  assert.equal((await data.delete('levels', 'moon', { owner: 'p1' }, 'p2')).code, 'not-yours');
+  assert.equal((await data.put('levels', 'moon', { name: 'Moon 2' }, {}, 'p1')).item.value.name, 'Moon 2');
+  assert.equal((await data.put('levels', 'big', 'x'.repeat(300), {}, 'p1')).code, 'too-big');
+  assert.equal((await data.put('levels', 'bad id!', 1, {}, 'p1')).code, 'bad');
+  assert.equal((await data.put('levels', 'none', undefined, {}, 'p1')).code, 'bad');
+  // a player's quota per collection; the server's own space has none, and the server writes in a player's space
+  await data.add('levels', { n: 2 }, {}, 'p1');
+  await data.add('levels', { n: 3 }, {}, 'p1');
+  assert.equal((await data.add('levels', { n: 4 }, {}, 'p1')).code, 'full');
+  assert.equal((await data.put('levels', 'moon', { name: 'Moon 3' }, {}, 'p1')).ok, true, 'a replace still fits');
+  assert.equal((await data.add('levels', { n: 5 }, {}, 'server')).item.owner, 'server');
+  assert.equal((await data.put('levels', 'gift', 1, { owner: 'p2' }, 'server')).item.owner, 'p2');
+  // the default: read 'owner' (every collection not named): others see nothing, not even that it exists
+  await data.put('notes', 'n1', 'secret plan', {}, 'p1');
+  assert.equal((await data.get('notes', 'n1', { owner: 'p1' }, 'p2')).code, 'unknown');
+  assert.equal((await data.get('notes', 'n1', {}, 'p1')).item.value, 'secret plan');
+  assert.equal((await data.list('notes', {}, '')).code, 'player');
+  assert.deepEqual((await data.list('notes', { owner: 'p1' }, 'p2')).items, [], 'a player lists only their own');
+  assert.equal((await data.list('notes', {}, 'server')).items.length, 1);
+  assert.equal((await data.get('notes', 'n1', { owner: 'p1' }, 'server')).item.value, 'secret plan');
+  // write: 'server': players cannot, the server can; a page reads it without naming the server
+  assert.equal((await data.put('prizes', 'today', { won: 100 }, {}, 'p1')).code, 'server-only');
+  assert.ok((await data.put('prizes', 'today', { won: 100 }, {}, 'server')).ok);
+  assert.deepEqual((await data.get('prizes', 'today', {}, '')).item, {
+    id: 'today',
+    owner: 'server',
+    value: { won: 100 },
+    updatedAt: t - 1,
+  });
+  assert.deepEqual(await data.delete('levels', 'gone', {}, 'p1'), { ok: true, deleted: false });
+  assert.deepEqual(await data.delete('levels', 'moon', {}, 'p1'), { ok: true, deleted: true });
+});
+
+test("the database: a document by id alone, from 0.1.0 pages: the player's own in a server-written collection; another's named", async () => {
+  const data = createData(execOf(sqlite()), {
+    rules: {
+      inbox: { read: 'owner', write: 'server' },
+      prizes: { read: 'anyone', write: 'server' },
+      levels: { read: 'anyone', write: 'owner' },
+      notes: { read: 'owner', write: 'owner' },
+    },
+  });
+  // read: owner + write: server: what the server wrote in a player's space, read by id alone
+  await data.put('inbox', 'welcome', 'hi p1', { owner: 'p1' }, 'server');
+  assert.equal((await data.get('inbox', 'welcome', {}, 'p1')).item.value, 'hi p1');
+  assert.equal((await data.get('inbox', 'welcome', {}, 'p2')).code, 'unknown', "never another player's");
+  // read: anyone + write: server: the server's first, then the player's own
+  await data.put('prizes', 'today', 'for all', {}, 'server');
+  await data.put('prizes', 'mine', 'for p1', { owner: 'p1' }, 'server');
+  assert.equal((await data.get('prizes', 'today', {}, 'p1')).item.value, 'for all');
+  assert.equal((await data.get('prizes', 'mine', {}, 'p1')).item.value, 'for p1');
+  // another player's document in a collection anyone reads: refused in words that name {owner}
+  await data.put('levels', 'abc123', { name: 'Moon' }, {}, 'p1');
+  const r = await data.get('levels', 'abc123', {}, 'p2');
+  assert.deepEqual([r.ok, r.status, r.code], [false, 400, 'owner']);
+  assert.match(r.why, /gf\.db\.get\('levels', 'abc123', \{owner\}\)/);
+  assert.equal((await data.get('levels', 'abc123', { owner: 'p1' }, 'p2')).item.value.name, 'Moon');
+  // a collection only its owners read never says that another player's document exists
+  await data.put('notes', 'n1', 'secret', {}, 'p1');
+  assert.equal((await data.get('notes', 'n1', {}, 'p2')).code, 'unknown');
+});
+
+test('the database: RULES are checked, and a list fails closed for anything but read: anyone', async () => {
+  for (const rules of [
+    { levels: { read: 'everyone' } },
+    { levels: { write: 'anyone' } },
+    { levels: { read: 'anyone', mode: 'x' } },
+    { levels: 'anyone' },
+    { 'bad name': { read: 'owner' } },
+    [],
+    null,
+  ])
+    assert.throws(() => createData(execOf(sqlite()), { rules }), /RULES/, JSON.stringify(rules));
+  // a rule changed to something unknown after the check (or a prototype name): the player's own only, never all
+  const rules = { '*': { read: 'owner', write: 'owner' }, levels: { read: 'anyone', write: 'owner' } };
+  const data = createData(execOf(sqlite()), { rules });
+  await data.put('levels', 'a', 1, {}, 'p1');
+  await data.put('levels', 'b', 2, {}, 'p2');
+  assert.equal((await data.list('levels', {}, '')).items.length, 2);
+  rules.levels.read = 'public';
+  assert.equal((await data.list('levels', {}, '')).code, 'player', 'a guest lists nothing');
   assert.deepEqual(
-    data.list('levels', { owner: 'p1', order: 'old', limit: 5 }, '').items.map(d => d.value.n ?? d.value.name),
-    ['by the game', 2],
-    'limit is capped at limits.list',
+    (await data.list('levels', {}, 'p2')).items.map(d => d.id),
+    ['b'],
   );
-  // read: 'owner': others see nothing, not even that it exists
-  data.put('notes', 'n1', 'secret plan', 'p1');
-  assert.equal(data.get('notes', 'n1', 'p2').code, 'unknown');
-  assert.equal(data.get('notes', 'n1', 'p1').item.value, 'secret plan');
-  assert.equal(data.list('notes', {}, '').code, 'player');
-  assert.deepEqual(data.list('notes', { owner: 'p1' }, 'p2').items, [], 'a player lists only their own');
-  assert.equal(data.list('notes', {}, 'server').items.length, 1);
-  // write: 'server': players cannot, the server can
-  assert.equal(data.put('prizes', 'p1', { won: 100 }, 'p1').code, 'server-only');
-  assert.ok(data.put('prizes', 'p1', { won: 100 }, 'server').ok);
-  assert.deepEqual(data.delete('levels', 'gone', 'p1'), { ok: true, deleted: false });
-  assert.deepEqual(data.delete('levels', 'moon', 'p1'), { ok: true, deleted: true });
+  assert.equal((await data.get('levels', 'a', { owner: 'p1' }, 'p2')).code, 'unknown');
+  for (const name of ['__proto__', 'constructor', 'toString']) {
+    await data.put(name, 'x', 1, {}, 'p1');
+    assert.equal((await data.list(name, {}, '')).code, 'player', name);
+  }
+});
+
+test('the database: no player takes an id in another player’s space, or the server’s', async () => {
+  const data = createData(execOf(sqlite()), { rules: { '*': { read: 'anyone', write: 'owner' } } });
+  // p2 writes "main" first, and p1's own "main" is still p1's to make
+  assert.equal((await data.put('profiles', 'main', { name: 'squatter' }, {}, 'p2')).ok, true);
+  const mine = await data.put('profiles', 'main', { name: 'Ana' }, {}, 'p1');
+  assert.deepEqual([mine.ok, mine.item.owner], [true, 'p1']);
+  assert.equal((await data.get('profiles', 'main', {}, 'p1')).item.value.name, 'Ana');
+  assert.equal((await data.get('profiles', 'main', { owner: 'p2' }, 'p1')).item.value.name, 'squatter');
+  // a player who names someone else's space, or the server's, is refused; the server's own "main" is untouched
+  await data.put('profiles', 'main', { name: 'official' }, {}, 'server');
+  assert.equal((await data.put('profiles', 'main', 1, { owner: 'server' }, 'p2')).code, 'not-yours');
+  assert.equal((await data.put('profiles', 'main', 1, { owner: 'p1' }, 'p2')).code, 'not-yours');
+  assert.equal((await data.add('profiles', 1, { owner: 'p1' }, 'p2')).code, 'not-yours');
+  assert.equal((await data.get('profiles', 'main', { owner: 'server' }, '')).item.value.name, 'official');
+  assert.equal((await data.list('profiles', {}, '')).items.length, 3, 'three documents, one "main" each');
+});
+
+test('the database: a list is paged by an after cursor over (updated, id), with ties, and offset is refused', async () => {
+  let t = 0;
+  const data = createData(execOf(sqlite()), {
+    rules: { '*': { read: 'anyone', write: 'owner' } },
+    now: () => Math.floor(t++ / 3), // three writes a millisecond: ties the cursor must keep apart
+  });
+  for (let i = 0; i < 7; i++) await data.put('runs', `r${i}`, i, {}, i % 2 ? 'p1' : 'p2');
+  const walk = async opts => {
+    const seen = [];
+    let after = '';
+    for (let page = 0; page < 10; page++) {
+      const a = await data.list('runs', { ...opts, limit: 2, after }, '');
+      assert.equal(a.ok, true, JSON.stringify(a));
+      seen.push(...a.items.map(d => d.value));
+      assert.equal(a.more, !!a.after);
+      if (!a.more) return seen;
+      after = a.after;
+    }
+    throw new Error('it never ended');
+  };
+  // newest first; within a millisecond by owner, then id (both newest-first too): every document once
+  const all = (await data.list('runs', { limit: 100 }, '')).items;
+  assert.deepEqual(
+    all.map(d => d.updatedAt),
+    [2, 1, 1, 1, 0, 0, 0],
+  );
+  assert.deepEqual(await walk({}), [6, 4, 5, 3, 2, 0, 1]);
+  assert.deepEqual(
+    await walk({}),
+    all.map(d => d.value),
+  );
+  assert.deepEqual(await walk({ order: 'old' }), [6, 4, 5, 3, 2, 0, 1].reverse());
+  assert.deepEqual(await walk({ owner: 'p1' }), [5, 3, 1]);
+  assert.equal((await data.list('runs', { offset: 2 }, '')).code, 'bad');
+  assert.match((await data.list('runs', { offset: 2 }, '')).why, /offset is gone: page with after/);
+  assert.equal((await data.list('runs', { after: 'not a cursor' }, '')).code, 'bad');
+});
+
+test('the database: a table an older database.js made moves to the new one, every document kept by its owner', async () => {
+  const s = sqlite();
+  // the schema of xcore 0.1.0: one id per collection
+  s.db.exec(
+    'CREATE TABLE docs (collection TEXT NOT NULL, id TEXT NOT NULL, owner TEXT NOT NULL, value TEXT NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (collection, id))',
+  );
+  s.db.exec('CREATE INDEX docs_owner ON docs (collection, owner, updated)');
+  s.db.exec(`INSERT INTO docs VALUES ('levels', 'moon', 'p1', '{"n":1}', 5), ('news', 'today', 'server', '"hi"', 6)`);
+  const data = createData(execOf(s), { rules: { '*': { read: 'anyone', write: 'owner' }, news: { write: 'server' } } });
+  await data.ready;
+  assert.deepEqual((await data.get('levels', 'moon', {}, 'p1')).item, {
+    id: 'moon',
+    owner: 'p1',
+    value: { n: 1 },
+    updatedAt: 5,
+  });
+  assert.equal((await data.get('news', 'today', {}, '')).item.value, 'hi');
+  assert.match(s.db.prepare("SELECT sql FROM sqlite_master WHERE name = 'docs'").get().sql, /collection, owner, id/);
+  // a move stopped half way (the old table gone, the new one not renamed yet) is finished the next time
+  const half = sqlite();
+  half.db.exec(
+    'CREATE TABLE docs_v2 (collection TEXT NOT NULL, owner TEXT NOT NULL, id TEXT NOT NULL, value TEXT NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY (collection, owner, id))',
+  );
+  half.db.exec(`INSERT INTO docs_v2 VALUES ('levels', 'p1', 'moon', '1', 5)`);
+  const again = createData(execOf(half));
+  assert.equal((await again.get('levels', 'moon', {}, 'p1')).item.value, 1);
+  // and a second start changes nothing
+  assert.equal((await createData(execOf(s)).get('levels', 'moon', {}, 'p1')).item.value.n, 1);
 });
 
 test("the database's routes: the page's token is checked by xgames.fun, and the calls reach the one object", async () => {
   const ctx = { storage: { sql: sqlite() } };
   const object = new GameData(ctx, {});
   const env = {
-    GF: { verifyPlayer: async token => (token === 'good' ? { ok: true, sub: 'x:42' } : { ok: false, why: 'expired' }) },
+    GF: {
+      verifyPlayer: async token =>
+        token === 'good'
+          ? { ok: true, sub: 'x:42' }
+          : token === 'other'
+            ? { ok: true, sub: 'x:7' }
+            : token === 'server'
+              ? { ok: true, sub: 'server' }
+              : { ok: false, why: 'expired' },
+    },
     GAME_DATA: { idFromName: name => name, get: () => ({ run: (op, args) => object.run(op, args) }) },
   };
   const call = async (method, p, { body, token } = {}) => {
@@ -127,23 +284,166 @@ test("the database's routes: the page's token is checked by xgames.fun, and the 
     (await call('POST', '/api/db/levels', { body: { value: 1 }, token: 'old' })).body.why,
     'Sign in again: expired.',
   );
+  assert.equal((await call('POST', '/api/db/levels', { body: { value: 1 }, token: 'server' })).status, 401);
   const made = await call('POST', '/api/db/levels', { body: { value: { name: 'Moon' } }, token: 'good' });
   assert.equal(made.status, 200);
   assert.equal(made.body.item.owner, 'x:42');
   assert.equal(made.body.status, undefined, 'the HTTP status is not repeated in the body');
   const id = made.body.item.id;
-  assert.deepEqual((await call('GET', `/api/db/levels/${id}`)).body.item.value, { name: 'Moon' });
+  assert.deepEqual((await call('GET', `/api/db/levels/${id}`, { token: 'good' })).body.item.value, { name: 'Moon' });
+  // the default is read 'owner': another player, or a guest naming the owner, does not see it
+  assert.equal((await call('GET', `/api/db/levels/${id}?owner=x%3A42`, { token: 'other' })).status, 404);
+  assert.equal((await call('GET', `/api/db/levels/${id}?owner=x%3A42`)).status, 404);
   assert.equal((await call('GET', '/api/db/levels?owner=me', { token: 'good' })).body.items.length, 1);
+  assert.deepEqual((await call('GET', '/api/db/levels', { token: 'other' })).body, {
+    ok: true,
+    items: [],
+    more: false,
+    after: null,
+  });
+  assert.equal((await call('GET', '/api/db/levels?offset=50', { token: 'good' })).status, 400);
   assert.equal((await call('PUT', `/api/db/levels/${id}`, { body: { value: 2 }, token: 'good' })).body.item.value, 2);
+  assert.equal(
+    (await call('PUT', `/api/db/levels/${id}?owner=x%3A42`, { body: { value: 3 }, token: 'other' })).body.code,
+    'not-yours',
+  );
   assert.equal((await call('PATCH', `/api/db/levels/${id}`, { token: 'good' })).status, 405);
   // under a folder (a preview, the kit's dev server's /game/) the same calls
-  assert.equal((await call('GET', `/game/api/db/levels/${id}`)).status, 200);
+  assert.equal((await call('GET', `/game/api/db/levels/${id}`, { token: 'good' })).status, 200);
   assert.equal((await call('DELETE', `/api/db/levels/${id}`, { token: 'good' })).body.deleted, true);
-  assert.equal((await call('GET', `/api/db/levels/${id}`)).status, 404);
-  // the server's own code, past the players' rules
+  assert.equal((await call('GET', `/api/db/levels/${id}`, { token: 'good' })).status, 404);
+  // the server's own code, past the players' rules: its own space by default, a player's by name
   const server = dataOf(env);
   assert.equal((await server.put('news', 'today', { text: 'hi' })).item.owner, 'server');
+  assert.equal((await server.get('news', 'today')).item.value.text, 'hi');
+  assert.equal((await server.put('levels', 'gift', 9, { owner: 'x:42' })).item.owner, 'x:42');
+  assert.equal((await call('GET', '/api/db/levels/gift', { token: 'good' })).body.item.value, 9);
   assert.equal((await server.list('news')).items.length, 1);
+  assert.equal((await server.list('levels', { owner: 'x:42' })).items.length, 1);
+});
+
+test('add database again: an untouched RULES from 0.1.0 (anyone read) becomes the new default', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  await addDatabaseObject(dir);
+  const file = path.join(dir, 'server/database.js');
+  const now = await readFile(file, 'utf8');
+  assert.match(now, /'\*': \{ read: 'owner', write: 'owner' \}/);
+  await writeFile(
+    file,
+    now.replace("'*': { read: 'owner', write: 'owner' }", "'*': { read: 'anyone', write: 'owner' }"),
+  );
+  const r = await addDatabase(dir);
+  assert.match(await readFile(file, 'utf8'), /'\*': \{ read: 'owner', write: 'owner' \}/);
+  assert.ok(
+    r.steps.some(s => /was the old default, where anyone read every document/.test(s)),
+    r.steps.join('\n'),
+  );
+  // RULES the person wrote are theirs, whatever they say
+  await writeFile(
+    file,
+    (await readFile(file, 'utf8')).replace("'*': {", "levels: { read: 'anyone', write: 'owner' },\n  '*': {"),
+  );
+  const mine = await addDatabase(dir);
+  assert.match(await readFile(file, 'utf8'), /levels: \{ read: 'anyone', write: 'owner' \}/);
+  assert.ok(!mine.steps.some(s => /old default/.test(s)));
+  // published as 0.1.0 left it, untouched: the check says it is open to anyone, and how to close it
+  const before = await readFile(file, 'utf8');
+  await writeFile(file, before.replace(/export const RULES = \{[\s\S]*?\n\};/, OLD_DEFAULT_RULES));
+  const open = await bundleServer(dir);
+  assert.match(
+    open.warnings.join('\n'),
+    /still has the RULES xcore 0\.1\.0 wrote .*open to anyone, signed in or not.*add database makes each player's documents their own/,
+  );
+  assert.doesNotMatch(open.warnings.join('\n'), /It keeps working/);
+  await writeFile(file, before);
+  assert.match((await bundleServer(dir)).warnings.join('\n'), /older database .*It keeps working/);
+  // refused for the 8 Durable Objects a server may have: refused before database.js is touched
+  const cfgFile = path.join(dir, 'gamesfun.json');
+  const cfg = JSON.parse(await readFile(cfgFile, 'utf8'));
+  cfg.server.objects = Array.from({ length: 8 }, (_, i) => ({ class: `Room${i}`, binding: `ROOM_${i}` }));
+  await writeFile(cfgFile, JSON.stringify(cfg));
+  const old = before.replace(/export const RULES = \{[\s\S]*?\n\};/, OLD_DEFAULT_RULES);
+  await writeFile(file, old);
+  await assert.rejects(addDatabase(dir), /already declares 8 Durable Objects/);
+  assert.equal(await readFile(file, 'utf8'), old, 'database.js left as it was');
+});
+
+test("upgrading 0.1.0's database.js: each dataOf(env) call with no owner is said with its change, by add database and at publish", async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  await addDatabaseObject(dir);
+  const file = path.join(dir, 'server/database.js');
+  const now = await readFile(file, 'utf8');
+  const game = [
+    "import { dataOf } from './database.js';",
+    'export async function profile(env, sub, opts) {',
+    "  const { item } = await dataOf(env).get('profiles', sub);",
+    "  await dataOf(env).put('profiles', sub, { gold: 1 });",
+    "  await dataOf(env).put('profiles', sub, { gold: 1 }, { owner: sub });",
+    '  const data = dataOf(env);',
+    "  await data.delete('profiles', sub);",
+    "  await data.add('news', { at: 1 }, { owner: 'server' });",
+    "  await data.list('news', { limit: 10, offset: 20 });",
+    "  await data.list('news', { limit: 10, offset: 0 });",
+    "  await data.get('profiles', sub, opts);",
+    "  await data.add('news', { at: 2 });",
+    "  // dataOf(env).get('in', 'a comment') is not code",
+    `  const s = "dataOf(env).get('in', 'a string')";`,
+    '  return [item, s];',
+    '}',
+    '',
+  ].join('\n');
+  await writeFile(path.join(dir, 'server/game.js'), game);
+  await writeFile(
+    path.join(dir, 'server/index.js'),
+    "import { handleDatabase } from './database.js';\nimport { profile } from './game.js';\nexport { GameData } from './database.js';\nexport default {\n  async fetch(request, env) {\n    const r = await handleDatabase(request, env);\n    if (r) return r;\n    return Response.json(await profile(env, 'x'));\n  },\n};\n",
+  );
+  // database.js as 0.1.0 had it: one id a collection, no space of each player's own
+  await writeFile(file, now.replace(OWNER_SPACES, 'PRIMARY KEY (collection, id)'));
+  const want = [
+    ['server/game.js', 3, 'get', /server's own space .*answers 404.*\{owner: sub\}.*\{owner: 'server'\}/],
+    ['server/game.js', 4, 'put', /the server's own copy, which the player never sees/],
+    ['server/game.js', 7, 'delete', /deletes the server's own copy/],
+    ['server/game.js', 9, 'list', /offset is refused now: page with .*after/],
+    ['server/game.js', 12, 'add', /adds to the server's own space/],
+  ];
+  const r = await addDatabase(dir);
+  assert.equal(await readFile(file, 'utf8'), now, 'database.js brought up to date');
+  assert.deepEqual(
+    r.calls.map(c => [c.file, c.line, c.op]),
+    want.map(w => w.slice(0, 3)),
+  );
+  r.calls.forEach((c, i) => assert.match(c.fix, want[i][3]));
+  const step = r.steps.find(x => /was 0\.1\.0's/.test(x));
+  assert.ok(step, r.steps.join('\n'));
+  assert.match(step, /change these 5 calls before you publish/);
+  assert.match(step, /server\/game\.js:3 dataOf\(env\)\.get\(…\): without an owner/);
+  // again, the file already up to date: nothing upgraded, nothing said
+  assert.equal((await addDatabase(dir)).calls.length, 0);
+  // publish says them as long as they are there
+  const b = await bundleServer(dir);
+  const said = b.warnings.find(w => /dataOf\(env\) with no owner/.test(w));
+  assert.ok(said, b.warnings.join('\n'));
+  for (const [f, line, op] of want) assert.match(said, new RegExp(`${f}:${line} dataOf\\(env\\)\\.${op}\\(`));
+  assert.doesNotMatch(said, /game\.js:(5|8|10|11|13|14):/);
+  // each says whose space it means: nothing to say
+  await writeFile(
+    path.join(dir, 'server/game.js'),
+    game
+      .replace("get('profiles', sub)", "get('profiles', sub, { owner: sub })")
+      .replace('{ gold: 1 });', "{ gold: 1 }, { owner: 'server' });")
+      .replace("delete('profiles', sub)", "delete('profiles', sub, { owner: sub })")
+      .replace('offset: 20', "after: ''")
+      .replace('{ at: 2 })', "{ at: 2 }, { owner: 'server' })"),
+  );
+  assert.doesNotMatch((await bundleServer(dir)).warnings.join('\n'), /dataOf\(env\) with no owner/);
+  // a 0.1.0 database.js not upgraded yet: its calls still mean what they did, so publish says nothing of them
+  await writeFile(path.join(dir, 'server/game.js'), game);
+  await writeFile(file, now.replace(OWNER_SPACES, 'PRIMARY KEY (collection, id)'));
+  assert.doesNotMatch((await bundleServer(dir)).warnings.join('\n'), /dataOf\(env\) with no owner/);
 });
 
 test('signin for a web game: gamesfun.js beside the page and loaded first; again, nothing changes', async t => {
@@ -220,11 +520,11 @@ test('signin for a Godot project: the autoload carries the client; for a Unity p
   await assert.rejects(addSignin(path.join(tmp.dir)), /not a game xcore knows/);
 });
 
-test('database: server/ and its object declared; the bundle is one publish takes; a server of its own is left to its owner', async t => {
+test('the older database (server/database.js): its object declared; the bundle is one publish takes; a server of its own is left to its owner', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await fixture(tmp, 'static');
-  const r = await addDatabase(dir);
+  const r = await addDatabaseObject(dir);
   assert.ok(existsSync(path.join(dir, 'gamesfun.js')), 'signin comes with it');
   assert.deepEqual(JSON.parse(await readFile(path.join(dir, 'gamesfun.json'), 'utf8')).server.objects, [
     { class: 'GameData', binding: 'GAME_DATA' },
@@ -241,7 +541,7 @@ test('database: server/ and its object declared; the bundle is one publish takes
   const own = await fixture(tmp2, 'static');
   await mkdir(path.join(own, 'server'));
   await writeFile(path.join(own, 'server', 'index.js'), 'export default { fetch: () => new Response("mine") };\n');
-  const o = await addDatabase(own);
+  const o = await addDatabaseObject(own);
   assert.equal(
     await readFile(path.join(own, 'server', 'index.js'), 'utf8'),
     'export default { fetch: () => new Response("mine") };\n',
@@ -258,7 +558,7 @@ test('multiplayer beside the database: one server routes both, both objects decl
   const dir = await fixture(tmp, 'static');
   const m = await addMultiplayer(dir);
   assert.match(m.steps.join('\n'), /GamesFun\.rooms\.join/);
-  await addDatabase(dir);
+  await addDatabaseObject(dir);
   const index = await readFile(path.join(dir, 'server/index.js'), 'utf8');
   assert.match(index, /handleDatabase[\s\S]*handleRooms/);
   assert.match(index, /Written by `xcore add database` and `xcore add multiplayer`/);
@@ -304,6 +604,19 @@ test('multiplayer beside the database: one server routes both, both objects decl
   const g = await addMultiplayer(godot);
   assert.match(g.steps.join('\n'), /GamesFun\.join_room\(code\)/);
   assert.match(g.steps.join('\n'), /local ENet game/);
+});
+
+test('the Godot client refuses an offset but 0 in db_list before it reaches the page (in the editor too), as gamesfun.js does', async () => {
+  const gd = await readFile(path.join(ROOT, 'lib', 'client', 'godot', 'gamesfun.gd'), 'utf8');
+  const fn = /func db_list\(collection: String, opts := \{\}\):\n([\s\S]*?)\n\n/.exec(gd)?.[1] ?? '';
+  const refuse = fn.indexOf('if opts.has("offset") and');
+  // a real offset only: 0 (or none) is the first page, as gamesfun.js takes it
+  assert.match(fn, /float\(str\(opts\["offset"\]\)\) != 0\.0/);
+  assert.ok(refuse >= 0, fn);
+  assert.ok(refuse < fn.indexOf('_run("db.list"'), 'refused before the bridge is asked');
+  assert.match(fn, /"code": "offset"/);
+  const cs = await readFile(path.join(ROOT, 'lib', 'client', 'unity', 'GamesFun.cs'), 'utf8');
+  assert.doesNotMatch(/public static Task<string> DbList\([^)]*\)/.exec(cs)[0], /offset/, "Unity's DbList takes after");
 });
 
 test("the engines' glue files hold no raw control character or line separator (C# and GDScript break on them)", async () => {

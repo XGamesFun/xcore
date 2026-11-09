@@ -24,7 +24,9 @@ xcore adopt ./my-game                      # its record, and the list of what to
 xcore check ./my-game                      # the page in Chrome, as the host serves it
 xcore dev ./my-game                        # play it here as xgames.fun hosts it: its server, sign-in, rooms, economy
 xcore add signin ./my-game                 # players sign in (X or a wallet); saves and leaderboards
-xcore add database ./my-game               # a database of its own, put up with the game
+xcore add database ./my-game               # a database of its own (D1), put up with the game
+xcore db query "SELECT * FROM players"     # read it here, or --live on xgames.fun
+xcore files put ./level.json levels/1.json --public --live   # a file its server and page read
 xcore add multiplayer ./my-game            # rooms players share (Godot's own multiplayer runs over them)
 xcore backend use custom ./my-game --url https://api.my-game.example   # only if it calls a backend you run
 xcore loot add ./my-game                   # only if it gets an economy (a Solana economy on loot)
@@ -157,8 +159,10 @@ client file the server hands out (`/socket.io/socket.io.js`) into the game. The 
 `https://<slug>-play.xgames.fun`.
 
 **What xcore writes in the game's folder**: `gamesfun.json` (adopt's record; commit it), `evidence/` (each check's
-screenshots and record, `evidence/verify-N/`) and `.gamesfun/` (publish's last passing check, and the link once
-published). None of them is published; add `evidence/` and `.gamesfun/` to the game's `.gitignore`.
+screenshots and record, `evidence/verify-N/`) and `.gamesfun/` (publish's last passing check, the link once
+published, the local database and files, and `xcore db export`'s dumps of your players' data). None of them is
+published. `.gamesfun/` keeps itself out of git: xcore writes `.gamesfun/.gitignore` (`*`) when it first writes
+there; add `evidence/` to the game's `.gitignore`.
 
 ## 2. Check
 
@@ -182,12 +186,13 @@ whose check fails goes up as a private draft only.
 `xcore dev <folder>` serves the game on this machine the way xgames.fun will host it, with everything a published game
 has behind it, so the whole game runs before it is published:
 
-| On this machine               |                                                                                                                                                                                                                                                                                                                                                               |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `http://127.0.0.1:8787/game/` | the published files (it runs `page.build` first, unless `--no-build`), with the play host's headers                                                                                                                                                                                                                                                           |
-| `/game/api/*`                 | the game's `server/` under workerd, the runtime xgames.fun runs it on: Durable Objects with their storage kept, WebSockets, `env.GF`, and its secrets from `.dev.vars`. A change under `server/` or to `.dev.vars` reloads it. Miniflare (with workerd, about 140 MB) is installed once, the first time a game with a server runs                             |
-| `/platform/v1/*`              | sign-in, saves and leaderboards: `gamesfun.js` signs in a local player (each tab its own, so two tabs play a room together), and `env.GF.verifyPlayer` accepts its token. Saves and scores are kept in `.gamesfun/dev-platform.json`, never published                                                                                                         |
-| `/loot/v1/rpc`                | the economy's Solana devnet RPC: xgames.fun's shared relay (what a published page talks to unless the game brings its own: `xcore add rpc`), or your own with `XSOLANA_RPC_URL` in `.env` (its URL is never shown; a call the shared relay would refuse is said in the terminal). The economy's calls answer once it is live on devnet (`xcore loot approve`) |
+| On this machine               |                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `http://127.0.0.1:8787/game/` | the published files (it runs `page.build` first, unless `--no-build`), with the play host's headers                                                                                                                                                                                                                                                                                                                |
+| `/game/api/*`                 | the game's `server/` under workerd, the runtime xgames.fun runs it on: Durable Objects with their storage kept, WebSockets, `env.GF`, the game's database (a local D1 in `.gamesfun/dev/d1/`, its migrations applied), and its secrets from `.dev.vars`. A change under `server/` or to `.dev.vars` reloads it. Miniflare (with workerd, about 140 MB) is installed once, the first time a game with a server runs |
+| `/platform/v1/*`              | sign-in, saves and leaderboards: `gamesfun.js` signs in a local player (each tab its own, so two tabs play a room together), and `env.GF.verifyPlayer` accepts its token. Saves and scores are kept in `.gamesfun/dev-platform.json`, never published                                                                                                                                                              |
+| `http://127.0.0.1:8788/`      | the game's public project files (`env.GF.files`, `xcore files`), kept in `.gamesfun/dev/files/`: another origin, as `<slug>.xgamesusercontent.com` is to the published game                                                                                                                                                                                                                                        |
+| `/loot/v1/rpc`                | the economy's Solana devnet RPC: xgames.fun's shared relay (what a published page talks to unless the game brings its own: `xcore add rpc`), or your own with `XSOLANA_RPC_URL` in `.env` (its URL is never shown; a call the shared relay would refuse is said in the terminal). The economy's calls answer once it is live on devnet (`xcore loot approve`)                                                      |
 
 Games made with any engine get all of it through `gamesfun.js` (`xcore add signin`): on a plain local server it stands
 in with this browser's storage; under `xcore dev` it uses the real thing. What is not the same as hosted: no CPU or
@@ -243,23 +248,67 @@ it trusts who is asking. It answers `{data, error, status}` like every other cal
 
 ### A database of its own: `xcore add database`
 
-`xcore add database <folder>` adds sign-in, and a database the game owns: server code (`server/database.js`, one
-Durable Object with SQLite storage, [docs/SERVER.md](docs/SERVER.md)) that publish puts on xgames.fun with the game, at
-its own `api/db/`. Nothing to sign up for, no keys, and it is kept between publishes. It holds documents (any JSON up
-to 64 KB) in collections:
+`xcore add database <folder>` adds sign-in, and a database the game owns: **one D1 database** (SQLite) a game, made on
+xgames.fun by the first publish and kept between publishes ([docs/SERVER.md](docs/SERVER.md), "A database of its
+own"). Nothing to sign up for and no keys. `gamesfun.json` → `database` declares it; its tables come from the
+migrations in `server/migrations/` (`0001_init.sql`, then `0002_….sql`: append only, applied by publish before the new
+version goes live).
+
+- **A game with a server of its own** gets an example first migration and `server/gf-db.js`: prepared queries
+  (`db(env).first('SELECT gold FROM players WHERE id = ?', sub)`), and `withPlayer(request, env)`, the signed-in
+  player's id. A rule that must hold under a burst of requests is one statement
+  (`UPDATE players SET runs = runs - 1 WHERE id = ? AND runs > 0 RETURNING runs`).
+- **A game with no server** gets xcore's stock server, which keeps the page's documents (any JSON up to 64 KB) in
+  collections, under the rules in `database.collections`. When it gets a server of its own (`xcore add
+multiplayer`, `rpc`, `vouchers`), `server/gf-docs.js` goes on serving the same documents there, under the same
+  rules; publish refuses a server that has `collections` and does not route `api/db/`:
 
 ```js
 const level = (await GamesFun.db.add('levels', { name: 'Moon', tiles })).data; // {id, owner, value, updatedAt}
-const mine = (await GamesFun.db.list('levels', { owner: 'me' })).data;
 await GamesFun.db.put('levels', level.id, { name: 'Moon 2', tiles });
+const page = await GamesFun.db.list('levels'); // page.data: the newest 50; page.after: the next page's place
+const next = await GamesFun.db.list('levels', { after: page.after }); // page.after is null on the last page
 ```
 
-Anyone reads; a signed-in player writes only their own documents. `RULES` at the top of `server/database.js` changes
-that per collection (`read: 'owner'` keeps a collection private to each player; `write: 'server'` lets only the game's
-own server code write, through `dataOf(env)`, for anything players must not set themselves). A game with a server of
-its own keeps it: the database is added beside it, with the two lines to route it. On this machine the page keeps
-documents in the browser instead. Its calls count toward the game server's requests (600 a minute from one player, 6,000 a
-minute shared by all its players): read and write when something happens, not every frame.
+**Each player has a space of their own** in every collection: a document is found by its collection, its owner and
+its id, so two players can both have a `main`, and nobody can take an id in another player's space. By default a
+signed-in player reads and writes only their own documents. `{"read": "anyone"}` in `database.collections` lets
+everyone read a collection (another player's document by its owner,
+`GamesFun.db.get('levels', id, { owner: playerId })`, and their list with `{ owner: playerId }`); `{"write": "server"}`
+is for what players must not set themselves (the page reads it without naming an owner: the server's document, or
+the player's own that the server wrote for them). Lists page with `after`; `offset` is gone, and refused in words.
+The order is by when a document was last written, so one written between two pages can show twice or be skipped.
+
+A game made with xcore 0.1.0: see [Upgrading from 0.1.0](#upgrading-from-010). On a plain local server the
+page keeps documents in the browser; under `xcore dev` the database is a local D1 in `.gamesfun/dev/d1/` with the
+same migrations. Its calls count toward the game server's requests (600 a minute from one player, 6,000 a minute
+shared by all its players): read and write when something happens, not every frame.
+
+`xcore db info|query|export|import` reads and writes the local database, and with `--live` the one on xgames.fun
+(each call kept in the game's audit log); a query only reads unless `--write`. `xcore db restore <time> --live` puts
+it back as it was up to 30 days ago, after showing what it would do; for a game with an economy it warns that loot
+balances and payouts on chain are not rolled back. A game made with xcore 0.1.0 keeps its `server/database.js` (a
+Durable Object, the older way), which goes on working.
+
+### Project files: `xcore files`
+
+A game with a server keeps files of its own on xgames.fun: replays, generated levels, a large saved world, content
+packs (Free 100 MB, Creator 10 GB, Scale 100 GB; 25 MB a file). Its server writes and reads them with
+`env.GF.files` ([docs/SERVER.md](docs/SERVER.md), "Project files"), and you put them from your machine:
+
+```bash
+xcore files put ./levels/forest-3.json levels/forest-3.json --public --live   # served at https://<slug>.xgamesusercontent.com/levels/forest-3.json
+xcore files ls levels/ --live
+xcore files get replays/run-1.json --live --out run-1.json
+xcore files rm levels/old.json --live
+xcore files usage --live
+```
+
+A public file is served from a site of its own, which the browser treats as a stranger to the game: it cannot use the
+player's sign-in or call the game's `api/`, and anything that could carry a script (HTML, SVG, JavaScript) is a
+download, never a page. The game's page may load its pictures, sounds and fonts and `fetch` its data. Players never
+write here. Without `--live`, `xcore files` works on the files `xcore dev` gives the server, kept in
+`.gamesfun/dev/files/` and served on a port of their own.
 
 ### Multiplayer: `xcore add multiplayer`
 
@@ -519,6 +568,45 @@ xcore domain                           # where the game plays, the sites that em
   older copy can't sign players in there, so `domain add` says when to run `xcore add signin` and publish again. A
   game whose plan drops keeps its domain paused: it sends players to the xgames.fun link until there is room again.
 - Custom domains need xgames.fun's operator to have set them up (Cloudflare for SaaS): until then `xcore domain` says so.
+
+## Upgrading from 0.1.0
+
+A game made with xcore 0.1.0 that has `server/database.js` (`xcore add database` then) needs these changes. A game
+without one needs none: the D1 database, `xcore db` and `xcore files` are new.
+
+1. **Run `xcore add database` again.** It brings `server/database.js` up to date (your `RULES` and `LIMITS` are
+   kept), with `gamesfun.js` (1.4.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
+   needs an owner (step 3) as `file:line` with its change; `xcore publish` lists them again until each names its
+   owner. On its first start the new `database.js` moves the documents to a table keyed by collection, owner and id,
+   each under its owner. After that, do not roll the game back to a version with 0.1.0's `database.js`: its writes
+   fail on the new table.
+2. **Rules are private by default.** A `RULES` that 0.1.0 wrote and nobody changed
+   (`'*': { read: 'anyone', write: 'owner' }`) becomes `'*': { read: 'owner', write: 'owner' }`: each player reads
+   only their own documents. Name each collection that is meant to be public:
+   `levels: { read: 'anyone', write: 'owner' }`. A rule xcore does not know (`read: 'everyone'`) now stops the server
+   when it starts, instead of being read as something else.
+3. **`dataOf(env)` takes an owner.** Without one it is the server's own space (owner `"server"`): 0.1.0's
+   `dataOf(env).get('profiles', playerId)` answers 404, and `.put('profiles', playerId, …)` writes a copy the player
+   never sees. Pass `{ owner: sub }` (the player's id, `env.GF.verifyPlayer`'s `sub`) as the last argument of `get`,
+   `put`, `add` and `delete`, or `{ owner: 'server' }` for the server's own documents. A `list` without an owner is
+   still everyone's.
+4. **A page reads another player's document by its owner.** An id alone is now the player's own document (or, in a
+   `write: 'server'` collection, the server's). For someone else's, pass the owner:
+   `gf.db.get('levels', id, { owner: doc.owner })`, `GET api/db/<collection>/<id>?owner=<id>`, Godot
+   `db_get(collection, id, {"owner": owner})`, Unity `DbGet(collection, id, owner)`. By id alone it gives
+   `data: null` with `code: 'owner'` (said once in the console).
+5. **Lists page with `after`, not `offset`.** Pass the last answer's `after` for the next page
+   (`gf.db.list('levels', { after: page.after })`); it is `null` on the last page, and `more` says whether there is
+   another. A real `offset` is refused (0 or none is fine): `code: 'offset'` from `gf.db.list` and Godot's `db_list`,
+   400 from `GET api/db/<collection>?offset=` and from `dataOf(env).list`. Unity's
+   `DbList(collection, owner, limit, after, order)` takes the `after` text where 0.1.0's took an `int offset`, so a
+   call that passed an offset does not compile until it passes `after`. `LIMITS.offset` is gone.
+6. **`createData`** (for server code that runs the documents over SQLite of its own): 0.1.0's
+   `createData(sql, { rules, limits, now })`, which called `sql.exec`, is
+   `createData(exec, { rules, limits, now, table })`, where `exec(query, ...bindings)` answers the rows or a promise
+   of them. Every call is async, and the options come before `who`: `get(collection, id, opts, who)`,
+   `put(collection, id, value, opts, who)`, `add(collection, value, opts, who)`, `delete(collection, id, opts, who)`,
+   `list(collection, opts, who)`.
 
 ## What is not supported, and why
 

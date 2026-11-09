@@ -2,7 +2,168 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.2.0 — 2026-11-08
+
+### Upgrading from 0.1.0
+
+A game made with xcore 0.1.0 that has `server/database.js` (`xcore add database` then) needs these changes. A game
+without one needs none: the D1 database, `xcore db` and `xcore files` are new.
+
+1. **Run `xcore add database` again.** It brings `server/database.js` up to date (your `RULES` and `LIMITS` are
+   kept), with `gamesfun.js` (1.4.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
+   needs an owner (step 3) as `file:line` with its change; `xcore publish` lists them again until each names its
+   owner. On its first start the new `database.js` moves the documents to a table keyed by collection, owner and id,
+   each under its owner. After that, do not roll the game back to a version with 0.1.0's `database.js`: its writes
+   fail on the new table.
+2. **Rules are private by default.** A `RULES` that 0.1.0 wrote and nobody changed
+   (`'*': { read: 'anyone', write: 'owner' }`) becomes `'*': { read: 'owner', write: 'owner' }`: each player reads
+   only their own documents. Name each collection that is meant to be public:
+   `levels: { read: 'anyone', write: 'owner' }`. A rule xcore does not know (`read: 'everyone'`) now stops the server
+   when it starts, instead of being read as something else.
+3. **`dataOf(env)` takes an owner.** Without one it is the server's own space (owner `"server"`): 0.1.0's
+   `dataOf(env).get('profiles', playerId)` answers 404, and `.put('profiles', playerId, …)` writes a copy the player
+   never sees. Pass `{ owner: sub }` (the player's id, `env.GF.verifyPlayer`'s `sub`) as the last argument of `get`,
+   `put`, `add` and `delete`, or `{ owner: 'server' }` for the server's own documents. A `list` without an owner is
+   still everyone's.
+4. **A page reads another player's document by its owner.** An id alone is now the player's own document (or, in a
+   `write: 'server'` collection, the server's). For someone else's, pass the owner:
+   `gf.db.get('levels', id, { owner: doc.owner })`, `GET api/db/<collection>/<id>?owner=<id>`, Godot
+   `db_get(collection, id, {"owner": owner})`, Unity `DbGet(collection, id, owner)`. By id alone it gives
+   `data: null` with `code: 'owner'` (said once in the console).
+5. **Lists page with `after`, not `offset`.** Pass the last answer's `after` for the next page
+   (`gf.db.list('levels', { after: page.after })`); it is `null` on the last page, and `more` says whether there is
+   another. A real `offset` is refused (0 or none is fine): `code: 'offset'` from `gf.db.list` and Godot's `db_list`,
+   400 from `GET api/db/<collection>?offset=` and from `dataOf(env).list`. Unity's
+   `DbList(collection, owner, limit, after, order)` takes the `after` text where 0.1.0's took an `int offset`, so a
+   call that passed an offset does not compile until it passes `after`. `LIMITS.offset` is gone.
+6. **`createData`** (for server code that runs the documents over SQLite of its own): 0.1.0's
+   `createData(sql, { rules, limits, now })`, which called `sql.exec`, is
+   `createData(exec, { rules, limits, now, table })`, where `exec(query, ...bindings)` answers the rows or a promise
+   of them. Every call is async, and the options come before `who`: `get(collection, id, opts, who)`,
+   `put(collection, id, value, opts, who)`, `add(collection, value, opts, who)`, `delete(collection, id, opts, who)`,
+   `list(collection, opts, who)`.
+
+### What changed
+
+After an audit of the storage work, and as settled with the platform (STORAGE.md §8.10):
+
+- **A game that gets a server of its own keeps `gf.db`.** A game the stock server served lost its documents (404 on
+  every page save and load) once `xcore add multiplayer`, `rpc` or `vouchers` gave it a server. Now `xcore add`
+  writes `server/gf-docs.js` whenever `database` has `collections` (a stock game's rules are written out first), and
+  the generated `server/index.js` routes `api/db/` through it, from the same `gf_docs` table under the same rules
+  (read from `gamesfun.json` when the server is bundled). Publish refuses a server of its own that has `collections`
+  and does not route `api/db/` (code `db-route`), and says the two lines to add.
+- **`offset` is refused in every client**, not dropped: `gf.db.list`, the browser's local list and Godot's
+  `db_list` answer an error (`code: 'offset'`) for any offset but 0, so 0.1.0 code that paged with it stops instead of
+  reading page 1 for ever; `offset: 0` (or none) is the first page, as it was. Page with `after`.
+- **Lists fail closed**: anything but `read: 'anyone'` lists only the player's own (a mistyped rule listed everything,
+  even to guests), and `RULES` / `collections` are checked when the server starts.
+- **A document by id alone (0.1.0 pages):** in a `write: 'server'` collection a player's get by id alone looks in the
+  server's space and then their own, so a `read: 'owner'` + `write: 'server'` document is read again. In a
+  `read: 'anyone'` collection, a get by id alone that finds only another player's document answers 400 `owner`,
+  naming `{owner}`; `gf.db.get` gives `data: null` with `code: 'owner'` and says it once in the console. Pass
+  `{owner: doc.owner}`. (gamesfun.js is 1.4.0.)
+- **Migrations are recorded in the database**, in `_gf_migrations (name, sha256, applied_at)`, in the same batch as
+  the migration (its row as started, the statements, its row finished), as xgames.fun records them; `xcore dev` reads
+  what is applied from there (the file beside the local database is read in once and removed). A row left as
+  started, a file partly applied, is refused with how to undo it; an empty migration (0 bytes) is refused. A
+  statement over D1's 100,000 bytes (UTF-8, comments left out, as xgames.fun sends it) or SQL that never ends is
+  refused before publish and by `xcore dev`, in xgames.fun's words, with nothing of the new migrations applied; a
+  migration may still be 1 MB of many statements. xgames.fun's progress table `_gf_migration_steps` is left out of
+  dumps, imports and `db info`, as `_gf_migrations` is.
+  `xcore add database` writes `server/migrations/.gitattributes` (`*.sql -text`), so git cannot change a migration's
+  line endings.
+- **Publish** says `migration-busy` (another publish is applying them: try again in a minute) and
+  `database-unavailable` (502: Cloudflare, not the SQL) in words.
+- **`xcore db query`** uses a copy of xgames.fun's rule (its statement splitting, the statements it allows, its
+  params), so it takes and refuses the same queries here and live; a `null` param is refused (write `NULL` in the
+  SQL).
+- **`xcore db export` and `import` round-trip**: a dump makes its tables first (`CREATE … IF NOT EXISTS`), then
+  writes each row as an upsert on the table's key (`INSERT … ON CONFLICT (key) DO UPDATE SET …`, the rowid for a
+  table without a key), after `PRAGMA defer_foreign_keys`, and leaves out `_gf_migrations`. A dump (xcore's or D1's,
+  whose `INSERT`s and any `REPLACE` are made upserts the same way) goes in over the database as it is, or into an
+  empty one, here and live: a row is updated where it is and never deleted, so a table whose rows point at another's
+  with `ON DELETE CASCADE` keeps them, and a row may come before the one it points at. Before, a local import of a
+  local export always failed ("table already exists").
+- **Live owner routes:** `db import --live` and `files put --live` are held to Studio's 4.5 MB a request before anything
+  is sent, with the way that takes more (`GF.files.put` from the game's server), and a bare 413 is explained.
+  `import --live` and `query --write --live` need `--yes` or the word typed, as `restore` does, and are refused with no
+  terminal to ask in; what would be refused anyway (an import too big to send, a query the route refuses) is said before
+  the word is asked for. `restore` prints `restored.previous` and the command that undoes it, and its preview shows the
+  migrations it rolls back and its warning. `db export --live` picks up an `export-pending` with its bookmark, and
+  prints the answer's `note`; one it gave up on is kept (`.gamesfun/export-pending.json`) and the next
+  `db export --live` picks it up there instead of starting over. A GitHub Actions credential's 403 on export, import,
+  restore, write queries, `files put` and `rm` says these need the owner's own login. An answer over 4 MB, which Studio
+  sends as `{"$download": url}` (a signed address in its bucket), is fetched from there without the sign-in and read as
+  the answer, so a big `db query --live` prints its rows instead of nothing; a download that failed is said.
+- **`GF.files.put` under `xcore dev`** holds a stream to exactly its `{length}`, and reads one with none up to 1 MB,
+  as the platform does. A missing local file answers `not-found`. A file named `__proto__`, `constructor` or
+  `toString` is a file like any other.
+- **The secret scan** misses nothing the unbounded scan caught: a JWT is matched up to 4,096 + 16,384 + 2,048
+  characters and a `*_SECRET` literal up to 16,384 (`MAX_MATCH` 32 KiB, under the 64 KiB overlap); before, a
+  service-role JWT with a payload over 1,000 characters went through.
+- **`.gamesfun/` keeps itself out of git**: xcore writes `.gamesfun/.gitignore` (`*`) when it writes there and finds
+  none, so `db export`'s dumps of players' data are not committed. It comes back when deleted, so its own words say
+  to change it instead (`!publish.json` commits that file); one you changed is left as you wrote it.
+- **0.1.0's server code over the new `database.js`:** `xcore add database`, bringing a 0.1.0 `server/database.js` up
+  to date, and then every publish list each `dataOf(env)` call in the server's code whose `get`, `put`, `add` or
+  `delete` names no owner (it now means the server's own space) and each `list` that passes an `offset`, as
+  `file:line` with the change to make. See "Upgrading from 0.1.0" above.
+- A `server/database.js` whose `RULES` are still 0.1.0's default is said to be open to anyone at publish, with
+  `xcore add database` to fix it. `xcore add database` over a `server/database.js` asks first whether there is room for
+  its Durable Object (8 a server), so a refusal leaves `database.js` as it was. The paging cursor's order is by when a
+  document was last written (one written between two pages can show twice or be skipped): said in `docs/SERVER.md` and
+  `gf.db`'s comments. The local files origin is cross-origin to the page but the same site (both `127.0.0.1`); live it
+  is another site as well.
+
+Project files (STORAGE.md §8.6–8.8):
+
+- `env.GF.files` (`put`, `get`, `head`, `list`, `delete`, `usage`) in the contract's `GF_METHODS` and under `xcore dev`, with
+  xgames.fun's path rules and caps (25 MB a file, Free's 100 MB); the files are kept in `.gamesfun/dev/files/`.
+- `xcore dev` serves the public files on a port of their own, with the files domain's headers (nosniff,
+  `sandbox; default-src 'none'`, CORP cross-origin, `*` CORS, no referrer), its types (media, fonts, JSON and text
+  inline; anything else a download), ETag and one range; the page's policy lets it load pictures, sounds, fonts and
+  data from there, as the play edge does for `<slug>.xgamesusercontent.com`.
+- `xcore files ls|put|get|rm|usage`, here or `--live` through xgames.fun's owner routes, refused in words while
+  `/api/kit/me` does not list `"files"`; publish refuses a server that uses `env.GF.files` until it does.
+
+A database of the game's own, on D1 (xgames.fun's storage interface, STORAGE.md §8.1–8.5):
+
+- `gamesfun.json` → `database` (`engine`, `binding`, `migrations`, `collections`), checked as xgames.fun checks it:
+  the binding's name and its clash with a Durable Object's, migration names (`0001_init.sql`), at most 200 of 1 MB,
+  and append only: a migration published (and remembered in `.gamesfun/publish.json`) that changed is refused before
+  anything goes up.
+- `xcore add database`: a game with a server gets the block, `server/migrations/0001_init.sql` and `server/gf-db.js`
+  (prepared queries, `withPlayer`); a game with none gets the block with `collections`, and **xcore's stock server**
+  as its server, which serves `api/db/*` from D1 with the same routes and answers as `server/database.js`, so
+  `gf.db` is unchanged. A game that has `server/database.js` keeps it; the check says it is the older way.
+- `xcore publish` sends `server.database` with the migration files as blobs, refuses a game with a database when
+  xgames.fun's `/api/kit/me` does not list `"d1"`, and says xgames.fun's `migration-changed` (409) and
+  `migration-failed` (422) in plain words.
+- `xcore dev` runs a local D1 in `.gamesfun/dev/d1/`, applies the migrations at each start and reload, and keeps the
+  server down with the reason when an applied migration changed.
+- `xcore db info|query|export|import|restore`: the local database, or `--live` through xgames.fun's owner routes. A
+  query only reads unless `--write`; `restore --live` shows its preview, warns that loot balances and payouts are not
+  rolled back for a game with an economy, and needs `--yes` or the word `restore` typed.
+
+The database is safe by default, and the secret scan reads every byte:
+
+- `xcore add database`: a collection is private by default (`RULES` `'*': { read: 'owner', write: 'owner' }`); a
+  `RULES` an older xcore wrote and nobody changed becomes the new default on the next `xcore add database`, which says
+  so.
+- Each player has a space of their own in every collection: documents are keyed by collection, owner and id, so no
+  player can take an id in another player's space (or the server's, `owner: "server"`, which only the server writes).
+  A page reads another player's document in a `read: 'anyone'` collection by its owner
+  (`gf.db.get(c, id, {owner})`, `GET api/db/<c>/<id>?owner=<id>`); without an owner it is the player's own, or the
+  server's in a `write: 'server'` collection. `dataOf(env)` reads and writes the server's own space by default, a
+  player's with `{owner: sub}`. A table an older `server/database.js` made moves to the new one on its first start,
+  every document kept under its owner.
+- Lists page with a cursor: `gf.db.list(c, {after})` and `GET api/db/<c>?after=` answer `after` (the next page's
+  place, `null` on the last) and `more`. `offset` is gone and refused in words; Unity's `DbList` takes `after` in its
+  place, Godot's `db_get` and Unity's `DbGet` take an owner.
+- The publish scan reads a text file whole, however big, in 4 MiB pieces that overlap by more than any key it looks
+  for can be long; it read only the first 4 MiB before. The patterns are one list, `lib/secret-patterns.mjs`, which
+  the publish scan and the kit both read; each has an upper bound, so the overlap is enough.
 
 Every lifecycle the commands report now has one named state, one place that decides it, and the same answer for a
 person and for `--json`.

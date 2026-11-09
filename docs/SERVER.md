@@ -160,6 +160,7 @@ Every call answers `{ok: true, …}` or `{ok: false, code, why}` (`why` is words
 | `GF.scores.submit(board, player, score, {name, order, writer})`, `.setup(board, {order, writer})`, `.top(board, {limit, offset})`, `.best(board, player)`, `.remove(board, player)`, `.drop(board)` | leaderboards: a player's best is kept; `order` `"high"` (default) or `"low"`; `writer: "server"`: only the server writes the board (or every board a pattern names: `daily-*`, `*`); `drop`: the board gone, its place among the 16 free |
 | `GF.loot.report({round, endedAt, winners})`, `GF.loot.status()`                                                                                                                                     | a result that pays prizes by place: xgames.fun's keeper signs it with the game's host key (set up by the owner in Studio); for amounts your server works out, your own key (below, "Paying a result")                                    |
 | `GF.info()`                                                                                                                                                                                         | `{ok, contract, gameId, slug}`                                                                                                                                                                                                           |
+| `GF.files.put(path, body, {type, public, length})`, `.get(path)`, `.head(path)`, `.list({prefix, after})`, `.delete(path)`, `.usage()`                                                              | the game's project files (below, "Project files"): replays, levels, content packs; public ones on the files site                                                                                                                         |
 
 `player` is the game's own word for a player; normally `verifyPlayer`'s `sub`, so nobody can write another player's.
 The page writes the same saves and boards for its own signed-in player (`/platform/v1/*`), so a board is the player's
@@ -173,6 +174,50 @@ nobody fills a day's board ahead of time; `GF.scores.setup('*', {writer: 'server
 boards at all (a board's own rule wins over a pattern, a longer pattern over a shorter one). A game has 16 boards:
 **`GF.scores.drop(board)`** removes one (a past day's, once its prizes are paid) and frees its place. Only the server
 can set or lift a rule (`writer: 'any'`) or drop a board.
+
+### Project files: `env.GF.files`
+
+Files that you or the game's server write, never players: replays, generated levels, a large saved world, content
+packs. xgames.fun keeps them for the game (Free 100 MB, Creator 10 GB, Scale 100 GB; 25 MB a file), and serves the
+public ones from a site of their own, `https://<slug>.xgamesusercontent.com/<path>`.
+
+```js
+// the server keeps a replay, public: the page loads it from its address
+const saved = await env.GF.files.put(`replays/${runId}.json`, JSON.stringify(replay), {
+  type: 'application/json',
+  public: true,
+});
+if (!saved.ok) return Response.json({ why: saved.why }, { status: saved.code === 'full' ? 507 : 400 });
+return Response.json({ replay: saved.url });
+
+// a file only the server reads
+const world = await env.GF.files.get('worlds/main.bin');
+if (world.ok) state = new Uint8Array(await new Response(world.body).arrayBuffer());
+```
+
+| Call                                                       | Answer                                                                                                                                                                                                                                                                                                        |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GF.files.put(path, body, {type, public = false, length})` | `{ok, path, bytes, url?}`: `body` a string, an ArrayBuffer or a stream of bytes; a stream is held to exactly its `length` (more or fewer bytes: `code: "body"`, nothing stored), and one with no `length` is read up to 1 MB (longer: `code: "body"`); `url` when public; over the game's cap, `code: "full"` |
+| `GF.files.get(path)`                                       | `{ok, body, type, bytes, public}`: `body` is a stream of the bytes (`await new Response(body).text()`)                                                                                                                                                                                                        |
+| `GF.files.head(path)`                                      | the same, without `body`                                                                                                                                                                                                                                                                                      |
+| `GF.files.list({prefix, after, limit = 100})`              | `{ok, items: [{path, bytes, type, public, updatedAt}], after}`: a prefix is empty or a folder ending in `/`; pass `after` on                                                                                                                                                                                  |
+| `GF.files.delete(path)`, `GF.files.usage()`                | `{ok, deleted}`, `{ok, bytes, files, cap}`                                                                                                                                                                                                                                                                    |
+
+- **Paths** are letters, digits, `.`, `_` and `-`, with `/` between folders, at most 512 characters, and no `.` or
+  `..` part: `levels/forest-3.json`.
+- **The files site is a stranger to the game.** A file there cannot use the player's sign-in or call the game's
+  `api/`. Every answer carries `X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox; default-src
+'none'`. Pictures (PNG, JPEG, WebP, GIF, AVIF), sounds, videos, fonts, JSON and plain text are served as
+  themselves; anything else (HTML, SVG, JavaScript, CSS, XML, PDF) is a download, `application/octet-stream`. The
+  game's page may load pictures, sounds, fonts and `fetch` from it, never scripts or styles.
+- **From your machine:** `xcore files put <file> [path] [--public]`, `ls`, `get`, `rm`, `usage`; with `--live`, the
+  game's files on xgames.fun.
+- **Locally**, `xcore dev` keeps them in `.gamesfun/dev/files/` (never published) and serves the public ones on a port
+  of their own (`project files: … http://127.0.0.1:8788`), another origin to the page, as live. (Here it is the same
+  site, both being `127.0.0.1`; live, `xgamesusercontent.com` is another site too, so cookies and the like keep apart
+  there in a way they may not on this machine.) `xcore files` without `--live` reads and writes the same ones.
+- Publish refuses a server that uses `env.GF.files` while xgames.fun does not keep project files yet (its
+  `GET /api/kit/me` lists `"files"` once it does).
 
 ### Secrets
 
@@ -375,6 +420,160 @@ const { voucher } = await voucherFor(env, { grant: 'clear', wallet, round: match
   export `GameVouchers`, as `xcore add vouchers` says. `signVoucher` from `@xgamesfun/solana/results` is the same
   signature, for a server that signs by itself.
 
+## A database of its own
+
+`xcore add database` gives the game **one D1 database** (SQLite, run by Cloudflare), made on xgames.fun by the
+first publish that has one and kept between publishes. Its server reads it as `env.DB`. It holds all of the game's
+own data: its records (guilds, match history, shop stock), a player's state with rules (runs left today, gold), and,
+for a game with no server, the documents its page saves.
+
+```json
+{
+  "database": {
+    "engine": "d1",
+    "binding": "DB",
+    "migrations": "server/migrations",
+    "collections": { "*": { "read": "owner", "write": "owner" }, "profiles": { "read": "anyone", "write": "owner" } }
+  }
+}
+```
+
+| Field         | Rule                                                                                                                                                                                                                                                                                   |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine`      | `"d1"`, the only one                                                                                                                                                                                                                                                                   |
+| `binding`     | default `"DB"`: its name on `env`. The rules of a Durable Object's binding (A–Z, 0–9 and `_`, not `GF` or `GF_…`), and not one of theirs                                                                                                                                               |
+| `migrations`  | default `"server/migrations"`, a folder inside `server/` (never a public file). Files named `0001_init.sql`, `0002_add_guilds.sql` …: four digits, `_`, lowercase words; at most 200, 1 MB each, no statement over D1's 100,000 bytes                                                  |
+| `collections` | who may read and write each collection of the page's documents (`gf.db`, at `api/db/`): read by the stock server, or by `server/gf-docs.js` in a server of its own (below). `read`: `"owner"` or `"anyone"`; `write`: `"owner"` or `"server"`. Without it, each player's own, as `"*"` |
+
+**Migrations are append only.** Publish applies the new ones, in name order, before the new version goes live; a
+migration that fails stops the publish (the version before keeps playing; the ones applied before it stay applied).
+Once a migration is published it never changes: put the next change in a new file
+(`0002_add_gold.sql`: `ALTER TABLE players ADD COLUMN gold INTEGER NOT NULL DEFAULT 0;`). A changed or missing one is
+refused, by `xcore publish` before anything goes up and by xgames.fun, and so is an empty one (0 bytes). `xcore add
+database` writes `server/migrations/.gitattributes` (`*.sql -text`), so git on Windows never changes a migration's
+line endings (and so its sha256). Each database records what it has applied in its own table, `_gf_migrations`, in
+the same batch as the migration: a restore to before a migration un-applies it, and the next publish applies it
+again.
+
+### From a server of its own
+
+`xcore add database` in a game with a `server/` writes the block, an example first migration
+(`server/migrations/0001_init.sql`, change it before you publish) and `server/gf-db.js`:
+
+```js
+import { db, withPlayer } from './gf-db.js';
+
+export default {
+  async fetch(request, env) {
+    const sub = await withPlayer(request, env); // env.GF.verifyPlayer's sub, or null for a guest
+    if (!sub) return Response.json({ why: 'Sign in first.' }, { status: 401 });
+    await db(env).run('INSERT OR IGNORE INTO players (id) VALUES (?)', sub);
+    // a rule is one statement, so a burst of requests cannot spend the same run twice
+    const left = await db(env).first(
+      'UPDATE players SET runs = runs - 1 WHERE id = ? AND runs > 0 RETURNING runs',
+      sub,
+    );
+    if (!left) return Response.json({ why: 'No runs left today.' }, { status: 409 });
+    return Response.json({ runs: left.runs });
+  },
+};
+```
+
+`db(env).all`, `.first`, `.run` and `.batch([[sql, ...params], …])` (all of them or none) are prepared statements:
+pass every value as a `?` and an argument, never inside the SQL's text. `env.DB` is D1 itself, for anything else.
+
+**The page's documents in a server of its own.** When the block has `collections`, `xcore add database` (and
+`add multiplayer`, `rpc` and `vouchers`) also writes `server/gf-docs.js`, which answers `api/db/*` as the stock server
+does, from the same table (`gf_docs`), under `collections` (it reads them from `gamesfun.json` when the server is
+bundled). xcore's own `server/index.js` routes it first; in an index of your own, first thing in `fetch`:
+
+```js
+import { handleDocs } from './gf-docs.js';
+const db = await handleDocs(request, env);
+if (db) return db;
+```
+
+`docsOf(env)` is the server's own access to them, past the rules (`docsOf(env).put('news', 'today', {…})`). A game the
+stock server served keeps its documents and rules when it gets a server of its own: `xcore add multiplayer` writes
+the rules it had into `collections`, and `server/gf-docs.js` serves them. Publish refuses a game whose block has
+`collections` while its server does not route `api/db/` (every `gf.db` call would answer 404), and says how.
+
+That check reads the text of the files in `server/` only (not `server/gf-docs.js` or `server/database.js`): a call to
+`handleDocs(` (or `handleDatabase(`) there, or `api/db` in the code. A router kept outside `server/` (a `src/router.js`
+the server imports) is not read, so a game whose `api/db/` is routed only there is refused all the same. Keep xcore's
+route in `server/`: the three lines above, first thing in `fetch` of `server/index.js` (or of another file in
+`server/`), before the request reaches the router.
+
+### With no server: the stock server
+
+A game with the block and no `server/` gets **xcore's stock server** as its server: publish bundles it
+([`lib/client/server/stock.js`](../lib/client/server/stock.js), with `collections` built in) and it serves the page's
+`api/db/*` from the database, with the same routes and answers as the older `server/database.js`, so
+`GamesFun.db` in the page is the same. Its documents are in a table it makes itself, `gf_docs`.
+
+- **Each player has a space of their own** in every collection: a document is `{id, owner, value, updatedAt}`,
+  found by collection, owner and id, so two players can both have a `main` and nobody takes another's id. By default
+  a player reads and writes only their own.
+- `read: "anyone"`: everyone reads the collection; another player's document by its owner,
+  `GamesFun.db.get('profiles', 'main', { owner: playerId })`, a player's list with `{ owner: playerId }`. An id alone
+  is the player's own: a `get` by id alone that finds only another player's document answers 400 `owner` ("name
+  whose document it is with `{owner}`"), and `GamesFun.db.get` gives `data: null` with `code: 'owner'` and says it
+  once in the console. Before each player had a space of their own (gamesfun.js 1.3, xcore 0.1.0) an id named any
+  player's document, so a page that reads another's by id alone needs its `owner` now (each document has it).
+- `write: "server"`: only a server writes it (owner `"server"`); the page reads it without naming an owner, from the
+  server's space and then from the player's own (what the server wrote for that player, with `{owner: sub}`), so a
+  `read: "owner"` + `write: "server"` collection (an inbox, a verified record) is read by id alone. The stock server
+  has no code of yours, so such a collection needs a server of your own to fill it.
+- A list comes newest first, a page at a time: `const page = await GamesFun.db.list('levels')`, then
+  `GamesFun.db.list('levels', { after: page.after })`; `after` is `null` on the last page. `offset` is gone: the
+  client and the server refuse it in words, so a loop that paged with it stops instead of reading page 1 again.
+- The order is by when each document was **last written** (`updatedAt`), so a document written between two pages
+  moves to the front: a listing taken while players write can show it twice, or not at all. List what must be exact
+  in one page (`limit` up to 100), or keep it in a table of your own (a server with its own migrations) with an order
+  that does not change.
+- Any `read` but `"anyone"` lists only the player's own (it fails closed), and `collections` (or `RULES`) is checked
+  when the server starts: a mistyped rule stops it, in words.
+
+### On this machine, and on xgames.fun: `xcore db`
+
+`xcore dev` runs a local D1 for the server, kept in `.gamesfun/dev/d1/` (hidden: never published), and applies the
+same migrations when it starts and reloads. A migration changed after it was applied here keeps the server down with
+the reason, as xgames.fun would refuse it; put it back, or delete `.gamesfun/dev/d1/` to start the local database
+afresh.
+
+```sh
+xcore db info                                     # here: its size, the migrations applied, its tables
+xcore db query "SELECT * FROM players LIMIT 10"   # one statement; reads only without --write
+xcore db query "UPDATE players SET runs = 3 WHERE id = ?" --params '["dev:ab12"]' --write
+xcore db export                                   # SQL into .gamesfun/exports/ (or --out <file>)
+xcore db import seed.sql                          # statements of your own, or an export; all or none
+xcore db info --live                              # the same on xgames.fun, with --live
+xcore db restore 2026-11-08T12:00:00Z --live      # back in time, up to 30 days (D1 Time Travel)
+```
+
+`--live` goes through xgames.fun's owner routes with your sign-in (`xcore login`), and each call is kept in the
+game's audit log. Without `--write`, a query is only `SELECT`, `EXPLAIN`, `PRAGMA table_info` or `table_list`, here
+and live. `restore` says what it would go back to first, and goes on only with `--yes` or when you type `restore`.
+It prints the command that undoes it, `xcore db restore <the moment before it> --live`. That moment is this
+machine's clock, read just before the restore is asked for, because xgames.fun's restore takes a time, not a
+bookmark: `restored.previous` (the bookmark from before it) is printed too, but cannot be passed back. A clock that
+is off by more than the restore took to start puts the undo a little before or after the true moment; check it with
+the preview (`xcore db restore <time> --live`, without `--yes`) before you go on.
+**A game with an economy:** a restore puts back the database only. Loot balances, items and payouts on chain stay
+as they are, so a player can keep what they won while the database forgets it; export first. An export holds your
+players' data: keep it out of git and off shared drives.
+
+Publish refuses a game with a database while xgames.fun does not run databases yet (its `GET /api/kit/me` lists
+`"d1"` once it does), and says so.
+
+**The older database**, `server/database.js` (one Durable Object with SQLite storage, from xcore 0.1.0), keeps
+working for a game that has it, and `xcore add database` keeps it up to date; the check says it is the older way. It
+has the same owner spaces, rules and paging, with `RULES` at its top and `dataOf(env)` for the server's own code:
+without an owner it is the server's own space (`dataOf(env).put('news', 'today', …)`), with one a player's
+(`dataOf(env).get('profiles', 'main', { owner: sub })`). In 0.1.0 a document was found by its id alone, whoever wrote
+it, so 0.1.0 code that reads or writes a player's document by id alone needs `{ owner }`: `xcore add database` and
+publish list each such call (the README's "Upgrading from 0.1.0").
+
 ## Running it locally
 
 `xcore dev <folder>` runs `server/` under workerd, the runtime xgames.fun runs it on, at the page's `/game/api/*`
@@ -383,7 +582,8 @@ const { voucher } = await voucherFor(env, { grant: 'clear', wallet, round: match
 `.gamesfun/dev-platform.json`). `env.GF.loot.report` is printed, not signed or paid; a voucher key of your own
 (`xcore add vouchers`) signs for real, with the test key in `.dev.vars`. The dev host answers only `localhost`,
 `127.0.0.1` and `[::1]`, so a page on another site can't reach it. Durable Object storage is kept in
-`.gamesfun/dev-server/`, its secrets come from `.dev.vars`, and a change under `server/`, to `gamesfun.json` or to
+`.gamesfun/dev-server/`, the game's database (a local D1, its migrations applied) in `.gamesfun/dev/d1/`, its project files in
+`.gamesfun/dev/files/` (the public ones on a port of their own), its secrets come from `.dev.vars`, and a change under `server/`, to `gamesfun.json` or to
 `.dev.vars` rebuilds and reloads it. Miniflare (with
 workerd, about 140 MB) is installed once on first use, into xcore's state folder (`GAMESFUN_SERVER_DEPS=<folder>` uses
 one installed elsewhere). What is not the same as hosted: no CPU or request limits (its log says when the page's requests would pass Free's

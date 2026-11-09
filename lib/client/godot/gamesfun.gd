@@ -168,8 +168,10 @@ func scores_mine(board: String):
 	return await _run("scores.mine", [board])
 
 
-func db_get(collection: String, id: String):
-	return await _run("db.get", [collection, id])
+## opts: {"owner": "me" | "server" | a player's id}; without it, the player's own. Another player's document is read
+## by its owner: db_get(c, id, {"owner": doc.owner})
+func db_get(collection: String, id: String, opts := {}):
+	return await _run("db.get", [collection, id, opts])
 
 
 func db_put(collection: String, id: String, value):
@@ -180,8 +182,12 @@ func db_add(collection: String, value):
 	return await _run("db.add", [collection, value])
 
 
-## opts: {"owner": "me", "limit": 50, "offset": 0, "order": "new" | "old"}
+## opts: {"owner": "me" | "server" | a player's id, "limit": 50, "after": the last answer's "after", "order": "new" | "old"}
+## The answer's "after" is null on the last page. An "offset" but 0 is refused (it is gone: page with "after"), here as
+## well, so a loop that paged with it stops in the editor too.
 func db_list(collection: String, opts := {}):
+	if opts.has("offset") and opts["offset"] != null and str(opts["offset"]) != "" and float(str(opts["offset"])) != 0.0:
+		return {"data": null, "error": "db_list takes no offset any more: pass the last answer's after for the next page", "status": 0, "code": "offset"}
 	return await _run("db.list", [collection, opts])
 
 

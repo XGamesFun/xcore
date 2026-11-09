@@ -147,7 +147,10 @@ test('xcore embed and xcore domain, as a person runs them', async t => {
   // an older xcore's copy of the client: on its own domain it could not tell which game it is
   await writeFile(
     path.join(dir, 'gamesfun.js'),
-    readFileSync(path.join(ROOT, 'lib', 'client', 'gamesfun.js'), 'utf8').replace("'1.3.0'", "'1.1.0'"),
+    readFileSync(path.join(ROOT, 'lib', 'client', 'gamesfun.js'), 'utf8').replace(
+      /var VERSION = '[^']+'/,
+      "var VERSION = '1.1.0'",
+    ),
   );
   await writeFile(
     path.join(dir, '.gamesfun', 'publish.json'),

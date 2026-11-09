@@ -187,9 +187,16 @@ function checkLines(where, out, p) {
       ...(sv.compatibilityFlags.length ? [sv.compatibilityFlags.join(', ')] : []),
     ];
     lines.push(
-      `  server code: ${sv.entry} bundled from ${plural(sv.files.length, 'file')} (${sv.files.join(', ')}) ` +
-        `into one ${kb(sv.bytes)} file, sha256 ${sv.sha256.slice(0, 12)}…${extras.map(e => `, ${e}`).join('')}; ` +
-        'server/ and gamesfun.json are not public files',
+      sv.stock
+        ? `  server code: xcore's stock server (${kb(sv.bytes)}, sha256 ${sv.sha256.slice(0, 12)}…), which serves the page's api/db/ from the game's database under gamesfun.json → database.collections`
+        : `  server code: ${sv.entry} bundled from ${plural(sv.files.length, 'file')} (${sv.files.join(', ')}) ` +
+            `into one ${kb(sv.bytes)} file, sha256 ${sv.sha256.slice(0, 12)}…${extras.map(e => `, ${e}`).join('')}; ` +
+            'server/ and gamesfun.json are not public files',
+      ...(sv.database
+        ? [
+            `  database: env.${sv.database.binding}, ${sv.database.migrations.length ? `${plural(sv.database.migrations.length, 'migration')} (${sv.database.migrations.join(', ')})` : 'no migrations'}`,
+          ]
+        : []),
       ...sv.warnings.map(w => `  ${w}`),
     );
   }

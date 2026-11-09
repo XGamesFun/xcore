@@ -28,6 +28,12 @@ export default [
       globals: { ...globals.serviceworker, WebSocketPair: 'readonly', WebSocketRequestResponsePair: 'readonly' },
     },
   },
+  // the page's documents for a game's own server: xcore add puts database.js's documents code where it says
+  // __DOCS_CORE__, so these come from there
+  {
+    files: ['lib/client/server/gf-docs.js'],
+    languageOptions: { globals: { createData: 'readonly', routeDatabase: 'readonly', serverData: 'readonly' } },
+  },
   // the client's tests hand functions to Chrome, which run in the page (GamesFun, its window, Unity's stand-ins)
   {
     files: ['tests/client.test.mjs'],

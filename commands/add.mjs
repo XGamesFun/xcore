@@ -10,8 +10,11 @@ const usage = `Usage: xcore add signin|database|multiplayer|rpc|vouchers [folder
   signin     xgames.fun's player sign-in (X first, or a wallet), each player's saves and leaderboards, from the game's
              own code. A web game gets gamesfun.js beside its page; a Godot 4 project an autoload (GamesFun); a Unity
              project a WebGL plugin (Assets/Plugins/GamesFun). On this machine a local player stands in.
-  database   all of signin, and a database of the game's own: server code (server/database.js, SQLite on xgames.fun)
-             that publish puts up with the game. Documents in collections; who may read and write each is in its RULES.
+  database   all of signin, and a database of the game's own (one D1 database a game, made on xgames.fun by the
+             first publish: gamesfun.json → database). With a server of its own, its code reads and writes it
+             (server/gf-db.js; tables from server/migrations/); with none, xcore's stock server keeps the page's
+             documents in it (gf.db), each player's own, under gamesfun.json → database.collections. xcore db
+             queries, exports and restores it.
   multiplayer
              all of signin, and rooms of the game's own: server code (server/rooms.js) that relays between the players
              of a room, the first in its host. Godot's high-level multiplayer (RPCs, spawners, synchronizers) runs over

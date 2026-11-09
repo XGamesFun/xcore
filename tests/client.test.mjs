@@ -21,7 +21,7 @@ const GAME = `<!doctype html><html><head><script src="./gamesfun.js"></script></
 
 /** xgames.fun, in miniature: the play host's sign-in request, the platform's page calls, a game server's api/db. */
 function standIn() {
-  const s = { requests: [], approved: false, saves: {}, boards: {}, docs: [], seen: [] };
+  const s = { requests: [], approved: false, saves: {}, boards: {}, docs: [], seen: [], queries: [] };
   const players = { 'tok-own': 'x:42', 'tok-page': 'x:43' };
   const server = createServer(async (req, res) => {
     const host = String(req.headers.host).split(':')[0];
@@ -146,7 +146,20 @@ function standIn() {
       s.docs.push(item);
       return send(200, { ok: true, item });
     }
-    if (url.pathname === '/api/db/levels') return send(200, { ok: true, items: s.docs, more: false });
+    if (url.pathname === '/api/db/levels') {
+      s.queries.push(url.search);
+      const first = !url.searchParams.get('after');
+      return send(200, { ok: true, items: first ? s.docs : [], more: first, after: first ? 'page2' : null });
+    }
+    const doc = /^\/api\/db\/levels\/([^/]+)$/.exec(url.pathname);
+    if (doc && req.method === 'GET') {
+      s.queries.push(url.search);
+      const item = s.docs.find(d => d.id === doc[1] && d.owner === (url.searchParams.get('owner') ?? who));
+      // by id alone, another player's document: the database says to name its owner
+      if (!item && !url.searchParams.has('owner') && s.docs.some(d => d.id === doc[1]))
+        return send(400, { ok: false, code: 'owner', why: `levels/${doc[1]} is not in your own space: name {owner}.` });
+      return item ? send(200, { ok: true, item }) : send(404, { ok: false, code: 'unknown', why: 'No such document.' });
+    }
     return send(404, { ok: false, why: 'not here' });
   });
   return new Promise(r =>
@@ -198,7 +211,38 @@ test(
     assert.equal((await page.evaluate(() => GamesFun.scores.submit('best', 1200))).data.best, 1200);
     assert.equal((await page.evaluate(() => GamesFun.scores.top('best'))).data[0].score, 1200);
     assert.equal((await page.evaluate(() => GamesFun.db.add('levels', { name: 'Moon' }))).data.owner, 'x:42');
-    assert.equal((await page.evaluate(() => GamesFun.db.list('levels'))).data.length, 1);
+    const first = await page.evaluate(() => GamesFun.db.list('levels'));
+    assert.deepEqual([first.data.length, first.after, first.more], [1, 'page2', true], "the next page's place");
+    const second = await page.evaluate(() => GamesFun.db.list('levels', { after: 'page2', limit: 10 }));
+    assert.deepEqual([second.data, second.after, second.more], [[], null, false]);
+    assert.equal(
+      (await page.evaluate(() => GamesFun.db.get('levels', 'd1', { owner: 'x:42' }))).data.value.name,
+      'Moon',
+    );
+    assert.equal((await page.evaluate(() => GamesFun.db.get('levels', 'd1', { owner: 'x:7' }))).data, null);
+    assert.deepEqual(g.s.queries, ['', '?limit=10&after=page2', '?owner=x%3A42', '?owner=x%3A7']);
+    // offset is gone: refused before anything is sent, so a loop that paged with it stops
+    const offset = await page.evaluate(() => GamesFun.db.list('levels', { offset: 50 }));
+    assert.deepEqual([offset.data, offset.code, offset.status], [null, 'offset', 0]);
+    assert.match(offset.error, /no offset any more: pass the last answer's after/);
+    assert.equal(g.s.queries.length, 4, 'not sent');
+    // 0, or none, is the first page, as it always was: 0.1.0 code that passed offset: 0 reads it
+    for (const offset of [0, '0', null]) {
+      const zero = await page.evaluate(o => GamesFun.db.list('levels', { offset: o }), offset);
+      assert.ok(!zero.error, String(offset));
+      assert.equal(zero.data.length, 1);
+    }
+    assert.deepEqual(g.s.queries.slice(4), ['', '', '']);
+    // another player's document by id alone: null as a missing one, its why kept and said once in the console
+    g.s.docs.push({ id: 'd9', owner: 'x:7', value: { name: 'Theirs' }, updatedAt: 1 });
+    const warned = [];
+    page.on('console', m => m.type() === 'warning' && warned.push(m.text()));
+    const theirs = await page.evaluate(() => GamesFun.db.get('levels', 'd9'));
+    assert.deepEqual([theirs.data, theirs.error, theirs.status, theirs.code], [null, null, 404, 'owner']);
+    assert.match(theirs.why, /name \{owner\}/);
+    await page.evaluate(() => GamesFun.db.get('levels', 'd9'));
+    await page.waitForTimeout(100);
+    assert.equal(warned.filter(w => /gf\.db\.get: levels\/d9 is not in your own space/.test(w)).length, 1);
     assert.equal((await page.evaluate(() => GamesFun.saves.get('bad key!'))).status, 0);
     assert.ok(g.s.seen.includes('PUT moth-play.xgames.test/platform/v1/saves/main (tok-own)'), g.s.seen.join('\n'));
     await page.evaluate(() => GamesFun.signOut());
@@ -356,7 +400,15 @@ test(
       await gf.scores.submit('best', 40);
       const doc = (await gf.db.add('levels', { name: 'Moon' })).data;
       const other = await gf.db.put('levels', doc.id, { name: 'Moon 2' });
+      for (let i = 0; i < 4; i++) await gf.db.put('runs', 'r' + i, i);
+      const p1 = await gf.db.list('runs', { limit: 3 });
+      const p2 = await gf.db.list('runs', { limit: 3, after: p1.after });
+      await gf.db.put('runs', 'x', 1);
+      const offset = await gf.db.list('runs', { offset: 3 });
+      const zero = await gf.db.list('runs', { offset: 0, limit: 2 });
       return {
+        offset: [offset.data, offset.code],
+        zero: [zero.code, zero.data.length],
         local: gf.local,
         before,
         player,
@@ -366,6 +418,14 @@ test(
         mine: (await gf.scores.mine('best')).data.score,
         docs: (await gf.db.list('levels')).data.map(d => d.value.name),
         other: other.data.value.name,
+        runs: [
+          p1.data.length,
+          p2.data.length,
+          !!p1.after,
+          p2.after,
+          new Set(p1.data.concat(p2.data).map(d => d.id)).size,
+        ],
+        theServers: (await gf.db.get('runs', 'x', { owner: 'server' })).data,
       };
     });
     assert.deepEqual(r, {
@@ -378,6 +438,10 @@ test(
       mine: 50,
       docs: ['Moon 2'],
       other: 'Moon 2',
+      runs: [3, 1, true, null, 4],
+      theServers: null,
+      offset: [null, 'offset'],
+      zero: [undefined, 2],
     });
     await page.reload();
     assert.equal((await page.evaluate(() => GamesFun.ready)).id, 'local:player', 'still signed in after a reload');

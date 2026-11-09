@@ -90,13 +90,16 @@ public class GamesFun : MonoBehaviour
         Call("scores.top", "[" + Str(board) + ",{\"limit\":" + limit + ",\"offset\":" + offset + "}]");
     public static Task<string> ScoresMine(string board) => Call("scores.mine", "[" + Str(board) + "]");
 
-    public static Task<string> DbGet(string collection, string id) => Call("db.get", "[" + Str(collection) + "," + Str(id) + "]");
+    /// <summary>owner: "me" (or null: the player's own), "server" or a player's id.</summary>
+    public static Task<string> DbGet(string collection, string id, string owner = null) =>
+        Call("db.get", "[" + Str(collection) + "," + Str(id) + (owner != null ? ",{\"owner\":" + Str(owner) + "}" : "") + "]");
     public static Task<string> DbPut(string collection, string id, string valueJson) => Call("db.put", "[" + Str(collection) + "," + Str(id) + "," + valueJson + "]");
     public static Task<string> DbAdd(string collection, string valueJson) => Call("db.add", "[" + Str(collection) + "," + valueJson + "]");
-    /// <summary>owner: "me", a player id, or null for everyone's; order: "new" or "old".</summary>
-    public static Task<string> DbList(string collection, string owner = null, int limit = 50, int offset = 0, string order = "new") =>
+    /// <summary>owner: "me", "server", a player id, or null for everyone's; after: the last answer's "after" (null on
+    /// the last page), for the next page; order: "new" or "old".</summary>
+    public static Task<string> DbList(string collection, string owner = null, int limit = 50, string after = null, string order = "new") =>
         Call("db.list", "[" + Str(collection) + ",{" + (owner != null ? "\"owner\":" + Str(owner) + "," : "")
-            + "\"limit\":" + limit + ",\"offset\":" + offset + ",\"order\":" + Str(order) + "}]");
+            + (after != null ? "\"after\":" + Str(after) + "," : "") + "\"limit\":" + limit + ",\"order\":" + Str(order) + "}]");
     public static Task<string> DbDelete(string collection, string id) => Call("db.delete", "[" + Str(collection) + "," + Str(id) + "]");
 
     // ---- the game's Solana economy (xcore loot add: xsolana.json and gf/loot/ beside the build's index.html) ----
