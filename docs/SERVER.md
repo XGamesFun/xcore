@@ -608,3 +608,10 @@ my-vault: 278 files, 10.0 MB, nothing refused. Left out: .gamesfun/, .gitignore,
 
 Hosted, the game's server answers at `https://<slug>-play.xgames.fun/api/…`. A blocked or over-limit server answers
 `{error, message}` with 451, 429, 404, 503 or 502 instead of the server's own answer.
+
+While the game's owner has it **paused for maintenance** (xgames.fun/console, the Live tab; README "Live"), xgames.fun
+answers its `api/*` itself with `503 {ok: false, code: 'maintenance', why, since}` and `retry-after: 60`, WebSocket
+upgrades included: the server's code does not run for a new request. What already runs keeps running (an open
+WebSocket, a Durable Object's alarm, the `env.GF` calls they make); a server that should stop those reads the game's
+`GET /platform/v1/live` (`maintenance` is `{message, since}` while paused). `xcore dev` does the same from
+`.gamesfun/live.json`.
