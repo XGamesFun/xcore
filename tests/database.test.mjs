@@ -225,6 +225,39 @@ test("a statement over D1's 100,000 bytes: refused before publish and by xcore d
   assert.deepEqual(fixed, { ok: true, applied: ['0002_many.sql'] });
 });
 
+test('a migration is hashed as its exact bytes: CRLF and LF are two migrations, and one turned into the other is refused', async t => {
+  const { applyMigrations } = await import('../lib/dev/d1.mjs');
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const lf = 'CREATE TABLE a (x TEXT);\nCREATE TABLE b (y TEXT);\n';
+  const crlf = lf.replace(/\n/g, '\r\n');
+  const read = async text =>
+    (await readServerConfig(await game(tmp, { database: {} }, { 'server/migrations/0001_init.sql': text }))).database
+      .migrations[0];
+  const [one, two] = [await read(lf), await read(crlf)];
+  assert.equal(one.sha256, sha(Buffer.from(lf)));
+  assert.equal(two.sha256, sha(Buffer.from(crlf)), 'the bytes on disk, \r\n and all');
+  assert.notEqual(one.sha256, two.sha256);
+  assert.deepEqual([one.bytes, two.bytes], [lf.length, crlf.length]);
+  assert.ok(Buffer.from(two.data).equals(Buffer.from(crlf)), 'the blob that goes up is the same bytes');
+  assert.deepEqual(
+    publishField({
+      sha256: 'x',
+      bytes: 1,
+      objects: [],
+      compatibilityFlags: [],
+      database: { has: true, binding: 'DB', migrations: [two] },
+    }).database.migrations,
+    [{ name: '0001_init.sql', sha256: sha(Buffer.from(crlf)), bytes: crlf.length }],
+  );
+  // applied with CRLF (a Windows checkout without .gitattributes), then the same file with LF: it changed
+  const db = fakeD1();
+  assert.equal((await applyMigrations(null, db, [two])).ok, true);
+  const r = await applyMigrations(null, db, [one]);
+  assert.equal(r.code, 'migration-changed');
+  assert.match(r.why, /0001_init\.sql changed after it/);
+});
+
 test('the database records its migrations in _gf_migrations, in the batch with their statements', async t => {
   const { applyMigrations, readApplied } = await import('../lib/dev/d1.mjs');
   const tmp = await tempDir();
@@ -1172,6 +1205,27 @@ test('db export --live picks up an export-pending with its bookmark; a CI creden
     e =>
       e.code === 'export-pending' && /still running on D1 \(bookmark bm\d+\).*db export --live again/.test(e.message),
   );
+  // the next run picks it up where that one stopped: its first ask carries the bookmark kept for it
+  const kept = path.join(dir, '.gamesfun', 'export-pending.json');
+  const left = JSON.parse(await readFile(kept, 'utf8')).bookmark;
+  assert.equal(left, `bm${asked.length}`);
+  asked.length = 0;
+  pending = 0;
+  await dbExport(dir, { live: true, origin: g.origin, env, wait: 1 });
+  assert.deepEqual(asked, [{ bookmark: left }], 'picked up, not started over');
+  assert.equal(existsSync(kept), false, 'done: nothing kept');
+  // a kept bookmark D1 no longer knows: refused, so that run starts over
+  await writeFile(kept, JSON.stringify({ origin: g.origin, bookmark: 'stale' }));
+  const handle = g.state.handle;
+  g.state.handle = (method, url, json, ctx) =>
+    url === '/api/kit/games/g1/db/export' && json?.bookmark === 'stale'
+      ? (asked.push(json), [400, { error: 'That export is not running.' }])
+      : handle(method, url, json, ctx);
+  asked.length = 0;
+  await dbExport(dir, { live: true, origin: g.origin, env, wait: 1 });
+  assert.deepEqual(asked, [{ bookmark: 'stale' }, null]);
+  assert.equal(existsSync(kept), false);
+  g.state.handle = handle;
   // GitHub Actions (an OIDC credential, no login): xgames.fun's plain 403 is said as what it is
   const ci = {
     GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'ci-config'),

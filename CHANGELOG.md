@@ -91,7 +91,8 @@ After an audit of the storage work, and as settled with the platform (STORAGE.md
   refused with no terminal to ask in; what would be refused anyway (an import too big to send, a query the route
   refuses) is said before the word is asked for. `restore` prints `restored.previous` and the command that undoes it, and its
   preview shows the migrations it rolls back and its warning. `db export --live` picks up an `export-pending` with
-  its bookmark, and prints the answer's `note`. A GitHub Actions credential's 403 on export, import, restore, write
+  its bookmark, and prints the answer's `note`; one it gave up on is kept (`.gamesfun/export-pending.json`) and the
+  next `db export --live` picks it up there instead of starting over. A GitHub Actions credential's 403 on export, import, restore, write
   queries, `files put` and `rm` says these need the owner's own login. An answer over 4 MB, which Studio sends as
   `{"$download": url}` (a signed address in its bucket), is fetched from there without the sign-in and read as the
   answer, so a big `db query --live` prints its rows instead of nothing; a download that failed is said. `files put --live` sends `x-gf-length`.
