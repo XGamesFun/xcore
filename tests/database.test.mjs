@@ -1028,8 +1028,9 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
   r = await xc(['export', '--live', '--json']);
   assert.equal(r.status, 0, r.stderr);
   const out = JSON.parse(r.stdout);
-  // the file's path as this machine writes it (\ on Windows), read from the game folder with /
-  assert.match(path.relative(dir, out.file).split(path.sep).join('/'), /^\.gamesfun\/exports\/db-live-.*\.sql$/);
+  // the file's path as this machine writes it (\ on Windows; on macOS the temp folder's real path, /private/var/…),
+  // read with / and from its end
+  assert.match(out.file.split(path.sep).join('/'), /\/\.gamesfun\/exports\/db-live-[^/]*\.sql$/);
   assert.equal(await readFile(out.file, 'utf8'), dump.toString());
   await writeFile(path.join(tmp.dir, 'in.sql'), 'INSERT INTO players VALUES (1);');
   const before = seen.length;
