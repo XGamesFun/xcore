@@ -271,7 +271,14 @@ its id, so two players can both have a `main`, and nobody can take an id in anot
 signed-in player reads and writes only their own documents. `{"read": "anyone"}` in `database.collections` lets
 everyone read a collection (another player's document by its owner,
 `GamesFun.db.get('levels', id, { owner: playerId })`, and their list with `{ owner: playerId }`); `{"write": "server"}`
-is for what players must not set themselves (the page reads it without naming an owner). On a plain local server the
+is for what players must not set themselves (the page reads it without naming an owner: the server's document, or
+the player's own that the server wrote for them). Lists page with `after`; `offset` is gone, and refused in words.
+The order is by when a document was last written, so one written between two pages can show twice or be skipped.
+
+**From gamesfun.js 1.3 (xcore 0.1.0):** an id alone named any player's document then; now it is the player's own.
+A page that reads another player's document by id alone gets `data: null` with `code: 'owner'` (said once in the
+console): pass its owner, `GamesFun.db.get('levels', id, { owner: doc.owner })`. Paging with `offset` gets an error
+(`code: 'offset'`) instead of the first page again: page with `after`. On a plain local server the
 page keeps documents in the browser; under `xcore dev` the database is a local D1 in `.gamesfun/dev/d1/` with the
 same migrations. Its calls count toward the game server's requests (600 a minute from one player, 6,000 a minute
 shared by all its players): read and write when something happens, not every frame.

@@ -155,6 +155,9 @@ function standIn() {
     if (doc && req.method === 'GET') {
       s.queries.push(url.search);
       const item = s.docs.find(d => d.id === doc[1] && d.owner === (url.searchParams.get('owner') ?? who));
+      // by id alone, another player's document: the database says to name its owner
+      if (!item && !url.searchParams.has('owner') && s.docs.some(d => d.id === doc[1]))
+        return send(400, { ok: false, code: 'owner', why: `levels/${doc[1]} is not in your own space: name {owner}.` });
       return item ? send(200, { ok: true, item }) : send(404, { ok: false, code: 'unknown', why: 'No such document.' });
     }
     return send(404, { ok: false, why: 'not here' });
@@ -218,6 +221,21 @@ test(
     );
     assert.equal((await page.evaluate(() => GamesFun.db.get('levels', 'd1', { owner: 'x:7' }))).data, null);
     assert.deepEqual(g.s.queries, ['', '?limit=10&after=page2', '?owner=x%3A42', '?owner=x%3A7']);
+    // offset is gone: refused before anything is sent, so a loop that paged with it stops
+    const offset = await page.evaluate(() => GamesFun.db.list('levels', { offset: 50 }));
+    assert.deepEqual([offset.data, offset.code, offset.status], [null, 'offset', 0]);
+    assert.match(offset.error, /no offset any more: pass the last answer's after/);
+    assert.equal(g.s.queries.length, 4, 'not sent');
+    // another player's document by id alone: null as a missing one, its why kept and said once in the console
+    g.s.docs.push({ id: 'd9', owner: 'x:7', value: { name: 'Theirs' }, updatedAt: 1 });
+    const warned = [];
+    page.on('console', m => m.type() === 'warning' && warned.push(m.text()));
+    const theirs = await page.evaluate(() => GamesFun.db.get('levels', 'd9'));
+    assert.deepEqual([theirs.data, theirs.error, theirs.status, theirs.code], [null, null, 404, 'owner']);
+    assert.match(theirs.why, /name \{owner\}/);
+    await page.evaluate(() => GamesFun.db.get('levels', 'd9'));
+    await page.waitForTimeout(100);
+    assert.equal(warned.filter(w => /gf\.db\.get: levels\/d9 is not in your own space/.test(w)).length, 1);
     assert.equal((await page.evaluate(() => GamesFun.saves.get('bad key!'))).status, 0);
     assert.ok(g.s.seen.includes('PUT moth-play.xgames.test/platform/v1/saves/main (tok-own)'), g.s.seen.join('\n'));
     await page.evaluate(() => GamesFun.signOut());
@@ -379,7 +397,9 @@ test(
       const p1 = await gf.db.list('runs', { limit: 3 });
       const p2 = await gf.db.list('runs', { limit: 3, after: p1.after });
       await gf.db.put('runs', 'x', 1);
+      const offset = await gf.db.list('runs', { offset: 3 });
       return {
+        offset: [offset.data, offset.code],
         local: gf.local,
         before,
         player,
@@ -411,6 +431,7 @@ test(
       other: 'Moon 2',
       runs: [3, 1, true, null, 4],
       theServers: null,
+      offset: [null, 'offset'],
     });
     await page.reload();
     assert.equal((await page.evaluate(() => GamesFun.ready)).id, 'local:player', 'still signed in after a reload');

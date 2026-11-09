@@ -488,11 +488,24 @@ A game with the block and no `server/` gets **xcore's stock server** as its serv
   found by collection, owner and id, so two players can both have a `main` and nobody takes another's id. By default
   a player reads and writes only their own.
 - `read: "anyone"`: everyone reads the collection; another player's document by its owner,
-  `GamesFun.db.get('profiles', 'main', { owner: playerId })`, a player's list with `{ owner: playerId }`.
-- `write: "server"`: only a server writes it (owner `"server"`); the page reads it without naming an owner. The stock
-  server has no code of yours, so such a collection needs a server of your own to fill it.
+  `GamesFun.db.get('profiles', 'main', { owner: playerId })`, a player's list with `{ owner: playerId }`. An id alone
+  is the player's own: a `get` by id alone that finds only another player's document answers 400 `owner` ("name
+  whose document it is with `{owner}`"), and `GamesFun.db.get` gives `data: null` with `code: 'owner'` and says it
+  once in the console. Before each player had a space of their own (gamesfun.js 1.3, xcore 0.1.0) an id named any
+  player's document, so a page that reads another's by id alone needs its `owner` now (each document has it).
+- `write: "server"`: only a server writes it (owner `"server"`); the page reads it without naming an owner, from the
+  server's space and then from the player's own (what the server wrote for that player, with `{owner: sub}`), so a
+  `read: "owner"` + `write: "server"` collection (an inbox, a verified record) is read by id alone. The stock server
+  has no code of yours, so such a collection needs a server of your own to fill it.
 - A list comes newest first, a page at a time: `const page = await GamesFun.db.list('levels')`, then
-  `GamesFun.db.list('levels', { after: page.after })`; `after` is `null` on the last page.
+  `GamesFun.db.list('levels', { after: page.after })`; `after` is `null` on the last page. `offset` is gone: the
+  client and the server refuse it in words, so a loop that paged with it stops instead of reading page 1 again.
+- The order is by when each document was **last written** (`updatedAt`), so a document written between two pages
+  moves to the front: a listing taken while players write can show it twice, or not at all. List what must be exact
+  in one page (`limit` up to 100), or keep it in a table of your own (a server with its own migrations) with an order
+  that does not change.
+- Any `read` but `"anyone"` lists only the player's own (it fails closed), and `collections` (or `RULES`) is checked
+  when the server starts: a mistyped rule stops it, in words.
 
 ### On this machine, and on xgames.fun: `xcore db`
 

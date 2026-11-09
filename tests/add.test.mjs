@@ -67,7 +67,11 @@ test('the database: each player reads and writes their own space; the rules and 
   assert.deepEqual(moon, { ok: true, item: { id: 'moon', owner: 'p1', value: { name: 'Moon' }, updatedAt: 1000 } });
   assert.equal((await data.get('levels', 'moon', {}, '')).code, 'player', 'a guest names whose it is');
   assert.deepEqual((await data.get('levels', 'moon', { owner: 'p1' }, '')).item.value, { name: 'Moon' });
-  assert.equal((await data.get('levels', 'moon', {}, 'p2')).code, 'unknown', "p2's own space has no moon");
+  // p2's own space has no moon; p1's has: by id alone that is said, with how to name the owner
+  const elsewhere = await data.get('levels', 'moon', {}, 'p2');
+  assert.deepEqual([elsewhere.status, elsewhere.code], [400, 'owner']);
+  assert.match(elsewhere.why, /not in your own space.*\{owner\}/);
+  assert.equal((await data.get('levels', 'moon', { owner: 'me' }, 'p2')).code, 'unknown', 'named: simply not there');
   assert.equal((await data.put('levels', 'moon', 1, { owner: 'p1' }, 'p2')).code, 'not-yours');
   assert.equal((await data.delete('levels', 'moon', { owner: 'p1' }, 'p2')).code, 'not-yours');
   assert.equal((await data.put('levels', 'moon', { name: 'Moon 2' }, {}, 'p1')).item.value.name, 'Moon 2');
@@ -100,6 +104,65 @@ test('the database: each player reads and writes their own space; the rules and 
   });
   assert.deepEqual(await data.delete('levels', 'gone', {}, 'p1'), { ok: true, deleted: false });
   assert.deepEqual(await data.delete('levels', 'moon', {}, 'p1'), { ok: true, deleted: true });
+});
+
+test("the database: a document by id alone, from 0.1.0 pages: the player's own in a server-written collection; another's named", async () => {
+  const data = createData(execOf(sqlite()), {
+    rules: {
+      inbox: { read: 'owner', write: 'server' },
+      prizes: { read: 'anyone', write: 'server' },
+      levels: { read: 'anyone', write: 'owner' },
+      notes: { read: 'owner', write: 'owner' },
+    },
+  });
+  // read: owner + write: server: what the server wrote in a player's space, read by id alone
+  await data.put('inbox', 'welcome', 'hi p1', { owner: 'p1' }, 'server');
+  assert.equal((await data.get('inbox', 'welcome', {}, 'p1')).item.value, 'hi p1');
+  assert.equal((await data.get('inbox', 'welcome', {}, 'p2')).code, 'unknown', "never another player's");
+  // read: anyone + write: server: the server's first, then the player's own
+  await data.put('prizes', 'today', 'for all', {}, 'server');
+  await data.put('prizes', 'mine', 'for p1', { owner: 'p1' }, 'server');
+  assert.equal((await data.get('prizes', 'today', {}, 'p1')).item.value, 'for all');
+  assert.equal((await data.get('prizes', 'mine', {}, 'p1')).item.value, 'for p1');
+  // another player's document in a collection anyone reads: refused in words that name {owner}
+  await data.put('levels', 'abc123', { name: 'Moon' }, {}, 'p1');
+  const r = await data.get('levels', 'abc123', {}, 'p2');
+  assert.deepEqual([r.ok, r.status, r.code], [false, 400, 'owner']);
+  assert.match(r.why, /gf\.db\.get\('levels', 'abc123', \{owner\}\)/);
+  assert.equal((await data.get('levels', 'abc123', { owner: 'p1' }, 'p2')).item.value.name, 'Moon');
+  // a collection only its owners read never says that another player's document exists
+  await data.put('notes', 'n1', 'secret', {}, 'p1');
+  assert.equal((await data.get('notes', 'n1', {}, 'p2')).code, 'unknown');
+});
+
+test('the database: RULES are checked, and a list fails closed for anything but read: anyone', async () => {
+  for (const rules of [
+    { levels: { read: 'everyone' } },
+    { levels: { write: 'anyone' } },
+    { levels: { read: 'anyone', mode: 'x' } },
+    { levels: 'anyone' },
+    { 'bad name': { read: 'owner' } },
+    [],
+    null,
+  ])
+    assert.throws(() => createData(execOf(sqlite()), { rules }), /RULES/, JSON.stringify(rules));
+  // a rule changed to something unknown after the check (or a prototype name): the player's own only, never all
+  const rules = { '*': { read: 'owner', write: 'owner' }, levels: { read: 'anyone', write: 'owner' } };
+  const data = createData(execOf(sqlite()), { rules });
+  await data.put('levels', 'a', 1, {}, 'p1');
+  await data.put('levels', 'b', 2, {}, 'p2');
+  assert.equal((await data.list('levels', {}, '')).items.length, 2);
+  rules.levels.read = 'public';
+  assert.equal((await data.list('levels', {}, '')).code, 'player', 'a guest lists nothing');
+  assert.deepEqual(
+    (await data.list('levels', {}, 'p2')).items.map(d => d.id),
+    ['b'],
+  );
+  assert.equal((await data.get('levels', 'a', { owner: 'p1' }, 'p2')).code, 'unknown');
+  for (const name of ['__proto__', 'constructor', 'toString']) {
+    await data.put(name, 'x', 1, {}, 'p1');
+    assert.equal((await data.list(name, {}, '')).code, 'player', name);
+  }
 });
 
 test('the database: no player takes an id in another player’s space, or the server’s', async () => {
@@ -444,6 +507,17 @@ test('multiplayer beside the database: one server routes both, both objects decl
   const g = await addMultiplayer(godot);
   assert.match(g.steps.join('\n'), /GamesFun\.join_room\(code\)/);
   assert.match(g.steps.join('\n'), /local ENet game/);
+});
+
+test('the Godot client refuses offset in db_list before it reaches the page (in the editor too), as gamesfun.js does', async () => {
+  const gd = await readFile(path.join(ROOT, 'lib', 'client', 'godot', 'gamesfun.gd'), 'utf8');
+  const fn = /func db_list\(collection: String, opts := \{\}\):\n([\s\S]*?)\n\n/.exec(gd)?.[1] ?? '';
+  const refuse = fn.indexOf('if opts.has("offset"):');
+  assert.ok(refuse >= 0, fn);
+  assert.ok(refuse < fn.indexOf('_run("db.list"'), 'refused before the bridge is asked');
+  assert.match(fn, /"code": "offset"/);
+  const cs = await readFile(path.join(ROOT, 'lib', 'client', 'unity', 'GamesFun.cs'), 'utf8');
+  assert.doesNotMatch(/public static Task<string> DbList\([^)]*\)/.exec(cs)[0], /offset/, "Unity's DbList takes after");
 });
 
 test("the engines' glue files hold no raw control character or line separator (C# and GDScript break on them)", async () => {
