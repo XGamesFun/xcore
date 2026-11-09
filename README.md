@@ -257,7 +257,9 @@ version goes live).
   player's id. A rule that must hold under a burst of requests is one statement
   (`UPDATE players SET runs = runs - 1 WHERE id = ? AND runs > 0 RETURNING runs`).
 - **A game with no server** gets xcore's stock server, which keeps the page's documents (any JSON up to 64 KB) in
-  collections, under the rules in `database.collections`:
+  collections, under the rules in `database.collections`. When it gets a server of its own (`xcore add
+multiplayer`, `rpc`, `vouchers`), `server/gf-docs.js` goes on serving the same documents there, under the same
+  rules; publish refuses a server that has `collections` and does not route `api/db/`:
 
 ```js
 const level = (await GamesFun.db.add('levels', { name: 'Moon', tiles })).data; // {id, owner, value, updatedAt}

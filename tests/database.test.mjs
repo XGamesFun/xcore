@@ -150,8 +150,9 @@ test('gamesfun.json → database: the binding, the migrations and the collection
     await game(tmp, { database: { collections: { '*': { read: 'anyone' } } } }, { 'server/index.js': SERVER }),
   );
   assert.equal(own.stock, false);
-  assert.equal(own.database.collections, null, 'a server of its own writes its rules in code');
-  assert.match(own.warnings.join('\n'), /collections is read only by the stock server/);
+  assert.deepEqual(own.database.collections, { '*': { read: 'anyone' } }, "a server of its own's, for gf-docs.js");
+  const none = await readServerConfig(await game(tmp, { database: {} }, { 'server/index.js': SERVER }));
+  assert.equal(none.database.collections, null, 'none given: a server of its own writes its rules in code');
 });
 
 test('append only: the migrations applied must come first, each the same bytes', () => {
@@ -496,6 +497,110 @@ test('the stock server answers as server/database.js does, over D1, under the co
   }
   // its documents are in a table of its own, made by itself
   assert.ok(d1.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'gf_docs'").get());
+});
+
+test('a game the stock server served keeps gf.db when it gets a server of its own (xcore add multiplayer)', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await game(tmp, { database: {} });
+  const verifyPlayer = async tok => ({ a: { ok: true, sub: 'p:a' } })[tok] ?? { ok: false, why: 'expired' };
+  const d1 = fakeD1();
+  const env = { DB: d1, GF: { verifyPlayer }, GAME_ROOMS: { idFromName: n => n, get: () => ({}) } };
+  const serve = async (n, b) => {
+    assert.ok(b.ok, JSON.stringify([b.problems, b.hits]));
+    const file = path.join(tmp.dir, `server-${n}.mjs`);
+    await writeFile(file, b.code);
+    return (await import(pathToFileURL(file).href)).default;
+  };
+  const ask = async (server, method, p, body) => {
+    const res = await server.fetch(
+      new Request(`https://moth-play.xgames.fun${p}`, {
+        method,
+        headers: { authorization: 'Bearer a' },
+        body: body ? JSON.stringify(body) : undefined,
+      }),
+      env,
+    );
+    return { status: res.status, ...(await res.json().catch(() => ({}))) };
+  };
+  // a document the page saved through the stock server
+  const stock = await serve('stock', await bundleServer(dir, { minify: false }));
+  const made = await ask(stock, 'POST', '/api/db/levels', { value: { name: 'Moon' } });
+  assert.equal(made.status, 200);
+  // a server of its own: its rules written out, server/gf-docs.js routed first in server/index.js
+  const r = await addMultiplayer(dir);
+  const cfg = JSON.parse(await readFile(path.join(dir, 'gamesfun.json'), 'utf8'));
+  assert.deepEqual(cfg.database.collections, { '*': { read: 'owner', write: 'owner' } });
+  assert.ok(r.written.includes('wrote server/gf-docs.js'), r.written.join('\n'));
+  const index = await readFile(path.join(dir, 'server', 'index.js'), 'utf8');
+  assert.match(index, /import \{ handleDocs \} from '\.\/gf-docs\.js';/);
+  assert.ok(index.indexOf('handleDocs(request, env)') < index.indexOf('handleRooms(request, env)'), 'routed first');
+  assert.match(r.steps.join('\n'), /server\/gf-docs\.js answers gf\.db there from the same documents/);
+  const docs = await readFile(path.join(dir, 'server', 'gf-docs.js'), 'utf8');
+  assert.match(docs, /export function createData\(/, "database.js's documents code is in it");
+  assert.doesNotMatch(docs, /__DOCS_CORE__|DurableObject|---- the documents' code/);
+  const own = await bundleServer(dir, { minify: false });
+  assert.equal(own.docsUnrouted, undefined);
+  assert.ok(own.inputs.includes('server/gf-docs.js') && own.inputs.includes('gamesfun.json'), own.inputs.join(' '));
+  // the same document, through the game's own server; and a new one
+  const server = await serve('own', own);
+  const got = await ask(server, 'GET', `/api/db/levels/${made.item.id}`);
+  assert.deepEqual([got.status, got.item?.value], [200, { name: 'Moon' }]);
+  assert.equal((await ask(server, 'POST', '/api/db/levels', { value: 2 })).status, 200);
+  assert.equal((await ask(server, 'GET', '/api/db/levels')).items.length, 2);
+  // the rules are gamesfun.json's: a mistyped one stops the bundle, in words
+  cfg.database.collections.levels = { read: 'everyone' };
+  await writeFile(path.join(dir, 'gamesfun.json'), JSON.stringify(cfg));
+  assert.match((await bundleServer(dir)).problems.join('\n'), /collections\.levels is \{"read": "owner" \| "anyone"/);
+});
+
+test('a server of its own with database.collections and no api/db/ route: said, and publish refuses it', async t => {
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = { GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'), GAMESFUN_CREDENTIALS: 'file' };
+  await signIn(g, env);
+  const dir = await fixture(tmp, 'static');
+  await adopt(dir);
+  const cfgFile = path.join(dir, 'gamesfun.json');
+  const cfg = JSON.parse(await readFile(cfgFile, 'utf8'));
+  await writeFile(cfgFile, JSON.stringify({ ...cfg, database: { collections: { '*': { read: 'owner' } } } }));
+  await mkdir(path.join(dir, 'server'), { recursive: true });
+  await writeFile(path.join(dir, 'server', 'index.js'), SERVER);
+  const b = await bundleServer(dir);
+  assert.equal(b.docsUnrouted, true);
+  assert.match(b.warnings.join('\n'), /does not route api\/db\/: every gf\.db call answers 404/);
+  g.state.me = { server: { contracts: ['gf-server-v1'], features: ['d1'] } };
+  await assert.rejects(
+    publishGame(dir, { origin: g.origin, env, check: passing }),
+    e => e.code === 'db-route' && /does not route api\/db\/.*handleDocs/.test(e.message),
+  );
+  assert.ok(!g.state.calls.includes('POST /api/kit/publish'), 'nothing was sent');
+  // xcore add database writes the helper, and says how to route it in a server/index.js of the person's own
+  const r = await addDatabase(dir);
+  assert.ok(existsSync(path.join(dir, 'server', 'gf-docs.js')));
+  assert.match(r.steps.join('\n'), /server\/index\.js is your own: route the page's documents in it/);
+  await writeFile(
+    path.join(dir, 'server', 'index.js'),
+    `import { handleDocs } from './gf-docs.js';\nexport default { async fetch(request, env) { const db = await handleDocs(request, env); if (db) return db; return new Response('ok'); } };\n`,
+  );
+  const routed = await bundleServer(dir);
+  assert.ok(routed.ok, JSON.stringify(routed.problems));
+  assert.equal(routed.docsUnrouted, undefined);
+  // a route of its own for api/db/ is the person's choice: allowed, with a word that collections are not read
+  await writeFile(
+    path.join(dir, 'server', 'index.js'),
+    `export default { fetch(request) { if (new URL(request.url).pathname.startsWith('/api/db/')) return new Response('mine'); return new Response('ok'); } };\n`,
+  );
+  const mine = await bundleServer(dir);
+  assert.equal(mine.docsUnrouted, undefined);
+  assert.match(
+    mine.warnings.join('\n'),
+    /collections is read by server\/gf-docs\.js \(handleDocs\), which this server does not route/,
+  );
 });
 
 test('publish: a database needs "d1" in server.features; with it, the migrations go up as blobs in server.database', async t => {

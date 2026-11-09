@@ -437,12 +437,12 @@ for a game with no server, the documents its page saves.
 }
 ```
 
-| Field         | Rule                                                                                                                                                                                                              |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `engine`      | `"d1"`, the only one                                                                                                                                                                                              |
-| `binding`     | default `"DB"`: its name on `env`. The rules of a Durable Object's binding (A–Z, 0–9 and `_`, not `GF` or `GF_…`), and not one of theirs                                                                          |
-| `migrations`  | default `"server/migrations"`, a folder inside `server/` (never a public file). Files named `0001_init.sql`, `0002_add_guilds.sql` …: four digits, `_`, lowercase words; at most 200, 1 MB each                   |
-| `collections` | read only by the stock server (below): who may read and write each collection of the page's documents. `read`: `"owner"` or `"anyone"`; `write`: `"owner"` or `"server"`. Without it, each player's own, as `"*"` |
+| Field         | Rule                                                                                                                                                                                                                                                                                   |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine`      | `"d1"`, the only one                                                                                                                                                                                                                                                                   |
+| `binding`     | default `"DB"`: its name on `env`. The rules of a Durable Object's binding (A–Z, 0–9 and `_`, not `GF` or `GF_…`), and not one of theirs                                                                                                                                               |
+| `migrations`  | default `"server/migrations"`, a folder inside `server/` (never a public file). Files named `0001_init.sql`, `0002_add_guilds.sql` …: four digits, `_`, lowercase words; at most 200, 1 MB each                                                                                        |
+| `collections` | who may read and write each collection of the page's documents (`gf.db`, at `api/db/`): read by the stock server, or by `server/gf-docs.js` in a server of its own (below). `read`: `"owner"` or `"anyone"`; `write`: `"owner"` or `"server"`. Without it, each player's own, as `"*"` |
 
 **Migrations are append only.** Publish applies the new ones, in name order, before the new version goes live; a
 migration that fails stops the publish (the version before keeps playing; the ones applied before it stay applied).
@@ -476,6 +476,22 @@ export default {
 
 `db(env).all`, `.first`, `.run` and `.batch([[sql, ...params], …])` (all of them or none) are prepared statements:
 pass every value as a `?` and an argument, never inside the SQL's text. `env.DB` is D1 itself, for anything else.
+
+**The page's documents in a server of its own.** When the block has `collections`, `xcore add database` (and
+`add multiplayer`, `rpc` and `vouchers`) also writes `server/gf-docs.js`, which answers `api/db/*` as the stock server
+does, from the same table (`gf_docs`), under `collections` (it reads them from `gamesfun.json` when the server is
+bundled). xcore's own `server/index.js` routes it first; in an index of your own, first thing in `fetch`:
+
+```js
+import { handleDocs } from './gf-docs.js';
+const db = await handleDocs(request, env);
+if (db) return db;
+```
+
+`docsOf(env)` is the server's own access to them, past the rules (`docsOf(env).put('news', 'today', {…})`). A game the
+stock server served keeps its documents and rules when it gets a server of its own: `xcore add multiplayer` writes
+the rules it had into `collections`, and `server/gf-docs.js` serves them. Publish refuses a game whose block has
+`collections` while its server does not route `api/db/` (every `gf.db` call would answer 404), and says how.
 
 ### With no server: the stock server
 
