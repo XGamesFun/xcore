@@ -15,7 +15,7 @@ import { addDatabase, addMultiplayer } from '../lib/add.mjs';
 import { bundleServer } from '../lib/server/bundle.mjs';
 import { migrationsChanged, publishField, readServerConfig } from '../lib/server/contract.mjs';
 import { splitSql } from '../lib/dev/d1.mjs';
-import { readOnlyProblem } from '../lib/db.mjs';
+import { queryProblem, readOnlyProblem, sqlStatements } from '../lib/db.mjs';
 import { adopt } from '../lib/publish/adopt.mjs';
 import { publishGame, preflight, checkSummary } from '../lib/publish/index.mjs';
 import { fixture, passing, runAsync, signIn, standIn, tempDir } from './helpers.mjs';
@@ -128,6 +128,11 @@ test('gamesfun.json → database: the binding, the migrations and the collection
   assert.match(named.problems.join('\n'), /0002_Add Guilds\.sql: a migration's name is four digits/);
   assert.match(named.problems.join('\n'), /0003_x\.sql and 0003_y\.sql have the same number/);
   assert.match(named.warnings.join('\n'), /notes\.md is not a migration/);
+  // an empty migration (0 bytes) is refused, as xgames.fun refuses it
+  assert.match(
+    (await problems({ database: {} }, { 'server/migrations/0001_init.sql': '' })).join('\n'),
+    /server\/migrations\/0001_init\.sql is empty \(0 bytes\)/,
+  );
   assert.deepEqual(
     named.database.migrations.map(m => m.name),
     ['0001_init.sql', '0003_x.sql'],
@@ -162,6 +167,59 @@ test('append only: the migrations applied must come first, each the same bytes',
   assert.equal(migrationsChanged([applied[0], applied[1]], applied), null);
 });
 
+test('the database records its migrations in _gf_migrations, in the batch with their statements', async t => {
+  const { applyMigrations, readApplied } = await import('../lib/dev/d1.mjs');
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const m = (name, text) => ({
+    name,
+    path: `server/migrations/${name}`,
+    text,
+    sha256: sha(text),
+    bytes: Buffer.byteLength(text),
+  });
+  const one = m('0001_init.sql', 'CREATE TABLE players (id TEXT PRIMARY KEY);');
+  const d1 = fakeD1();
+  let r = await applyMigrations(null, d1, [one], { now: () => 7 });
+  assert.deepEqual(r, { ok: true, applied: ['0001_init.sql'] });
+  assert.deepEqual(
+    d1.db
+      .prepare('SELECT * FROM _gf_migrations')
+      .all()
+      .map(x => ({ ...x })),
+    [{ name: '0001_init.sql', sha256: one.sha256, applied_at: 7 }],
+  );
+  assert.deepEqual(await readApplied(d1), [{ name: '0001_init.sql', sha256: one.sha256, at: 7 }]);
+  // again: nothing to do
+  assert.deepEqual(await applyMigrations(null, d1, [one]), { ok: true, applied: [] });
+  // a migration that fails leaves neither its statements nor its record
+  const bad = m('0002_bad.sql', 'CREATE TABLE guilds (id TEXT);\nCREATE TABLE players (dup INT);');
+  r = await applyMigrations(null, d1, [one, bad]);
+  assert.equal(r.code, 'migration-failed');
+  assert.equal(d1.db.prepare("SELECT count(*) AS n FROM sqlite_master WHERE name = 'guilds'").get().n, 0);
+  assert.equal(d1.db.prepare('SELECT count(*) AS n FROM _gf_migrations').get().n, 1);
+  // an empty one is refused before anything runs
+  r = await applyMigrations(null, d1, [one, m('0002_none.sql', '')]);
+  assert.equal(r.code, 'migration-empty');
+  assert.match(r.why, /0002_none\.sql is empty \(0 bytes\)/);
+  // changed after it was applied: refused, from what the database itself recorded
+  r = await applyMigrations(null, d1, [m('0001_init.sql', 'CREATE TABLE players (id TEXT);')]);
+  assert.equal(r.code, 'migration-changed');
+  // the file an earlier xcore kept beside the database is read into the table once, then removed
+  const dir = path.join(tmp.dir, 'old');
+  const file = path.join(dir, '.gamesfun', 'dev', 'd1', 'gf-migrations.json');
+  await mkdir(path.dirname(file), { recursive: true });
+  await writeFile(file, JSON.stringify([{ name: one.name, sha256: one.sha256, at: '2026-11-08T00:00:00.000Z' }]));
+  const old = fakeD1();
+  old.db.exec(one.text);
+  assert.deepEqual(await applyMigrations(dir, old, [one]), { ok: true, applied: [] }, 'not applied a second time');
+  assert.equal(existsSync(file), false);
+  assert.deepEqual(
+    (await readApplied(old)).map(a => [a.name, a.at]),
+    [['0001_init.sql', Date.parse('2026-11-08T00:00:00.000Z')]],
+  );
+});
+
 test('splitSql: statements as SQLite reads them (quotes, comments, a trigger’s BEGIN … END)', () => {
   assert.deepEqual(
     splitSql(`-- a comment; not a statement
@@ -185,11 +243,52 @@ END`,
   assert.deepEqual(splitSql('  -- only a comment\n'), []);
 });
 
-test('xcore db query reads only, unless --write: one statement, SELECT, EXPLAIN, PRAGMA table_info / table_list', () => {
-  for (const ok of ['SELECT * FROM players', 'explain select 1', 'PRAGMA table_info(players)', 'PRAGMA table_list'])
-    assert.equal(readOnlyProblem(ok), null, ok);
-  for (const no of ['DELETE FROM players', 'PRAGMA writable_schema = 1', 'SELECT 1; DROP TABLE players', ''])
-    assert.ok(readOnlyProblem(no), no);
+test("xcore db query: the rule of xgames.fun's query route, the same cases taken and refused", () => {
+  // the cases of creator-studio/tests/game-database.test.mjs, so a query fares the same here and live
+  for (const sql of [
+    'SELECT * FROM guilds',
+    '  select 1;',
+    "SELECT ';' AS semi",
+    'SELECT "a;b" FROM t -- trailing; comment',
+    'EXPLAIN QUERY PLAN SELECT 1',
+    'EXPLAIN DELETE FROM guilds',
+    'PRAGMA table_list',
+    'PRAGMA table_info(guilds)',
+    "PRAGMA table_info('guilds');",
+    'PRAGMA main.table_info("guilds")',
+    '/* hi */ SELECT 1',
+  ])
+    assert.equal(queryProblem(sql), null, sql);
+  for (const sql of [
+    'DELETE FROM guilds',
+    'INSERT INTO guilds VALUES (1)',
+    'UPDATE guilds SET name=1',
+    'DROP TABLE guilds',
+    'ATTACH DATABASE x AS y',
+    'CREATE TABLE x (y)',
+    'WITH x AS (SELECT 1) DELETE FROM guilds',
+    'REPLACE INTO guilds VALUES (1)',
+    'PRAGMA writable_schema=1',
+    'PRAGMA table_info(guilds) = 1',
+    'PRAGMA foreign_keys=OFF',
+    'VACUUM',
+    '/* SELECT */ DELETE FROM guilds',
+    '-- SELECT\nDELETE FROM guilds',
+    'SELECT 1; DELETE FROM guilds',
+    "SELECT ''; DROP TABLE guilds; --'",
+    'BEGIN',
+    'select 1;;delete from t',
+  ])
+    assert.ok(queryProblem(sql), sql);
+  assert.match(queryProblem('SELECT 1; SELECT 2'), /one statement at a time \(this has 2\)/);
+  assert.match(queryProblem("SELECT 'unclosed"), /never ends/);
+  assert.match(queryProblem('DELETE FROM t'), /Add --write/);
+  assert.equal(queryProblem('DELETE FROM t', { write: true }), null);
+  assert.match(queryProblem('DELETE FROM t; DELETE FROM u', { write: true }), /one statement/);
+  assert.deepEqual(sqlStatements("SELECT 'a;b'; -- c;\nSELECT [x;y] /* ; */"), ["SELECT 'a;b'", 'SELECT [x;y]']);
+  // readOnlyProblem is the same rule without write
+  assert.equal(readOnlyProblem('PRAGMA table_info(players)'), null);
+  assert.ok(readOnlyProblem(''));
 });
 
 test('add database to a game with no server: the block with collections, and the stock server is its server', async t => {
@@ -409,6 +508,13 @@ test('publish: a database needs "d1" in server.features; with it, the migrations
     publish(),
     e => e.code === 'migration-changed' && /0001_init\.sql changed after xgames\.fun applied it/.test(e.message),
   );
+  g.state.refuse = { at: 'complete', status: 409, body: { code: 'migration-busy' } };
+  await assert.rejects(
+    publish(),
+    e =>
+      e.code === 'migration-busy' &&
+      /another publish of this game is applying its database migrations .*Try again in a minute/.test(e.message),
+  );
   g.state.refuse = {
     at: 'complete',
     status: 422,
@@ -494,7 +600,7 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
   const sent = seen.length;
   r = await xc(['query', 'DELETE FROM players', '--live']);
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /without --write a query only reads/);
+  assert.match(r.stderr, /a query may only read: SELECT, EXPLAIN.*Add --write/);
   assert.equal(seen.length, sent);
   r = await xc(['query', 'DELETE FROM players', '--live', '--write', '--json']);
   assert.equal(JSON.parse(r.stdout).ok, true);
@@ -568,7 +674,7 @@ test(
       info.tables.find(x => x.name === 'gf_docs'),
       { name: 'gf_docs', rows: 1 },
     );
-    await assert.rejects(dbQuery(dir, 'INSERT INTO players (id) VALUES (?)', { params: ['p1'] }), /only reads/);
+    await assert.rejects(dbQuery(dir, 'INSERT INTO players (id) VALUES (?)', { params: ['p1'] }), /may only read/);
     await dbQuery(dir, 'INSERT INTO players (id) VALUES (?)', { params: ['p1'], write: true });
     assert.deepEqual((await dbQuery(dir, 'SELECT id, gold FROM players')).results, [{ id: 'p1', gold: 0 }]);
     const dump = await dbExport(dir);

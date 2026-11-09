@@ -80,7 +80,7 @@ test('the files store: put, get, head, list a page at a time, delete, usage, and
   const got = await store.get('levels/a.json');
   assert.deepEqual([got.body.toString(), got.type, got.bytes, got.public], ['{"n":1}', 'application/json', 7, true]);
   assert.equal((await store.head('saves/world.bin')).type, 'application/octet-stream');
-  assert.equal((await store.get('nope.json')).code, 'unknown');
+  assert.equal((await store.get('nope.json')).code, 'not-found');
   assert.equal((await store.put('../x', 'a')).code, 'path');
   assert.equal((await store.put('big.bin', 'x'.repeat(601))).code, 'too-big');
   assert.equal((await store.put('levels', 'x')).code, 'path', 'a file where a folder is');
@@ -193,7 +193,7 @@ test('env.GF.files through the dev host: a file’s bytes go to the store as the
     etag: JSON.parse(got.headers.get('x-gf-answer')).etag,
   });
   assert.deepEqual(Buffer.from(await got.arrayBuffer()), bytes);
-  assert.equal((await (await host('files.get', { body: '["none"]' })).json()).code, 'unknown');
+  assert.equal((await (await host('files.get', { body: '["none"]' })).json()).code, 'not-found');
   assert.equal((await s.run('files.list', [{ prefix: 'w/' }])).items.length, 1);
   assert.deepEqual(await s.run('files.usage', []), { ok: true, bytes: 5, files: 1, cap: FILES.capBytes });
   assert.equal(
