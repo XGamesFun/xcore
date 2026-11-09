@@ -108,7 +108,8 @@ After an audit of the storage work, and as settled with the platform (STORAGE.md
   `delete` names no owner (it now means the server's own space) and each `list` that passes an `offset`, as
   `file:line` with the change to make. See "Upgrading from 0.1.0" above.
 - A `server/database.js` whose `RULES` are still 0.1.0's default is said to be open to anyone at publish, with
-  `xcore add database` to fix it. The paging cursor's order is by when a document was last written (one written
+  `xcore add database` to fix it. `xcore add database` over a `server/database.js` asks first whether there is room
+  for its Durable Object (8 a server), so a refusal leaves `database.js` as it was. The paging cursor's order is by when a document was last written (one written
   between two pages can show twice or be skipped): said in `docs/SERVER.md` and `gf.db`'s comments. The local files
   origin is cross-origin to the page but the same site (both `127.0.0.1`); live it is another site as well.
 

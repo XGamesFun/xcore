@@ -359,6 +359,15 @@ test('add database again: an untouched RULES from 0.1.0 (anyone read) becomes th
   assert.doesNotMatch(open.warnings.join('\n'), /It keeps working/);
   await writeFile(file, before);
   assert.match((await bundleServer(dir)).warnings.join('\n'), /older database .*It keeps working/);
+  // refused for the 8 Durable Objects a server may have: refused before database.js is touched
+  const cfgFile = path.join(dir, 'gamesfun.json');
+  const cfg = JSON.parse(await readFile(cfgFile, 'utf8'));
+  cfg.server.objects = Array.from({ length: 8 }, (_, i) => ({ class: `Room${i}`, binding: `ROOM_${i}` }));
+  await writeFile(cfgFile, JSON.stringify(cfg));
+  const old = before.replace(/export const RULES = \{[\s\S]*?\n\};/, OLD_DEFAULT_RULES);
+  await writeFile(file, old);
+  await assert.rejects(addDatabase(dir), /already declares 8 Durable Objects/);
+  assert.equal(await readFile(file, 'utf8'), old, 'database.js left as it was');
 });
 
 test("upgrading 0.1.0's database.js: each dataOf(env) call with no owner is said with its change, by add database and at publish", async t => {
