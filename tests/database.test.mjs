@@ -220,6 +220,57 @@ test('the database records its migrations in _gf_migrations, in the batch with t
   );
 });
 
+test('xcore db export and import round-trip: a dump goes back in over the tables its migrations made', async () => {
+  const { dumpDatabase, importPlan, applyMigrations } = await import('../lib/dev/d1.mjs');
+  const text =
+    'CREATE TABLE players (id TEXT PRIMARY KEY, gold INT);\nCREATE TABLE log (what TEXT);\nCREATE INDEX log_by_what ON log (what);';
+  const migrations = [{ name: '0001_init.sql', text, sha256: sha(text), bytes: text.length }];
+  const from = fakeD1();
+  await applyMigrations(null, from, migrations);
+  from.db.exec(
+    "INSERT INTO players VALUES ('p1', 3), ('it''s', NULL); INSERT INTO log VALUES ('a'), ('a'), ('b'); CREATE TABLE gf_docs (k TEXT PRIMARY KEY); INSERT INTO gf_docs VALUES ('x')",
+  );
+  const dump = await dumpDatabase(from);
+  assert.match(dump, /^PRAGMA defer_foreign_keys=TRUE;/);
+  assert.match(dump, /CREATE TABLE IF NOT EXISTS players/);
+  assert.match(dump, /CREATE INDEX IF NOT EXISTS log_by_what/);
+  assert.match(dump, /INSERT OR REPLACE INTO "log" \("rowid", "what"\) VALUES \(1, 'a'\);/, 'no key: its rowid');
+  assert.doesNotMatch(dump, /INSERT[^\n]*_gf_migrations|CREATE TABLE[^\n]*_gf_migrations/);
+  // into another database with the same migrations, twice: every row once
+  const into = fakeD1();
+  await applyMigrations(null, into, migrations);
+  const run = async plan => into.batch(plan.statements.map(st => into.prepare(st)));
+  await run(importPlan(dump));
+  await run(importPlan(dump));
+  const rows = q =>
+    into.db
+      .prepare(q)
+      .all()
+      .map(r => ({ ...r }));
+  assert.deepEqual(rows('SELECT * FROM players ORDER BY id'), [
+    { id: "it's", gold: null },
+    { id: 'p1', gold: 3 },
+  ]);
+  assert.deepEqual(rows('SELECT what FROM log ORDER BY rowid'), [{ what: 'a' }, { what: 'a' }, { what: 'b' }]);
+  assert.deepEqual(rows('SELECT k FROM gf_docs'), [{ k: 'x' }]);
+  assert.deepEqual(rows('SELECT name FROM _gf_migrations'), [{ name: '0001_init.sql' }]);
+  // D1's own export (CREATE TABLE, INSERT INTO … VALUES, its _gf_migrations) goes in the same way
+  const d1 = importPlan(
+    "PRAGMA defer_foreign_keys=TRUE;\nCREATE TABLE players (id TEXT PRIMARY KEY, gold INT);\nINSERT INTO \"players\" VALUES('p1',9);\nCREATE TABLE _gf_migrations (name TEXT PRIMARY KEY, sha256 TEXT NOT NULL, applied_at INTEGER NOT NULL);\nINSERT INTO \"_gf_migrations\" VALUES('0001_init.sql','x',1);",
+  );
+  assert.equal(d1.left, 2, 'its record of migrations left out');
+  await run(d1);
+  assert.deepEqual(rows("SELECT gold FROM players WHERE id = 'p1'"), [{ gold: 9 }]);
+  assert.deepEqual(rows('SELECT sha256 FROM _gf_migrations'), [{ sha256: sha(text) }]);
+  assert.match(d1.sql, /^PRAGMA defer_foreign_keys=TRUE;\nCREATE TABLE IF NOT EXISTS players/);
+  // SQL of your own runs as written, and may not change the record
+  assert.deepEqual(importPlan("INSERT INTO log VALUES ('c');").statements, ["INSERT INTO log VALUES ('c')"]);
+  assert.throws(
+    () => importPlan("DELETE FROM _gf_migrations WHERE name = '0001_init.sql'"),
+    /record of its migrations/,
+  );
+});
+
 test('splitSql: statements as SQLite reads them (quotes, comments, a trigger’s BEGIN … END)', () => {
   assert.deepEqual(
     splitSql(`-- a comment; not a statement
@@ -678,7 +729,19 @@ test(
     await dbQuery(dir, 'INSERT INTO players (id) VALUES (?)', { params: ['p1'], write: true });
     assert.deepEqual((await dbQuery(dir, 'SELECT id, gold FROM players')).results, [{ id: 'p1', gold: 0 }]);
     const dump = await dbExport(dir);
-    assert.match(await readFile(dump.file, 'utf8'), /INSERT INTO "players" \("id", "gold"\) VALUES \('p1', 0\);/);
+    assert.match(
+      await readFile(dump.file, 'utf8'),
+      /INSERT OR REPLACE INTO "players" \("id", "gold"\) VALUES \('p1', 0\);/,
+    );
+    // the dump goes back in over the same database: nothing doubled, and its migrations' record left as it was
+    const back = await dbImport(dir, dump.file);
+    assert.equal(back.dump, true);
+    assert.equal((await dbQuery(dir, 'SELECT count(*) AS n FROM players')).results[0].n, 1);
+    assert.equal((await dbQuery(dir, 'SELECT count(*) AS n FROM gf_docs')).results[0].n, 1);
+    assert.deepEqual(
+      (await dbInfo(dir)).applied.map(m => m.name),
+      ['0001_init.sql'],
+    );
     await writeFile(
       path.join(tmp.dir, 'more.sql'),
       "INSERT INTO players (id) VALUES ('p2'); INSERT INTO players (id) VALUES ('p3');",

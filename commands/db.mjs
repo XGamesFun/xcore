@@ -22,7 +22,8 @@ the game's database on xgames.fun, which keeps every call in the game's audit lo
                      --write. --params '["moon", 3]' fills its ? marks
   export             the whole database as SQL, into --out <file> or .gamesfun/exports/ (hidden: never published;
                      it holds your players' data, so keep it out of git and off shared drives)
-  import <file.sql>  run a file of SQL statements (a dump from export, or your own), all of it or none; at most 5 MB
+  import <file.sql>  run a file of SQL statements, all of it or none; at most 5 MB. A dump from export (here, live
+                     or D1's) goes in over what is there: tables kept, rows with the same key replaced
   restore <time>     live only: the database as it was at <time> (a date such as 2026-11-08T12:00:00Z, or unix
                      seconds; up to 30 days back). It says what it would go back to first, and goes on only with
                      --yes or when you type "restore". A game with an economy: what happened on chain (loot
@@ -135,7 +136,7 @@ export default {
         const r = await dbImport(dir, arg, { live, log });
         if (values.json) return printJson(r);
         console.log(
-          `Imported ${arg} into ${where}${r.statements !== undefined ? ` (${plural(r.statements, 'statement')})` : ''}.`,
+          `Imported ${arg} into ${where}${r.statements !== undefined ? ` (${plural(r.statements, 'statement')})` : ''}.${r.dump ? ' A dump goes in over what is there: its tables kept, its rows replacing those with the same key.' : ''}${r.left ? ` Its record of migrations (_gf_migrations, ${plural(r.left, 'statement')}) was left out: this database keeps its own.` : ''}`,
         );
         return 0;
       }
