@@ -117,6 +117,7 @@ test('the files store: a path named __proto__, constructor or toString is a file
   for (const name of ['__proto__', 'constructor', 'toString', 'levels/constructor'])
     assert.deepEqual(await store.put(name, name, { public: true }), { ok: true, path: name, bytes: name.length });
   assert.equal((await store.get('__proto__')).body.toString(), '__proto__');
+  assert.match(await readFile(path.join(dir, '.gamesfun', '.gitignore'), 'utf8'), /^\*$/m, 'kept out of git');
   assert.deepEqual(await store.usage(), { ok: true, bytes: 9 + 11 + 8 + 18, files: 4, cap: FILES.capBytes });
   // kept on disk and read back the same by another store
   const again = createFileStore({ dir });
@@ -128,6 +129,18 @@ test('the files store: a path named __proto__, constructor or toString is a file
   assert.deepEqual(await again.delete('constructor'), { ok: true, deleted: true });
   assert.deepEqual(await again.delete('valueOf'), { ok: true, deleted: false });
   assert.equal((await again.usage()).files, 3);
+});
+
+test('.gamesfun/ gets a .gitignore of its own (*) the first time xcore writes there; one of yours is left alone', async t => {
+  const { stateFolder, STATE_GITIGNORE } = await import('../lib/state-folder.mjs');
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await game(tmp);
+  assert.equal(await stateFolder(dir), path.join(dir, '.gamesfun'));
+  assert.equal(await readFile(path.join(dir, '.gamesfun', '.gitignore'), 'utf8'), STATE_GITIGNORE);
+  await writeFile(path.join(dir, '.gamesfun', '.gitignore'), 'exports/\n');
+  await stateFolder(dir);
+  assert.equal(await readFile(path.join(dir, '.gamesfun', '.gitignore'), 'utf8'), 'exports/\n');
 });
 
 test('public files on an origin of their own: the files domain’s headers, types, ETag and ranges (§8.7)', async t => {

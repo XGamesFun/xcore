@@ -449,7 +449,11 @@ for a game with no server, the documents its page saves.
 migration that fails stops the publish (the version before keeps playing; the ones applied before it stay applied).
 Once a migration is published it never changes: put the next change in a new file
 (`0002_add_gold.sql`: `ALTER TABLE players ADD COLUMN gold INTEGER NOT NULL DEFAULT 0;`). A changed or missing one is
-refused, by `xcore publish` before anything goes up and by xgames.fun.
+refused, by `xcore publish` before anything goes up and by xgames.fun, and so is an empty one (0 bytes). `xcore add
+database` writes `server/migrations/.gitattributes` (`*.sql -text`), so git on Windows never changes a migration's
+line endings (and so its sha256). Each database records what it has applied in its own table, `_gf_migrations`, in
+the same batch as the migration: a restore to before a migration un-applies it, and the next publish applies it
+again.
 
 ### From a server of its own
 

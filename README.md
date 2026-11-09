@@ -159,8 +159,10 @@ client file the server hands out (`/socket.io/socket.io.js`) into the game. The 
 `https://<slug>-play.xgames.fun`.
 
 **What xcore writes in the game's folder**: `gamesfun.json` (adopt's record; commit it), `evidence/` (each check's
-screenshots and record, `evidence/verify-N/`) and `.gamesfun/` (publish's last passing check, and the link once
-published). None of them is published; add `evidence/` and `.gamesfun/` to the game's `.gitignore`.
+screenshots and record, `evidence/verify-N/`) and `.gamesfun/` (publish's last passing check, the link once
+published, the local database and files, and `xcore db export`'s dumps of your players' data). None of them is
+published. `.gamesfun/` keeps itself out of git: xcore writes `.gamesfun/.gitignore` (`*`) when it first writes
+there; add `evidence/` to the game's `.gitignore`.
 
 ## 2. Check
 

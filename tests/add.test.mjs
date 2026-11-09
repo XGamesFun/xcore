@@ -29,6 +29,7 @@ import { decodeBase58 } from '@xgamesfun/solana/chain/base58';
 import { decode, voucherBytes } from '@xgamesfun/solana/client';
 import { readProof } from '@xgamesfun/solana/results';
 import { bundleServer } from '../lib/server/bundle.mjs';
+import { OLD_DEFAULT_RULES } from '../lib/server/contract.mjs';
 import { fixture, ROOT, tempDir } from './helpers.mjs';
 
 // the database imports cloudflare:workers (a Durable Object's base class); here a stand-in
@@ -347,6 +348,17 @@ test('add database again: an untouched RULES from before 0.1.1 (anyone read) bec
   const mine = await addDatabase(dir);
   assert.match(await readFile(file, 'utf8'), /levels: \{ read: 'anyone', write: 'owner' \}/);
   assert.ok(!mine.steps.some(s => /old default/.test(s)));
+  // published as 0.1.0 left it, untouched: the check says it is open to anyone, and how to close it
+  const before = await readFile(file, 'utf8');
+  await writeFile(file, before.replace(/export const RULES = \{[\s\S]*?\n\};/, OLD_DEFAULT_RULES));
+  const open = await bundleServer(dir);
+  assert.match(
+    open.warnings.join('\n'),
+    /still has the RULES xcore 0\.1\.0 wrote .*open to anyone, signed in or not.*add database makes each player's documents their own/,
+  );
+  assert.doesNotMatch(open.warnings.join('\n'), /It keeps working/);
+  await writeFile(file, before);
+  assert.match((await bundleServer(dir)).warnings.join('\n'), /older database .*It keeps working/);
 });
 
 test('signin for a web game: gamesfun.js beside the page and loaded first; again, nothing changes', async t => {

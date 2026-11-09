@@ -397,6 +397,10 @@ test('add database to a game with a server: the block, an example migration and 
   assert.deepEqual(cfg.server.objects, [{ class: 'GameRoom', binding: 'GAME_ROOMS' }], 'no Durable Object for it');
   assert.equal(await readFile(path.join(dir, 'server', 'index.js'), 'utf8'), index, 'its server is left as it is');
   assert.match(await readFile(path.join(dir, 'server/migrations/0001_init.sql'), 'utf8'), /CREATE TABLE players/);
+  // no line-ending conversion for a migration (its sha256 is its bytes), and that file is no migration itself
+  assert.match(await readFile(path.join(dir, 'server/migrations/.gitattributes'), 'utf8'), /^\*\.sql -text$/m);
+  const read = await readServerConfig(dir);
+  assert.deepEqual([read.warnings, read.database.migrations.map(m => m.name)], [[], ['0001_init.sql']]);
   const helper = await readFile(path.join(dir, 'server/gf-db.js'), 'utf8');
   assert.match(helper, /const BINDING = 'DB';/);
   assert.match(helper, /export async function withPlayer\(request, env\)/);
@@ -661,6 +665,11 @@ test('publish: a database needs "d1" in server.features; with it, the migrations
   );
   assert.ok(g.state.uploads.has(sent.modules[0].sha256), 'and the stock server bundle');
   const link = JSON.parse(await readFile(path.join(dir, '.gamesfun', 'publish.json'), 'utf8'))[g.origin];
+  assert.match(
+    await readFile(path.join(dir, '.gamesfun', '.gitignore'), 'utf8'),
+    /^\*$/m,
+    '.gamesfun/ kept out of git',
+  );
   assert.deepEqual(link.migrations, [{ name: '0001_init.sql', sha256: sha(migration) }], 'remembered as applied');
   // the published migration changed: refused here before anything is sent
   const calls = g.state.calls.length;
@@ -967,6 +976,7 @@ test(
     await dbQuery(dir, 'INSERT INTO players (id) VALUES (?)', { params: ['p1'], write: true });
     assert.deepEqual((await dbQuery(dir, 'SELECT id, gold FROM players')).results, [{ id: 'p1', gold: 0 }]);
     const dump = await dbExport(dir);
+    assert.match(await readFile(path.join(dir, '.gamesfun', '.gitignore'), 'utf8'), /^\*$/m, 'exports kept out of git');
     assert.match(
       await readFile(dump.file, 'utf8'),
       /INSERT OR REPLACE INTO "players" \("id", "gold"\) VALUES \('p1', 0\);/,
