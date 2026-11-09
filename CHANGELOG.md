@@ -2,6 +2,12 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.2.1 — 2026-11-09
+
+- Slots (xgames.fun 2026-11-08): every game sits in a slot; everyone gets 2 free slots (games on Free), any more are
+  paid (games on Creator). `xcore plan --all` shows free and paid slots; `xcore publish` names the commands that open a
+  free slot when a new game is refused (`no-free-slot`); paid slots are bought on your console (xgames.fun/console).
+
 ## 0.2.0 — 2026-11-08
 
 ### Upgrading from 0.1.0
@@ -164,10 +170,6 @@ The database is safe by default, and the secret scan reads every byte:
 - The publish scan reads a text file whole, however big, in 4 MiB pieces that overlap by more than any key it looks
   for can be long; it read only the first 4 MiB before. The patterns are one list, `lib/secret-patterns.mjs`, which
   the publish scan and the kit both read; each has an upper bound, so the overlap is enough.
-
-- Slots (xgames.fun 2026-11-08): every game sits in a slot; everyone gets 2 free slots (games on Free), any more are
-  paid (games on Creator). `xcore plan --all` shows free and paid slots; `xcore publish` names the commands that open a
-  free slot when a new game is refused (`no-free-slot`); paid slots are bought on your console (xgames.fun/console).
 
 Every lifecycle the commands report now has one named state, one place that decides it, and the same answer for a
 person and for `--json`.
