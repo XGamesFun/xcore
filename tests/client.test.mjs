@@ -301,6 +301,18 @@ test(
     });
     assert.equal(player.id, 'x:43');
     assert.deepEqual(await page.evaluate(() => window.asked), [{ type: 'gf:auth-signin', with: 'x' }]);
+    // with Google (2026-11-09): the page above is asked with 'google'; 'wallet' signs in with X (a wallet signs nobody in)
+    await frame.evaluate(async () => {
+      GamesFun.signOut();
+      void GamesFun.signIn({ how: 'google' });
+      GamesFun.signOut();
+      void GamesFun.signIn({ how: 'wallet' });
+    });
+    await page.waitForFunction(() => window.asked.length >= 3);
+    assert.deepEqual((await page.evaluate(() => window.asked)).slice(1, 3), [
+      { type: 'gf:auth-signin', with: 'google' },
+      { type: 'gf:auth-signin', with: 'x' },
+    ]);
     assert.equal(g.s.requests.length, 0, 'no request of its own');
     assert.equal((await frame.evaluate(() => GamesFun.saves.put('main', 1))).error, null);
     assert.ok(g.s.seen.includes('PUT moth-play.xgames.test/platform/v1/saves/main (tok-page)'));

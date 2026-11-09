@@ -293,8 +293,9 @@ Tell players which one your game is.
 cap that counts players or wallets multiplies with each one a person makes. What helps:
 
 - **A person, not a wallet.** For rewards worth farming, pay only players signed in with X (`VOUCHERS.payOnly = 'x'`
-  in `server/vouchers.js`), count your caps per X account, and give the grant `perPerson` (the voucher carries a
-  hash of the player's X account).
+  in `server/vouchers.js`), or with X or Google (`'account'`: a Google account is easier to make than an X one, so it
+  stops less farming), count your caps per account, and give the grant `perPerson` (the voucher carries a hash of the
+  player's X account, or `g:<Google id>` for a Google account with no X).
 - **Totals.** Give every grant a `perDay` total in `xsolana.json`, so the most it pays a day is known whoever claims.
 - **Holding something.** Gate a reward on an NFT the game sells (a pass, a creature): each identity then costs money.
 - **Proven wallets.** Pay, and grant perks to, only a wallet the player proved is theirs: the one they signed in
@@ -378,7 +379,7 @@ voucher code into `server/gf-loot/` (bundled with the server, never a public fil
    the result's own id, any text, used once; amount: base units, or `'grant'` for the grant's own amount, always
    named so a forgotten amount never pays the most) or `{why}` to refuse. Until you write it, nothing is paid. Count a
    player's daily total in `PAY.paid` (it runs once a round, after its voucher is signed; again only if it threw), not in `check`.
-4. Who is paid: set `VOUCHERS.payOnly` to `'x'` for rewards worth farming (above, "Who gets paid"); the grant's
+4. Who is paid: set `VOUCHERS.payOnly` to `'x'` or `'account'` for rewards worth farming (above, "Who gets paid"); the grant's
    `perDay` total caps the rest.
 5. `xcore loot approve` (the grant's change goes live), then `xcore publish`. `api/vouchers/key` answers the live
    key's address once the secret is set; until then the server pays nothing.

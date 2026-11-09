@@ -123,7 +123,7 @@ func _run(path: String, args: Array):
 	return result
 
 
-## The player's sign-in, from a button press (a window may open). how: "x" or "wallet". -> Dictionary or null
+## The player's sign-in, from a button press (a window may open). how: "x" or "google". -> Dictionary or null
 func sign_in(how := "x"):
 	var p = await _run("signIn", [{"how": how}])
 	_set_player(p)

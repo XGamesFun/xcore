@@ -641,7 +641,7 @@ A game made with xcore 0.1.0 that has `server/database.js` (`xcore add database`
 without one needs none: the D1 database, `xcore db` and `xcore files` are new.
 
 1. **Run `xcore add database` again.** It brings `server/database.js` up to date (your `RULES` and `LIMITS` are
-   kept), with `gamesfun.js` (1.4.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
+   kept), with `gamesfun.js` (1.6.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
    needs an owner (step 3) as `file:line` with its change; `xcore publish` lists them again until each names its
    owner. On its first start the new `database.js` moves the documents to a table keyed by collection, owner and id,
    each under its owner. After that, do not roll the game back to a version with 0.1.0's `database.js`: its writes

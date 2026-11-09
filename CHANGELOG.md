@@ -4,7 +4,8 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 
 ## 0.3.0 — 2026-11-09
 
-- **Live operations** (xgames.fun/console's Live tab): `gamesfun.js` 1.5.0 adds `GamesFun.live` (`get()`, `refresh()`,
+- `gamesfun.js` is 1.6.0.
+- **Live operations** (xgames.fun/console's Live tab): `gamesfun.js` adds `GamesFun.live` (`get()`, `refresh()`,
   `onChange(fn)`, `banner(on)`, `value`) for the game's announcement, remote config and maintenance mode, which its
   owner changes with no republish (xgames.fun's play edge answers `GET /platform/v1/live` itself). A default banner
   shows the announcement and a pause that starts while the game is open; `data-live-banner="off"`,
@@ -20,6 +21,12 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
   browser does on the game's own link, and a frame that allows none (a post on X) opens the game in a tab of its own;
   `GamesFun.onFullscreen` follows it. `xcore adopt` warns when a game has no way to go full screen, and the
   bring-your-own-game skill offers the button.
+- Sign-in is X or Google (xgames.fun 2026-11-09): a wallet signs nobody in any more (a copycat game could relay that
+  signature); a player links a wallet on xgames.fun's account page and it comes with every sign-in.
+  `GamesFun.signIn({how: 'google'})` (and Godot's `sign_in("google")`, Unity's `SignIn("google")`); `how:
+'wallet'` signs in with X; `player.google` and the player's name (no @ for a Google name).
+- `server/vouchers.js`: `VOUCHERS.payOnly` may be `'account'` (players signed in with X or Google); a Google account
+  with no X counts as one person (`g:<id>`) for `perPerson`.
 
 ## 0.2.1 — 2026-11-09
 

@@ -71,7 +71,7 @@ public class GamesFun : MonoBehaviour
 #endif
     }
 
-    /// <summary>The player's sign-in, from a button press (a window may open). how: "x" or "wallet". → the player JSON, or "null".</summary>
+    /// <summary>The player's sign-in, from a button press (a window may open). how: "x" or "google". → the player JSON, or "null".</summary>
     public static Task<string> SignIn(string how = "x") => Call("signIn", "[{\"how\":" + Str(how) + "}]");
     public static Task<string> SignOut() => Call("signOut", "[]");
 

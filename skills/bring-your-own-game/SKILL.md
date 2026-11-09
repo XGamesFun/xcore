@@ -150,8 +150,9 @@ out of `.dev.vars` or repeat it.
 
 Design it so a cheater gains little (docs/SERVER.md, "How much your server can check" and "Who gets paid"): never send
 the page a run's whole seed up front (reveal randomness as the run goes); give slack per second, not per request; one
-open run per player; pay only proven wallets (the page calls `gf.loot.link()` once; a wallet sign-in needs none);
-a wallet is free, so for rewards worth farming set `VOUCHERS.payOnly` to `'x'` and give every grant a `perDay` total.
+open run per player; pay only proven wallets (the page calls `gf.loot.link()` once; a player whose xgames.fun account
+has a wallet linked needs none); a wallet is free, so for rewards worth farming set `VOUCHERS.payOnly` to `'x'` (X only)
+or `'account'` (X or Google; a Google account is easier to make) and give every grant a `perDay` total.
 
 A page alone can't prove a score or a win: anyone can change it in the console. A leaderboard that must be fair is
 one the server owns: `env.GF.scores.setup(board, {writer: 'server'})` refuses the page's submits to it (a pattern,

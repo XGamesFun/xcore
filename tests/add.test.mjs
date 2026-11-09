@@ -1034,6 +1034,7 @@ test('the voucher server: PAY.check decides, only a proven wallet is paid, one r
   const players = {
     x: { ok: true, sub: 'p1', wallet: null, x: { id: '42', handle: 'ana' } },
     w: { ok: true, sub: 'p2', wallet: W2, x: null },
+    g: { ok: true, sub: W2, wallet: W2, x: null, google: { id: '77', name: 'Anna' } },
   };
   const env = {
     VOUCHER_SEED: seed,
@@ -1126,6 +1127,15 @@ test('the voucher server: PAY.check decides, only a proven wallet is paid, one r
   // X only: a wallet player is refused
   VOUCHERS.payOnly = 'x';
   assert.equal((await call('/api/vouchers/pay', { body: { runId: 'run-w2' }, token: 'w' })).json.code, 'x-only');
+  VOUCHERS.payOnly = 'any';
+  // X or Google (2026-11-09): a wallet's own sign-in is refused; a Google account is paid, counted as one person
+  VOUCHERS.payOnly = 'account';
+  assert.equal((await call('/api/vouchers/pay', { body: { runId: 'run-w3' }, token: 'w' })).json.code, 'account-only');
+  const gp = await call('/api/vouchers/pay', { body: { runId: 'run-g', amount: 1 }, token: 'g' });
+  assert.equal(gp.status, 200, JSON.stringify(gp.json));
+  assert.notEqual(gp.json.voucher.personHash, '0'.repeat(64), 'a Google account with no X is one person (g:<id>)');
+  VOUCHERS.payOnly = 'x';
+  assert.equal((await call('/api/vouchers/pay', { body: { runId: 'run-g2' }, token: 'g' })).json.code, 'x-only');
   VOUCHERS.payOnly = 'any';
   // the rate: past perMinute a minute, refused
   VOUCHERS.perMinute = 1;
