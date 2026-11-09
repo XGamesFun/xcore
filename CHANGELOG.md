@@ -4,6 +4,58 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 
 ## Unreleased
 
+After an audit of the storage work, and as settled with the platform (STORAGE.md §8.10):
+
+- **A game that gets a server of its own keeps `gf.db`.** A game the stock server served lost its documents (404 on
+  every page save and load) once `xcore add multiplayer`, `rpc` or `vouchers` gave it a server. Now `xcore add`
+  writes `server/gf-docs.js` whenever `database` has `collections` (a stock game's rules are written out first), and
+  the generated `server/index.js` routes `api/db/` through it, from the same `gf_docs` table under the same rules
+  (read from `gamesfun.json` when the server is bundled). Publish refuses a server of its own that has `collections`
+  and does not route `api/db/` (code `db-route`), and says the two lines to add.
+- **`offset` is refused in every client**, not dropped: `gf.db.list`, the browser's local list and Godot's
+  `db_list` answer an error (`code: 'offset'`), so 0.1.0 code that paged with it stops instead of reading page 1 for
+  ever. Page with `after`.
+- **Lists fail closed**: anything but `read: 'anyone'` lists only the player's own (a mistyped rule listed everything,
+  even to guests), and `RULES` / `collections` are checked when the server starts.
+- **A document by id alone (0.1.0 pages):** in a `write: 'server'` collection a player's get by id alone looks in the
+  server's space and then their own, so a `read: 'owner'` + `write: 'server'` document is read again. In a
+  `read: 'anyone'` collection, a get by id alone that finds only another player's document answers 400 `owner`,
+  naming `{owner}`; `gf.db.get` gives `data: null` with `code: 'owner'` and says it once in the console. Pass
+  `{owner: doc.owner}`. (gamesfun.js is 1.4.0.)
+- **Migrations are recorded in the database**, in `_gf_migrations (name, sha256, applied_at)`, in the same batch as
+  the migration (its row as started, the statements, its row finished), as xgames.fun records them; `xcore dev` reads
+  what is applied from there (the file beside the local database is read in once and removed). A row left as
+  started, a file partly applied, is refused with how to undo it; an empty migration (0 bytes) is refused.
+  `xcore add database` writes `server/migrations/.gitattributes` (`*.sql -text`), so git cannot change a migration's
+  line endings.
+- **Publish** says `migration-busy` (another publish is applying them: try again in a minute) and
+  `database-unavailable` (502: Cloudflare, not the SQL) in words.
+- **`xcore db query`** uses a copy of xgames.fun's rule (its statement splitting, the statements it allows, its
+  params), so it takes and refuses the same queries here and live; a `null` param is refused (write `NULL` in the
+  SQL).
+- **`xcore db export` and `import` round-trip**: a dump is `CREATE … IF NOT EXISTS` and `INSERT OR REPLACE` (with the
+  rowid for a table without a key) and leaves out `_gf_migrations`; a dump (xcore's or D1's) goes in over the
+  database as it is. Before, a local import of a local export always failed ("table already exists").
+- **Live owner routes:** `db import --live` and `files put --live` are held to Studio's 4.5 MB a request before
+  anything is sent, with the way that takes more (`GF.files.put` from the game's server), and a bare 413 is
+  explained. `import --live` and `query --write --live` need `--yes` or the word typed, as `restore` does, and are
+  refused with no terminal to ask in. `restore` prints `restored.previous` and the command that undoes it, and its
+  preview shows the migrations it rolls back and its warning. `db export --live` picks up an `export-pending` with
+  its bookmark, and prints the answer's `note`. A GitHub Actions credential's 403 on export, import, restore, write
+  queries, `files put` and `rm` says these need the owner's own login. `files put --live` sends `x-gf-length`.
+- **`GF.files.put` under `xcore dev`** holds a stream to exactly its `{length}`, and reads one with none up to 1 MB,
+  as the platform does. A missing local file answers `not-found`. A file named `__proto__`, `constructor` or
+  `toString` is a file like any other.
+- **The secret scan** misses nothing the unbounded scan caught: a JWT is matched up to 4,096 + 16,384 + 2,048
+  characters and a `*_SECRET` literal up to 16,384 (`MAX_MATCH` 32 KiB, under the 64 KiB overlap); before, a
+  service-role JWT with a payload over 1,000 characters went through.
+- **`.gamesfun/` keeps itself out of git**: xcore writes `.gamesfun/.gitignore` (`*`) when it writes there and finds
+  none, so `db export`'s dumps of players' data are not committed.
+- A `server/database.js` whose `RULES` are still 0.1.0's default is said to be open to anyone at publish, with
+  `xcore add database` to fix it. The paging cursor's order is by when a document was last written (one written
+  between two pages can show twice or be skipped): said in `docs/SERVER.md` and `gf.db`'s comments. The local files
+  origin is cross-origin to the page but the same site (both `127.0.0.1`); live it is another site as well.
+
 Project files (STORAGE.md §8.6–8.8):
 
 - `env.GF.files` (`put`, `get`, `head`, `list`, `delete`, `usage`) in the contract's `GF_METHODS` and under `xcore dev`, with
