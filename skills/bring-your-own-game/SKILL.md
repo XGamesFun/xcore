@@ -57,6 +57,17 @@ stays on their host as a backend (README, "A game with its own Node server"). Su
 Never edit their build tool's output by hand (it is made again on every build): change the source or the config.
 Adopt again after the fixes; the list should be empty.
 
+**Full screen.** Most players meet a game in a post on X or on a phone, where it first shows in a small frame. When adopt
+warns that the game has no way to go full screen, offer the person a button for it (their game, their call): a small
+button in a corner of the first screen, big enough for a thumb, that calls `GamesFun.fullscreen()` from the click
+(`gamesfun.js`, loaded by `xcore add signin`; Godot `await GamesFun.fullscreen()`; Unity `Screen.fullScreen`).
+Pressed again it comes back. It answers `{on, how}`: on xgames.fun the page around the game goes full screen, or fills
+the screen in an app's own browser (X's on a phone among them); on the game's own link the browser does; in a frame
+that allows none (a post on X on a computer) the game opens in a tab of its own (`how: 'tab'`); an iPhone's Safari has
+no full screen for a page (`how: 'none'`): there the button can hide, or say "Add to Home Screen".
+`GamesFun.onFullscreen(on => …)` follows it (Esc, the browser's own controls). A game that goes full screen already
+(its own button, or its engine's) needs nothing.
+
 ## 3. Check
 
 ```bash
@@ -139,8 +150,9 @@ out of `.dev.vars` or repeat it.
 
 Design it so a cheater gains little (docs/SERVER.md, "How much your server can check" and "Who gets paid"): never send
 the page a run's whole seed up front (reveal randomness as the run goes); give slack per second, not per request; one
-open run per player; pay only proven wallets (the page calls `gf.loot.link()` once; a wallet sign-in needs none);
-a wallet is free, so for rewards worth farming set `VOUCHERS.payOnly` to `'x'` and give every grant a `perDay` total.
+open run per player; pay only proven wallets (the page calls `gf.loot.link()` once; a player whose xgames.fun account
+has a wallet linked needs none); a wallet is free, so for rewards worth farming set `VOUCHERS.payOnly` to `'x'` (X only)
+or `'account'` (X or Google; a Google account is easier to make) and give every grant a `perDay` total.
 
 A page alone can't prove a score or a win: anyone can change it in the console. A leaderboard that must be fair is
 one the server owns: `env.GF.scores.setup(board, {writer: 'server'})` refuses the page's submits to it (a pattern,

@@ -218,6 +218,14 @@ each, 16 a player), leaderboards (submit, top, the player's own), the game's dat
 (`api`). Every call answers `{data, error, status}` and none throws, so a game plays on as a guest wherever xgames.fun is
 not there.
 
+**Full screen.** Most players meet a game in a post on X or on a phone, where it shows in a small frame first; `xcore
+adopt` warns when a game has no way to go full screen. A button that calls `GamesFun.fullscreen()` from the click
+(`await GamesFun.fullscreen()` in Godot; `Screen.fullScreen` in Unity) does it wherever the game is: in xgames.fun's
+play page the page around the game goes full screen (or fills the screen in an app's own browser, X's among them), on
+its own link the browser does, and in a frame that allows none (a post on X on a computer) the game opens in a tab of
+its own. It answers `{on, how: 'page' | 'browser' | 'tab' | 'none'}` (`none`: an iPhone's Safari, which has no full
+screen for a page); pressed again it comes back, and `GamesFun.onFullscreen(on => …)` follows every change.
+
 **A leaderboard is the player's own word until the server takes it.** A signed-in player submits their own scores
 from the page, so anyone can submit any score for themselves from the browser's console. A game with its own server
 makes a board nobody can write that way: `env.GF.scores.setup('ranked', {writer: 'server'})` (or a pattern for boards
@@ -633,7 +641,7 @@ A game made with xcore 0.1.0 that has `server/database.js` (`xcore add database`
 without one needs none: the D1 database, `xcore db` and `xcore files` are new.
 
 1. **Run `xcore add database` again.** It brings `server/database.js` up to date (your `RULES` and `LIMITS` are
-   kept), with `gamesfun.js` (1.4.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
+   kept), with `gamesfun.js` (1.6.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
    needs an owner (step 3) as `file:line` with its change; `xcore publish` lists them again until each names its
    owner. On its first start the new `database.js` moves the documents to a table keyed by collection, owner and id,
    each under its owner. After that, do not roll the game back to a version with 0.1.0's `database.js`: its writes
