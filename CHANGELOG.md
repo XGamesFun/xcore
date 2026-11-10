@@ -2,6 +2,67 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.4.0 — 2026-11-10
+
+The kit now refuses at build time what xgames.fun refuses at publish, `xcore dev` behaves like the platform on a plan,
+and `@xgamesfun/solana` is 0.26.0.
+
+**May break**
+
+- Server bundles: an import, re-export or `import()` of `cloudflare:sockets`, `node:net`, `node:tls`, `node:dgram`,
+  `node:http2`, `node:module` or `node:child_process`, an `import()` of a name made at run time, and `nodejs_compat`
+  (so every `node:` import a bundle still uses) are refused, as xgames.fun refuses them. An import esbuild leaves out
+  of the bundle no longer refuses a publish.
+- Programs, installers and archives other than `.zip` are refused at publish, before anything is sent.
+- `xcore dev` enforces the Free plan by default (`--plan creator|scale` for another): 8 boards and 16 rules where it
+  allowed 16 and 32, "high" boards only from a page and two a player, a player's share of save bytes, rates a minute,
+  JSON page bodies of at most 96 KB, and for project files a matching type for anything public and 1 MB for a string
+  or `ArrayBuffer` body. A public file stored under 0.3.0 is served as a download until it is put again.
+- `PLATFORM_LIMITS.scores` in `@xgamesfun/xcore/server/contract` is Free's (8 boards, 16 rules), no longer 16 and 32;
+  `PLAN_LIMITS` has every plan's numbers.
+- `@xgamesfun/solana` 0.26.0, for loot 0.26.0 (on devnet since 2026-11-10, slot 520,815,761). No account of an earlier
+  build carries over: an economy that went live before goes live again (`xcore loot approve`), and the next publish
+  brings `gf/loot/` up to the installed package.
+
+**Servers and publishing**
+
+- Server bundles are checked by parsing the finished bundle, and a refusal names the file it came from, in a package
+  too. A path esbuild can list (``import(`./levels/${n}.js`)``) is bundled and accepted.
+- `nodejs_compat` is not offered: a `gamesfun.json` that asks for it is refused, in words.
+- docs/SERVER.md and README say what the platform does today: the list in `backend.json` applies to the calls a
+  server's entry makes (do not rely on it for anything else), no number of calls out a request is promised, and an
+  unpublished, taken-down or capped game's server is switched off (a running room within about five minutes).
+- The publish scan's patterns are bounded and linear, as xgames.fun's (4 MiB of any hostile text in well under a
+  second), and a secret-looking literal is judged with the host's bounds (one longer than 1,024 characters is no longer
+  refused). A backend origin whose host a page's security policy cannot name is refused.
+- A first publish (and `xcore check`) says the link name a game will get when xgames.fun leaves reserved words out of
+  its title.
+- A player's id is the account (`x:<id>`, or `g:<id>` for Google, different in every game), never the wallet: `wallet`
+  is a claim of its own and may be absent. The docs and the server templates say so.
+- `xcore review`: `server-no-token-check` (medium) and `work-before-token` (low) for a server of the game's own that
+  does work without, or before, checking a player's token; docs/SERVER.md has "Check the token first".
+
+**Local development and sign-in**
+
+- `xcore dev --plan free|creator|scale`: the dev platform refuses what xgames.fun refuses on that plan, and says which
+  plan it is imitating when it starts. Board reads carry per-game player ids with `me: true`; a read with no token sees
+  the top 100 (a 5-second cache, its own minute); ranks and offsets go to 10,000. `env.GF.scores.list()` works there.
+- `xcore login` says whether the sign-in reaches your whole account or which games, and `login --status` says it again
+  (asked of xgames.fun each time, with the saved answer when it cannot be reached). A command refused because the
+  sign-in was not given that game (`not-granted`) says so, with `xcore login` as the next step.
+- README: a backend of your own that keeps xgames.fun's key set fetches it again, once, when a token names a key id it
+  does not hold.
+
+**Solana economies**
+
+- New for a game's page through `gf.loot.call`: an auction's end delivers the lot and pays the seller together, and
+  says when a sale is waiting (`endAuction`); a loan's repayment brings the NFT home (`repay`); `lotteries` and
+  `ticketWeight` show a time-weighted lottery's weights and its sales close; `unstakeNft` can leave without a prize that
+  cannot be given; `collect` can give up a prize the player cannot receive.
+- New in a spec (`xcore loot check` explains each): a lottery's `closesBefore` and `timeWeighted`, a place's
+  `whenShort`, a box's `whenOut: "giveNothing"`. Many limits are gone and are warnings now: read the check's warnings
+  again for an economy written for 0.25.
+
 ## 0.3.0 — 2026-11-09
 
 - `gamesfun.js` is 1.6.0.
