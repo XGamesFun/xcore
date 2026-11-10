@@ -144,3 +144,26 @@ test('what a sign-in reaches is read from xgames.fun when asked: a game publishe
     /xgames\.fun could not be asked just now, so this is the list saved .* and may be out of date/,
   );
 });
+
+test('an answer that lists no games (a page, {}, games not a list) is no answer: the saved list stands', async t => {
+  const { g, env, cli } = await setUp(t, { scope: 'games', games: ['g1'] });
+  let answer = [200, { ok: true, games: [{ id: 'g1', title: 'Moth Run', slug: 'moth-run' }] }];
+  g.state.handle = (method, url) => (url === '/api/kit/plan' ? answer : null);
+  await loginWithReach({ origin: g.origin, env, open: approve(g) });
+  for (const odd of [
+    [200, Buffer.from('<!doctype html><title>xgames.fun</title>')],
+    [200, {}],
+    [200, { games: 'x' }],
+    [200, { games: [{ title: 'no id' }] }],
+  ]) {
+    answer = odd;
+    const r = await runAsync(['login', '--status'], { env: cli });
+    assert.match(r.stdout, /This sign-in reaches 1 of your games: Moth Run \(moth-run\)\./, JSON.stringify(odd[1]));
+    assert.match(r.stdout, /may be out of date/);
+    assert.deepEqual(
+      (await readReach(g.origin, { env })).games.map(x => x.id),
+      ['g1'],
+      'the saved copy is kept',
+    );
+  }
+});
