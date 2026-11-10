@@ -79,7 +79,9 @@ console errors, nothing missing, nothing from the root, something on screen), it
 screenshots in `evidence/verify-N/` and look at them. A failing check 4 names the origin and why: declare it in
 `backend.json` if the game really calls it, or remove the call. The page check does not say the game plays well:
 that is the person's own game; ask them what to try, and try it with `xcore dev <folder>` (the game as xgames.fun
-hosts it, with its server, sign-in, saves, rooms and economy RPC) or their own.
+hosts it, with its server, sign-in, saves, rooms and economy RPC, refusing what xgames.fun refuses on the Free plan;
+`--plan creator` for a Creator game) or their own. A refusal there (`rate`, `full`, `too-many`, `order`) is one the
+published game would get: fix the game, not the stand-in.
 
 ## 4. Players, a database, a backend (only when the game has or needs them)
 
@@ -200,7 +202,9 @@ xcore publish <folder>          # or gamesfun_login, then gamesfun_publish {"gam
 ```
 
 It builds, runs the page check on exactly those files, uploads the published folder and the `server/` bundle. A failed
-check makes a private draft only. Tell them the link, what you changed in their files, what the checks proved and what
+check makes a private draft only. `xcore login` asks the person to tick, on xgames.fun's approval page, the games this
+computer may work on (or their whole account), and says which it got; a command refused with code `not-granted` means
+the sign-in was not given that game: they run `xcore login` again and tick it (never work around it). Tell them the link, what you changed in their files, what the checks proved and what
 nothing checked (their gameplay, their backend's own behaviour).
 
 A game with a `server/`, saves or scores runs under its **plan** (`xcore plan <folder>`): Free by default (50 ms of CPU

@@ -67,7 +67,8 @@ export const passing = async () => ({
 
 /**
  * A stand-in xgames.fun: the token exchange and logout, and the publish calls, in memory. A test may set
- * state.me (more of GET /api/kit/me's answer: server, features), state.refuse ({at: 'begin' | 'complete', status,
+ * state.reach (the token exchange's {scope, games}: what the approval page gave the sign-in), state.me (more of GET
+ * /api/kit/me's answer: server, features), state.refuse ({at: 'begin' | 'complete', status,
  * body}: that publish step answers it), and state.handle(method, url, json, {req, raw, authed}) → [status, body] | [status, body,
  * headers] | null for routes of its own (the database's and the files' owner routes). state.published is the last
  * publish's body; state.uploads maps each uploaded blob's sha256 to its bytes.
@@ -104,6 +105,7 @@ export async function standIn() {
         email: 'alice@example.com',
         device: 'test',
         expiresAt: Date.now() + 1e9,
+        ...(state.reach ?? {}),
       });
     }
     if (!state.tokens.has(auth)) return send(401, { error: 'Sign in first: npx gamesfun login' });
