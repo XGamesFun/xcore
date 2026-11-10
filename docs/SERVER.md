@@ -35,7 +35,7 @@ my-game/
 | `main`               | default `server/index.js`; a `.js` or `.mjs` file under `server/`                                                                                                                                                                                                                                                                                               |
 | `objects`            | 0–8 Durable Objects (a room, a run, a vault): `class` is the class the entry exports, `binding` the name it has on `env` (A–Z, 0–9 and `_`, starting with a letter, at most 32 characters, never `GF` or `GF_…`). Each gets its own SQLite storage. **Append only**: once published, keep every class (removing one deletes its data, so the upload refuses it) |
 | `routes`             | `"/api/*"`, the only value for now                                                                                                                                                                                                                                                                                                                              |
-| `compatibilityFlags` | empty, or `["nodejs_compat"]` to use `node:crypto`, `node:buffer` and the other Node built-ins a Worker has                                                                                                                                                                                                                                                     |
+| `compatibilityFlags` | empty. `["nodejs_compat"]` is not offered: with Node's built-in modules a server can open raw network connections, so xgames.fun refuses a publish that asks for it, and the kit's check says so first. Use the Web APIs a Worker has (`fetch`, `crypto.subtle`, `URL`, `TextEncoder`)                                                                          |
 
 Without a `gamesfun.json` server entry, a `server/index.js` alone is a server with no objects. `server/` and
 `gamesfun.json` are **never served** as files, and a game with a server keeps no files under `api/` (its `/api/*` is
@@ -50,7 +50,7 @@ export class Vault extends DurableObject {
 }
 export default {
   async fetch(request, env, ctx) {
-    /* every /api/* request of the game, URL unchanged */
+    /* every /api/* request of the game, URL unchanged: check the player's token first (below) */
   },
 };
 ```
@@ -63,24 +63,38 @@ export default {
   `env.GF_GAME_ID`, `env.GF_SLUG` and `env.GF_CONTRACT` (`"gf-server-v1"`), and your own secrets as `env.<NAME>`
   (below, "Secrets"). No key of xgames.fun's. Keep keys out of server code: publish refuses one it finds.
 - **Runtime**: Cloudflare Workers, compatibility date `2025-06-01`.
-- **Outbound `fetch`** reaches only the origins in your `backend.json` and xgames.fun's own. To read Solana devnet
-  from the server, call xgames.fun's relay, `https://play.xgames.fun/loot/v1/rpc` (the methods loot's client uses, one
-  request a call): the public devnet RPC (`api.devnet.solana.com`) answers the Workers runtime with 403 ("Your IP or
-  provider is blocked"), under `xcore dev` as well.
-- **Limits**: set by the game's plan (README §5, `xcore plan`). Free: 50 ms of CPU per request to `fetch`, 20
-  subrequests, **600 requests a minute per game and 120 from one player**; Creator: 200 ms, 50, 6,000 and 600; a 5 MB
-  bundle on every plan. Past a rate, `/api/*` answers 429 with `retry-after: 60`, `scope` (`"player"` or `"game"`)
-  and `plan`. Keep frequent traffic,
+- **Outbound `fetch`**: the list in `backend.json` (and xgames.fun's own origins) applies to the calls your server's
+  entry makes while it answers a request; any other answers 403 with the header `x-gf-outbound: refused`. Do not rely
+  on it for anything else: keep what your Durable Objects call to what they need, in their own code. No number of calls
+  out a request is promised. To read Solana devnet from the server, call xgames.fun's relay,
+  `https://play.xgames.fun/loot/v1/rpc` (the methods loot's client uses, one request a call): the public devnet RPC
+  (`api.devnet.solana.com`) answers the Workers runtime with 403 ("Your IP or provider is blocked"), under `xcore dev`
+  as well.
+- **Limits**: set by the game's plan (README §5, `xcore plan`). Free: 50 ms of CPU per request to `fetch`, **600
+  requests a minute per game and 120 from one player**; Creator: 200 ms, 6,000 and 600; a 5 MB bundle on every plan.
+  Requests with no good game token share half of the game's minute (Free: 300), so signed-in players always have the
+  other half. Past a rate, `/api/*` answers 429 with `retry-after: 60`, `scope` (`"player"` or `"game"`) and `plan`.
+  Keep frequent traffic,
   such as positions in a real-time game, on a WebSocket rather than in many HTTP requests. A Durable
   Object's WebSocket counts as one request for its whole life, but a room's messages are held to a few milliseconds
   of CPU each **on every plan** (a bigger plan raises a request's CPU, not a room's): a room doing ~3 ms a message ran
   for minutes, one doing ~15 ms was reset within seconds (every socket closes with code 1006). Do a room's work as
   messages arrive rather than in timers, keep it to a millisecond or two per message, and reconnect on 1006. Heavy
   work (a replay, a long simulation) goes in an HTTP request instead, which gets the plan's CPU.
-- **Not allowed**: code made from text at run time (`eval`, `new Function`, `import()` of a computed path,
-  `importScripts`), files from outside the game folder (packages from `node_modules` are fine), Node built-ins without
-  `nodejs_compat`, and those a Worker does not have even with it (`node:fs`, `child_process`, `vm`, …). The check names
-  the file and line.
+- **Not allowed** (the kit's check names the file and line before anything is sent; xgames.fun refuses the same at
+  publish):
+  - **raw network connections**: an import, a re-export or an `import()` of `cloudflare:sockets`, `node:net`,
+    `node:tls`, `node:dgram`, `node:http2`, `node:module` or `node:child_process` (with or without `node:`), in the
+    server's own code or in a package it bundles. A game's server reaches the network with `fetch()` only: a
+    database driver or a mail or chat client that opens sockets runs on a host of your own;
+  - **an `import()` of a name made at run time** (`import(name)`): it could load any module. Import each module by
+    its own name; a path esbuild can list when it bundles (``import(`./levels/${name}.js`)``) is bundled, every
+    file there, and is fine. xgames.fun parses the bundle it is sent; the kit reads the same bundle with esbuild's
+    own parser, never by searching its text, so a word in a comment or a string is not an import;
+  - **Node's built-in modules** (`node:crypto`, `node:buffer`, `fs`, …): `nodejs_compat` is not offered, so use the
+    Web APIs a Worker has (`crypto.subtle`, `crypto.getRandomValues`, `TextEncoder`, `URL`);
+  - code made from text at run time (`eval`, `new Function`, `importScripts`; the runtime refuses them too), and files
+    from outside the game folder (packages from `node_modules` are fine).
 - **One request at a time, between awaits.** A Durable Object holds other requests back while it waits on its own
   storage, but an `await` of anything else (`fetch`, `env.GF.verifyPlayer`, another object) lets the next request
   in. Read and update a player's state (a daily cap, a balance) with nothing but storage calls in between: verify
@@ -106,6 +120,36 @@ export default {
   (Rapier's `rapier_wasm2d.js` is such a loader; a game running the same deterministic build in the page and in the
   server got identical results.)
 
+### Check the token first
+
+A request with no good game token is a stranger's. Check the token before any work, and answer 401 at once without
+one: the work your server does for callers with no token (reading the database, waking a room, calling out) counts
+toward what caps your game, and a capped game's server is switched off until the month ends ("Publishing it", below).
+
+```js
+export default {
+  async fetch(request, env) {
+    // what is truly public (a leaderboard everyone sees) may come before this; nothing else does
+    const token = /^Bearer\s+(\S+)$/i.exec(request.headers.get('authorization') ?? '')?.[1];
+    if (!token) return Response.json({ why: 'Sign in first.' }, { status: 401 }); // no call, no work: cheap
+    const player = await env.GF.verifyPlayer(token); // its signature, its audience (this game) and its expiry
+    if (!player.ok) return Response.json({ why: 'Sign in again.' }, { status: 401 });
+    // from here on, player.sub is who is asking
+    return Response.json(await env.GF.saves.get(player.sub));
+  },
+};
+```
+
+- `env.GF.verifyPlayer` checks the token's signature, that it was made for this game (its audience, `game:<slug>`)
+  and that it has not expired. A backend of your own that checks tokens with a JWT library checks all three:
+  `jwtVerify(token, keys, { issuer: 'xgames.fun', audience: 'game:<slug>' })`, never the signature alone (every
+  game's tokens are signed with one key, so a token without its audience checked is any game's).
+- The page sends it for you: `GamesFun.api(path)` adds `Authorization: Bearer …` for a signed-in player. A WebSocket
+  cannot carry that header: send `GamesFun.token` in the address (below).
+- `server/gf-db.js`'s `withPlayer(request, env)` is the same check (null without a token, with no call made).
+- `xcore review` names a server of the game's own whose files do work and never check a token, and an entry whose
+  `fetch` does work before its first check (fine for what is truly public, and yours to decide).
+
 ### A room over a WebSocket
 
 A Durable Object holds the room: every player's socket is accepted there, and a message from one goes to the others.
@@ -129,8 +173,14 @@ export class Room extends DurableObject {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === '/api/room') return env.ROOM.get(env.ROOM.idFromName('main')).fetch(request);
-    return new Response('not found', { status: 404 });
+    if (url.pathname !== '/api/room') return new Response('not found', { status: 404 });
+    // the player first, before the room is woken: a WebSocket cannot carry an Authorization header, so the page sends
+    // its token in the address
+    const token = url.searchParams.get('token');
+    if (!token) return new Response('sign in first', { status: 401 });
+    const player = await env.GF.verifyPlayer(token);
+    if (!player.ok) return new Response('sign in again', { status: 401 });
+    return env.ROOM.get(env.ROOM.idFromName('main')).fetch(request);
   },
 };
 ```
@@ -139,6 +189,7 @@ export default {
 // the page
 const url = new URL('api/room', document.baseURI);
 url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+url.searchParams.set('token', GamesFun.token);
 const socket = new WebSocket(url);
 ```
 
@@ -146,8 +197,8 @@ const socket = new WebSocket(url);
 server, so it notes the socket instead of failing on it.
 
 **When you publish an update**, the page's files and the server change within about 30 seconds, not all at once, and
-a room that has players connected can keep running the previous code until it empties. Make your messages tolerate one
-version talking to the other (a version number in the first message is enough to tell a player to reload).
+a room that is running keeps the previous code for up to about five minutes. Make your messages tolerate one version
+talking to the other (a version number in the first message is enough to tell a player to reload).
 
 ### `env.GF`, the platform
 
@@ -157,10 +208,17 @@ Every call answers `{ok: true, …}` or `{ok: false, code, why}` (`why` is words
 | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `GF.verifyPlayer(token)`                                                                                                                                                                            | `{ok, sub, wallet, x, lvl, exp, banned}`: who the player is, from the sign-in token the page sends (no display name: show `x.handle` when they signed in with X, else a name the page sends, cleaned). `banned`: the creator's ban from the console (`{kind: 'ban' \| 'hide', until}`, or null; always null in `xcore dev`). A token made before a ban still verifies for its hour, so refuse `kind: 'ban'` yourself |
 | `GF.saves.get(player, key = 'main')`, `.put(player, key, value)`, `.delete(player, key)`, `.list(player)`                                                                                           | a player's saves: any JSON value, 64 KB each, 16 a player                                                                                                                                                                                                                                                                                                                                                            |
-| `GF.scores.submit(board, player, score, {name, order, writer})`, `.setup(board, {order, writer})`, `.top(board, {limit, offset})`, `.best(board, player)`, `.remove(board, player)`, `.drop(board)` | leaderboards: a player's best is kept; `order` `"high"` (default) or `"low"`; `writer: "server"`: only the server writes the board (or every board a pattern names: `daily-*`, `*`); `drop`: the board gone, its place among the 16 free                                                                                                                                                                             |
+| `GF.scores.submit(board, player, score, {name, order, writer})`, `.setup(board, {order, writer})`, `.top(board, {limit, offset})`, `.best(board, player)`, `.remove(board, player)`, `.drop(board)` | leaderboards: a player's best is kept; `order` `"high"` (default) or `"low"`; `writer: "server"`: only the server writes the board (or every board a pattern names: `daily-*`, `*`); `drop`: the board gone, its place among the plan's boards free                                                                                                                                                                  |
 | `GF.loot.report({round, endedAt, winners})`, `GF.loot.status()`                                                                                                                                     | a result that pays prizes by place: xgames.fun's keeper signs it with the game's host key (set up by the owner in Studio); for amounts your server works out, your own key (below, "Paying a result")                                                                                                                                                                                                                |
 | `GF.info()`                                                                                                                                                                                         | `{ok, contract, gameId, slug}`                                                                                                                                                                                                                                                                                                                                                                                       |
 | `GF.files.put(path, body, {type, public, length})`, `.get(path)`, `.head(path)`, `.list({prefix, after})`, `.delete(path)`, `.usage()`                                                              | the game's project files (below, "Project files"): replays, levels, content packs; public ones on the files site                                                                                                                                                                                                                                                                                                     |
+
+**Who the player is.** `sub` is the player's account, never their wallet: `x:<X id>` for a player signed in with X,
+or `g:<id>` for a Google account with no X, an id that is **different in every game** (so it never says who the
+person is elsewhere). `wallet` is a claim of its own: the wallet linked to the account, or null when there is none, and
+it can change (a player links another). Key a player's data (saves, rows, rooms) on `sub`; read `wallet` only for what
+is about the wallet itself (paying it, what it holds). A game that kept a player's data by wallet reads `wallet` now,
+and one that keys on `sub` must not expect a Google player's id to match the same person's in another game.
 
 `player` is the game's own word for a player; normally `verifyPlayer`'s `sub`, so nobody can write another player's.
 The page writes the same saves and boards for its own signed-in player (`/platform/v1/*`), so a board is the player's
@@ -171,7 +229,8 @@ server's own `submit`) makes a board only the server writes. From then on the pa
 the page wrote while anyone could write it is removed (`setup` answers how many, `removed`). **A pattern** names every
 board starting that way, now and to come: `GF.scores.setup('daily-*', {writer: 'server'})` before the first day, and
 nobody fills a day's board ahead of time; `GF.scores.setup('*', {writer: 'server'})` keeps the page from making
-boards at all (a board's own rule wins over a pattern, a longer pattern over a shorter one). A game has 16 boards:
+boards at all (a board's own rule wins over a pattern, a longer pattern over a shorter one). A game has 8 boards on
+Free (16 rules) and 16 on Creator and Scale (32 rules):
 **`GF.scores.drop(board)`** removes one (a past day's, once its prizes are paid) and frees its place. Only the server
 can set or lift a rule (`writer: 'any'`) or drop a board.
 
@@ -258,8 +317,9 @@ xcore secret set XSOLANA_RPC_URL         # the RPC's URL with its key: the serve
   `getProgramAccounts` only with filters and only of loot's own programs (loot, Metaplex Core, lookup tables); and
   `sendTransaction` only for the game's own transactions (one with a loot instruction, or a plain SOL send). So a
   stranger calling `api/rpc` cannot spend your RPC's credits on anything else. Mainnet URLs are not used (loot runs on devnet until it is audited).
-- The server may call only `backend.json`'s origins: `xcore add rpc` adds the RPC's (`https://host` alone, never the
-  key) when `XSOLANA_RPC_URL` is in `.dev.vars` or `.env`, and publish says when it is missing.
+- The server's entry, where `api/rpc` runs, may call only `backend.json`'s origins: `xcore add rpc` adds the RPC's
+  (`https://host` alone, never the key) when `XSOLANA_RPC_URL` is in `.dev.vars` or `.env`, and publish says when it
+  is missing.
 - Solana's public `https://api.devnet.solana.com` refuses calls from Cloudflare ("Your IP or provider is blocked",
   measured 2026-11-03): use a provider's URL.
 - Under `xcore dev`, put `XSOLANA_RPC_URL` in `.dev.vars` to run this path; in `.env` it is the dev server's own
@@ -621,6 +681,14 @@ my-vault: 278 files, 10.0 MB, nothing refused. Left out: .gamesfun/, .gitignore,
 
 Hosted, the game's server answers at `https://<slug>-play.xgames.fun/api/…`. A blocked or over-limit server answers
 `{error, message}` with 451, 429, 404, 503 or 502 instead of the server's own answer.
+
+**A game that is unpublished, taken down or capped** (past its plan's money for the month: README "Its plan") has its
+server switched off: every `api/*` request answers `451 {"error": "stopped", "reason": "unpublished" | "taken-down" |
+"capped", "message"}`, its Durable Objects' alarms lapse and their sockets close. A room that is running stops within
+about five minutes. Its rooms' data and its secrets are kept, and the server comes back by itself when the game is
+published again (within 30 days, to be sure of its data) or its cap lifts (the month's turn, a paid slot, usage
+credit); a version published while it is capped goes live with its pages, and its server waits. The page keeps
+loading meanwhile, so a game whose server can be off says so when `api/` answers 451.
 
 While the game's owner has it **paused for maintenance** (xgames.fun/console, the Live tab; README "Live"), xgames.fun
 answers its `api/*` itself with `503 {ok: false, code: 'maintenance', why, since}` and `retry-after: 60`, WebSocket

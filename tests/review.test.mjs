@@ -166,6 +166,297 @@ test("a server that checks players' tokens itself must name the game's audience"
   assert.ok(!ids(await review(dir)).includes('high token-any-game'));
 });
 
+const AUTH =
+  "export async function requirePlayer(request, env) { const t = (request.headers.get('authorization')||'').slice(7); if (!t) return null; const p = await env.GF.verifyPlayer(t); return p.ok ? p : null; }\n";
+// [name, server files, gamesfun.json or null, what the review says about tokens]
+const TOKEN_CASES = [
+  [
+    'reads the board for anyone, never checks',
+    {
+      'index.js':
+        "export default {\n  async fetch(request, env) {\n    return Response.json(await env.GF.scores.top('best'));\n  },\n};\n",
+    },
+    null,
+    ['medium server-no-token-check'],
+  ],
+  [
+    'a database for anyone',
+    {
+      'index.js':
+        'export default { async fetch(request, env) { return Response.json(await env.DB.prepare("SELECT 1").all()); } };\n',
+    },
+    null,
+    ['medium server-no-token-check'],
+  ],
+  [
+    'a fetch out for anyone',
+    { 'index.js': "export default { async fetch() { return fetch('https://api.example.net/x'); } };\n" },
+    null,
+    ['medium server-no-token-check'],
+  ],
+  [
+    'a counter in a Durable Object, no token anywhere',
+    {
+      'index.js':
+        "export default { async fetch(request, env) { return env.HITS.get(env.HITS.idFromName('x')).fetch(request); } };\n",
+    },
+    null,
+    ['medium server-no-token-check'],
+  ],
+  [
+    'checks first, then works',
+    {
+      'index.js':
+        "export default {\n  async fetch(request, env) {\n    const token = (request.headers.get('authorization') ?? '').replace(/^Bearer\\s+/i, '');\n    if (!token) return new Response('sign in', { status: 401 });\n    const player = await env.GF.verifyPlayer(token);\n    if (!player.ok) return new Response('sign in', { status: 401 });\n    return Response.json(await env.GF.saves.get(player.sub));\n  },\n};\n",
+    },
+    null,
+    [],
+  ],
+  [
+    'works, then checks',
+    {
+      'index.js':
+        "export default {\n  async fetch(request, env) {\n    const top = await env.GF.scores.top('best');\n    const player = await env.GF.verifyPlayer(request.headers.get('authorization'));\n    if (!player.ok) return Response.json(top);\n    return Response.json({ top, me: player.sub });\n  },\n};\n",
+    },
+    null,
+    ['low work-before-token'],
+  ],
+  [
+    'a public board on GET, a checked POST',
+    {
+      'index.js':
+        "export default { async fetch(request, env) {\n if (request.method === 'GET') return Response.json(await env.GF.scores.top('best', {limit: 10}));\n const p = await env.GF.verifyPlayer((request.headers.get('authorization')||'').slice(7)); if (!p.ok) return new Response('no',{status:401});\n await env.GF.scores.submit('best', p.sub, 1); return Response.json({ok:true}); } };\n",
+    },
+    null,
+    ['low work-before-token'],
+  ],
+  [
+    'answers from what it has, no work',
+    { 'index.js': 'export default { fetch: () => Response.json({ ok: true }) };\n' },
+    null,
+    [],
+  ],
+  [
+    'checked first through a helper of its own (server/auth.js)',
+    {
+      'auth.js': AUTH,
+      'index.js':
+        "import { requirePlayer } from './auth.js';\nexport default { async fetch(request, env) { const p = await requirePlayer(request, env); if (!p) return new Response('no', {status: 401}); return Response.json(await env.GF.saves.get(p.sub, 'k')); } };\n",
+    },
+    null,
+    [],
+  ],
+  [
+    'a wrapper of its own checks every handler',
+    {
+      'auth.js':
+        AUTH +
+        "export const authed = h => async (request, env) => { const p = await requirePlayer(request, env); if (!p) return new Response('no',{status:401}); return h(request, env, p); };\n",
+      'index.js':
+        "import { authed } from './auth.js';\nconst handle = async (request, env, p) => Response.json(await env.GF.saves.get(p.sub,'k'));\nexport default { fetch: authed(handle) };\n",
+    },
+    null,
+    [],
+  ],
+  [
+    'a room whose Durable Object checks the token itself',
+    {
+      'room.js':
+        "import { DurableObject } from 'cloudflare:workers';\nexport class Room extends DurableObject { async fetch(request) { const p = await this.env.GF.verifyPlayer(new URL(request.url).searchParams.get('t')); if (!p.ok) return new Response('no',{status:401}); return new Response('hi'); } }\n",
+      'index.js':
+        "export { Room } from './room.js';\nexport default { async fetch(request, env) { return env.ROOMS.get(env.ROOMS.idFromName('lobby')).fetch(request); } };\n",
+    },
+    { server: { main: 'server/index.js', objects: [{ class: 'Room', binding: 'ROOMS' }] } },
+    [],
+  ],
+  [
+    "a router's JWT middleware (a package): not decided, so not said",
+    {
+      'index.js':
+        "import { Hono } from 'hono';\nimport { jwt } from 'hono/jwt';\nconst app = new Hono();\napp.use('/api/*', jwt({ secret: 'x' }));\napp.get('/api/me', async c => c.json(await c.env.GF.saves.get('a','b')));\nexport default app;\n",
+    },
+    null,
+    [],
+  ],
+  [
+    'a check in a comment only',
+    {
+      'index.js':
+        "// verifyPlayer(token) here someday\nexport default { async fetch(request, env) { return Response.json(await env.GF.scores.top('b')); } };\n",
+    },
+    null,
+    ['medium server-no-token-check'],
+  ],
+  [
+    'a check in a string only',
+    {
+      'index.js':
+        "const s = 'verifyPlayer(';\nexport default { async fetch(request, env) { return Response.json(await env.GF.scores.top('b')); } };\n",
+    },
+    null,
+    ['medium server-no-token-check'],
+  ],
+  [
+    'a check in a helper fetch never calls',
+    {
+      'index.js':
+        "function never(env){ return env.GF.verifyPlayer('x'); }\nexport default { async fetch(request, env) { return Response.json(await env.GF.scores.top('b')); } };\n",
+    },
+    null,
+    ['low work-before-token'],
+  ],
+  [
+    'env.GF?.saves?.get',
+    {
+      'index.js':
+        "export default { async fetch(request, env) { return Response.json(await env.GF?.saves?.get('a','b')); } };\n",
+    },
+    null,
+    ['medium server-no-token-check'],
+  ],
+  [
+    'const { GF } = env',
+    {
+      'index.js':
+        "export default { async fetch(request, env) { const { GF } = env; return Response.json(await GF.scores.top('b')); } };\n",
+    },
+    null,
+    ['medium server-no-token-check'],
+  ],
+  [
+    'const g = env.GF; g.saves',
+    {
+      'index.js':
+        "export default { async fetch(request, env) { const g = env.GF; return Response.json(await g.saves.get('a','b')); } };\n",
+    },
+    null,
+    ['medium server-no-token-check'],
+  ],
+  [
+    'export default new Server()',
+    {
+      'index.js':
+        "class S { async fetch(request, env) { return Response.json(await env.GF.scores.top('b')); } }\nexport default new S();\n",
+    },
+    null,
+    ['medium server-no-token-check'],
+  ],
+  [
+    'checked first through a method of an object of its own (Auth.check())',
+    {
+      'auth.js':
+        "export const Auth = { async check(request, env) { const t = (request.headers.get('authorization')||'').slice(7); if (!t) return null; const p = await env.GF.verifyPlayer(t); return p.ok ? p : null; } };\n",
+      'index.js':
+        "import { Auth } from './auth.js';\nexport default { async fetch(request, env) { const p = await Auth.check(request, env); if (!p) return new Response('no', {status: 401}); return Response.json(await env.GF.saves.get(p.sub, 'k')); } };\n",
+    },
+    null,
+    [],
+  ],
+  [
+    'checked first through a static method of a class of its own',
+    {
+      'auth.js':
+        "export class Auth {\n  static async check(request, env) { const t = (request.headers.get('authorization')||'').slice(7); if (!t) return null; const p = await env.GF.verifyPlayer(t); return p.ok ? p : null; }\n}\n",
+      'index.js':
+        "import { Auth } from './auth.js';\nexport default { async fetch(request, env) { const p = await Auth.check(request, env); if (!p) return new Response('no', {status: 401}); return Response.json(await env.GF.saves.get(p.sub, 'k')); } };\n",
+    },
+    null,
+    [],
+  ],
+  [
+    'checked first through an arrow on an object of its own',
+    {
+      'auth.js':
+        "export const Auth = { check: async (request, env) => { const t = (request.headers.get('authorization')||'').slice(7); if (!t) return null; const p = await env.GF.verifyPlayer(t); return p.ok ? p : null; } };\n",
+      'index.js':
+        "import { Auth } from './auth.js';\nexport default { async fetch(request, env) { const p = await Auth.check(request, env); if (!p) return new Response('no', {status: 401}); return Response.json(await env.GF.saves.get(p.sub, 'k')); } };\n",
+    },
+    null,
+    [],
+  ],
+  [
+    "a package whose name has 'auth' inside a word (authority, authorName): still said",
+    {
+      'index.js':
+        "import { authorName } from 'authority';\nexport default { async fetch(request, env) { return Response.json(await env.GF.scores.top('b')); } };\n",
+    },
+    null,
+    ['medium server-no-token-check'],
+  ],
+  [
+    'a sign-in package by its path (@acme/auth): not decided, so not said',
+    {
+      'index.js':
+        "import { requireUser } from '@acme/auth';\nexport default { async fetch(request, env) { return Response.json(await env.GF.scores.top('b')); } };\n",
+    },
+    null,
+    [],
+  ],
+  [
+    'a sign-in package by its name (x-auth): not decided, so not said',
+    {
+      'index.js':
+        "import guard from 'x-auth';\nexport default { async fetch(request, env) { return Response.json(await env.GF.scores.top('b')); } };\n",
+    },
+    null,
+    [],
+  ],
+  [
+    'a sign-in package by its name (auth-kit): not decided, so not said',
+    {
+      'index.js':
+        "import { guard } from 'auth-kit';\nexport default { async fetch(request, env) { return Response.json(await env.GF.scores.top('b')); } };\n",
+    },
+    null,
+    [],
+  ],
+  [
+    "xcore's own parts (its index, api/rpc)",
+    {
+      'index.js':
+        "// The game's server on xgames.fun (docs/SERVER.md in @xgamesfun/xcore). Written by `xcore add rpc`:\nimport { handleRpc } from './rpc.js';\nexport default { async fetch(request, env) { const rpc = await handleRpc(request, env); if (rpc) return rpc; return new Response('not found', { status: 404 }); } };\n",
+      'rpc.js':
+        "export async function handleRpc(request, env) { return fetch(env.XSOLANA_RPC_URL, { method: 'POST' }); }\n",
+    },
+    null,
+    [],
+  ],
+];
+
+test('a server that works for anyone without checking a token is named; one that checks first (itself, through a helper of its own or in its room), or does no work, is not', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const tokenIds = r => ids(r).filter(f => /token/.test(f));
+  for (const [i, [name, files, cfg, expected]] of TOKEN_CASES.entries()) {
+    const dir = path.join(tmp.dir, `t${i}`);
+    await mkdir(path.join(dir, 'server'), { recursive: true });
+    await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>x</title>');
+    if (cfg) await writeFile(path.join(dir, 'gamesfun.json'), JSON.stringify(cfg));
+    for (const [f, text] of Object.entries(files)) await writeFile(path.join(dir, 'server', f), text);
+    const r = await review(dir);
+    assert.deepEqual(tokenIds(r), expected, name);
+    for (const f of r.findings.filter(x => /token/.test(x.id))) {
+      // the advice, not a recipe: no numbers, no timing
+      assert.match(f.message, /counts toward what caps the game/, name);
+      assert.doesNotMatch(`${f.message} ${f.fix}`, /\d+ ms|days?\b|minute/, name);
+      assert.match(f.fix, /verifyPlayer/);
+      assert.match(f.fix, /401/);
+    }
+  }
+  // the parts xcore writes, as `xcore add` writes them
+  const { addDatabase, addDatabaseObject, addMultiplayer, addRpc } = await import('../lib/add.mjs');
+  for (const [name, steps] of [
+    ['multiplayer, rpc and a database', [addMultiplayer, addRpc, addDatabase]],
+    ['the older database', [addDatabaseObject]],
+  ]) {
+    const dir = path.join(tmp.dir, name.replace(/\W+/g, '-'));
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>x</title>');
+    for (const step of steps) await step(dir);
+    assert.deepEqual(tokenIds(await review(dir)), [], name);
+  }
+});
+
 test('PAY.check read from the code: comments left out, env read or not', () => {
   const code = `// export const PAY = { check() { return { grant: 1 } } }
 export const PAY = {

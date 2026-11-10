@@ -69,7 +69,7 @@ test('the files store: put, get, head, list a page at a time, delete, usage, and
   t.after(tmp.cleanup);
   const dir = await game(tmp);
   const store = createFileStore({ dir, origin: () => 'http://127.0.0.1:9', cap: 1000, fileBytes: 600 });
-  assert.deepEqual(await store.put('levels/a.json', '{"n":1}', { public: true }), {
+  assert.deepEqual(await store.put('levels/a.json', '{"n":1}', { public: true, type: 'application/json' }), {
     ok: true,
     path: 'levels/a.json',
     bytes: 7,
@@ -115,7 +115,11 @@ test('the files store: a path named __proto__, constructor or toString is a file
   for (const name of ['__proto__', 'constructor', 'toString', 'hasOwnProperty'])
     assert.equal((await store.head(name)).code, 'not-found', `${name} before it is put`);
   for (const name of ['__proto__', 'constructor', 'toString', 'levels/constructor'])
-    assert.deepEqual(await store.put(name, name, { public: true }), { ok: true, path: name, bytes: name.length });
+    assert.deepEqual(await store.put(name, name, { public: true, type: 'text/plain' }), {
+      ok: true,
+      path: name,
+      bytes: name.length,
+    });
   assert.equal((await store.get('__proto__')).body.toString(), '__proto__');
   assert.match(await readFile(path.join(dir, '.gamesfun', '.gitignore'), 'utf8'), /^\*$/m, 'kept out of git');
   assert.deepEqual(await store.usage(), { ok: true, bytes: 9 + 11 + 8 + 18, files: 4, cap: FILES.capBytes });
@@ -157,11 +161,24 @@ test('public files on an origin of their own: the files domain’s headers, type
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await game(tmp);
-  const store = createFileStore({ dir });
-  await store.put('art/hero.png', Buffer.from('PNGDATA0123456789'), { public: true });
-  await store.put('page.html', '<script>alert(1)</script>', { public: true, type: 'text/html' });
-  await store.put('art/logo.svg', '<svg onload="x()"/>', { public: true, type: 'image/svg+xml' });
-  await store.put('hidden.json', '{}');
+  let store = createFileStore({ dir });
+  const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from('DATA01234')]);
+  await store.put('art/hero.png', png, { public: true, type: 'image/png' });
+  // what a browser runs is never public, as xgames.fun refuses it
+  for (const [p, body, type] of [
+    ['page.html', '<script>alert(1)</script>', 'text/html'],
+    ['art/logo.svg', '<svg onload="x()"/>', 'image/svg+xml'],
+  ]) {
+    assert.equal((await store.put(p, body, { public: true, type })).code, 'type', p);
+    await store.put(p, body, { type });
+  }
+  await store.put('hidden.json', '{}', { type: 'application/json' });
+  // a file kept public before the type check (an older xcore dev) is served, but only as a download
+  const index = path.join(dir, '.gamesfun', 'dev', 'files.json');
+  const kept = JSON.parse(await readFile(index, 'utf8'));
+  for (const p of ['page.html', 'art/logo.svg']) kept[p].public = true;
+  await writeFile(index, JSON.stringify(kept));
+  store = createFileStore({ dir });
   const files = await serveFiles(store);
   t.after(files.close);
   const get = (p, init) => fetch(`${files.origin}/${p}`, init);
@@ -171,7 +188,7 @@ test('public files on an origin of their own: the files domain’s headers, type
   assert.deepEqual(headersOf(r), { ...FILE_HEADERS });
   assert.equal(r.headers.get('content-type'), 'image/png');
   assert.equal(r.headers.get('content-disposition'), null, 'a picture is shown');
-  assert.equal(await r.text(), 'PNGDATA0123456789');
+  assert.deepEqual(Buffer.from(await r.arrayBuffer()), png);
   // what could carry a script is a download, never a page or a picture the browser runs
   for (const p of ['page.html', 'art/logo.svg']) {
     r = await get(p);
@@ -196,10 +213,10 @@ test('public files on an origin of their own: the files domain’s headers, type
   assert.equal(head.headers.get('content-length'), '17');
   const etag = head.headers.get('etag');
   assert.equal((await get('art/hero.png', { headers: { 'if-none-match': etag } })).status, 304);
-  r = await get('art/hero.png', { headers: { range: 'bytes=3-6' } });
-  assert.deepEqual([r.status, r.headers.get('content-range'), await r.text()], [206, 'bytes 3-6/17', 'DATA']);
+  r = await get('art/hero.png', { headers: { range: 'bytes=8-11' } });
+  assert.deepEqual([r.status, r.headers.get('content-range'), await r.text()], [206, 'bytes 8-11/17', 'DATA']);
   r = await get('art/hero.png', { headers: { range: 'bytes=-4' } });
-  assert.equal(await r.text(), '6789');
+  assert.equal(await r.text(), '1234');
   assert.equal((await get('art/hero.png', { headers: { range: 'bytes=40-' } })).status, 416);
   // only this machine's names (a page elsewhere pointing its own name here is refused)
   const other = await new Promise((resolve, reject) =>
@@ -226,15 +243,17 @@ test('env.GF.files through the dev host: a file’s bytes go to the store as the
   s.setFilesOrigin('http://127.0.0.1:7');
   const bytes = Buffer.from([0, 255, 10, 13, 128]);
   const host = (op, init) => s.handleHost(new Request(`http://gf.local/${op}`, { method: 'POST', ...init }));
-  const put = await (await host('files.put?path=w%2Fa.bin&public=1', { body: bytes })).json();
-  assert.deepEqual(put, { ok: true, path: 'w/a.bin', bytes: 5, url: 'http://127.0.0.1:7/w/a.bin' });
+  // bytes of no public type stay private (public: refused, as xgames.fun refuses them)
+  assert.equal((await (await host('files.put?path=w%2Fa.bin&public=1', { body: bytes })).json()).code, 'type');
+  const put = await (await host('files.put?path=w%2Fa.bin', { body: bytes })).json();
+  assert.deepEqual(put, { ok: true, path: 'w/a.bin', bytes: 5 });
   const got = await host('files.get', { body: JSON.stringify(['w/a.bin']) });
   assert.deepEqual(JSON.parse(got.headers.get('x-gf-answer')), {
     ok: true,
     path: 'w/a.bin',
     bytes: 5,
     type: 'application/octet-stream',
-    public: true,
+    public: false,
     updatedAt: JSON.parse(got.headers.get('x-gf-answer')).updatedAt,
     etag: JSON.parse(got.headers.get('x-gf-answer')).etag,
   });

@@ -128,3 +128,84 @@ test("the sign-in's storage key never changes: 0.1.0 and the kit keep the token 
   // renaming the platform to xgames.fun once changed it, which signed everyone out and orphaned their tokens
   assert.equal(credentialKey('https://xgames.fun'), 'games.fun https://xgames.fun');
 });
+
+test('programs, installers and archives are refused before anything is sent, as xgames.fun refuses them', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  await adopt(dir);
+  await mkdir(path.join(dir, 'downloads'), { recursive: true });
+  await writeFile(path.join(dir, 'downloads', 'Setup.EXE'), 'MZ');
+  await writeFile(path.join(dir, 'old-build.tar.gz'), 'x');
+  await writeFile(path.join(dir, 'levels.zip'), 'PK');
+  const pre = await preflight(dir);
+  assert.ok(
+    pre.problems.some(p => p === 'downloads/Setup.EXE: a program or an installer: a game never hands one out'),
+    pre.problems.join('\n'),
+  );
+  assert.ok(
+    pre.problems.some(p => /^old-build\.tar\.gz: an archive/.test(p)),
+    pre.problems.join('\n'),
+  );
+  assert.ok(!pre.problems.some(p => /levels\.zip/.test(p)), 'a .zip the game loads goes up');
+  const r = run(['publish', dir, '--check', '--json']);
+  assert.notEqual(r.status, 0);
+  assert.equal(JSON.parse(r.stdout).ok, false);
+});
+
+test("a game's link name: xgames.fun leaves sign-in, wallet and brand words out of it, and the kit says so first", async t => {
+  const { linkName } = await import('../lib/publish/names.mjs');
+  const cases = [
+    ['Dot Catch', 'dot-catch', []],
+    ['Wallet Wars', 'wars', ['wallet']],
+    ['Phantom Wallet Connect', 'game', ['phantom', 'wallet connect']],
+    ['Phantom Wallet Wars', 'wars', ['phantom', 'wallet']],
+    ['Sign In Quest', 'quest', ['sign in']],
+    ['X Games Fun Run', 'fun-run', ['x games']],
+    ['Connect Four', 'connect-four', []],
+    ['Designing Dreams', 'designing-dreams', []],
+    ['WalletConnect', 'game', ['walletconnect']],
+    ['Super Walletlord', 'super', ['walletlord']],
+    ['API', 'api-game', []],
+    ['Go', 'go-game', []],
+    ['Café Crème', 'cafe-creme', []],
+    ["Bob's Airdrop", 'bobs', ['airdrop']],
+  ];
+  for (const [title, slug, dropped] of cases) assert.deepEqual(linkName(title), { slug, dropped }, title);
+  assert.equal(linkName('a'.repeat(60)).slug.length, 48);
+
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = { GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'), GAMESFUN_CREDENTIALS: 'file' };
+  await signIn(g, env);
+  const dir = await fixture(tmp, 'static');
+  await adopt(dir);
+  const said = [];
+  await publishGame(dir, {
+    origin: g.origin,
+    env,
+    check: passing,
+    title: 'Phantom Wallet Wars',
+    progress: l => said.push(l),
+  });
+  const line = said.find(l => /link name/.test(l));
+  assert.ok(line, said.join('\n'));
+  assert.match(line, /Phantom Wallet Wars/);
+  assert.match(line, /"wars"/);
+  assert.match(line, /phantom, wallet/);
+  assert.ok(said.indexOf(line) < said.findIndex(l => /^Uploading/.test(l)), 'said before anything is uploaded');
+  // an update keeps the link it has: nothing to say
+  const again = [];
+  await publishGame(dir, {
+    origin: g.origin,
+    env,
+    check: passing,
+    title: 'Phantom Wallet Wars',
+    progress: l => again.push(l),
+  });
+  assert.ok(!again.some(l => /link name/.test(l)), again.join('\n'));
+});

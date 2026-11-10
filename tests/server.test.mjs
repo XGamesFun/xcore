@@ -32,26 +32,326 @@ test('a key gamesfun.json → server does not know is refused (a typo once dropp
   assert.deepEqual((await readServerConfig(good)).problems, []);
 });
 
-test('a dynamic import() of a path built at run time is refused, however it is built', async t => {
+test('nodejs_compat is not offered: gamesfun.json that asks for it is refused, in words, before anything is bundled', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
-  for (const code of [
-    `export const z = p => import('./' + p);\n${OK}`,
-    `export const z = p => import(\`./\${p}\`);\n${OK}`,
-    `export const z = p => import(p);\n${OK}`,
-  ]) {
-    const r = await bundleServer(await game(tmp, code));
-    assert.ok(
-      r.problems.some(p => /dynamic import\(\) of a computed path/.test(p)),
-      `${code.split('\n')[0]}: ${JSON.stringify(r.problems)}`,
-    );
-  }
-  const fine = await bundleServer(
-    await game(tmp, `export const z = () => import('./more.js');\n${OK}`).then(
-      async d => (await writeFile(path.join(d, 'server', 'more.js'), 'export const x = 1;\n'), d),
-    ),
+  const dir = await game(tmp, OK, { main: 'server/index.js', compatibilityFlags: ['nodejs_compat'] });
+  const r = await readServerConfig(dir);
+  assert.ok(
+    r.problems.some(p => /"nodejs_compat"/.test(p) && /does not offer/.test(p) && /Web APIs/.test(p)),
+    r.problems.join('\n'),
   );
-  assert.ok(!fine.problems.some(p => /computed path/.test(p)), JSON.stringify(fine.problems));
+  assert.deepEqual(r.compatibilityFlags, []);
+  const b = await bundleServer(dir);
+  assert.equal(b.ok, false);
+  assert.ok(b.problems.some(p => /nodejs_compat/.test(p)));
+  // another flag: what to do, in words
+  const other = await readServerConfig(await game(tmp, OK, { compatibilityFlags: ['streams_enable_constructors'] }));
+  assert.ok(
+    other.problems.some(p => /must be an empty list: remove "streams_enable_constructors"/.test(p)),
+    other.problems.join('\n'),
+  );
+  // an empty list is what every game has
+  assert.deepEqual((await readServerConfig(await game(tmp, OK, { compatibilityFlags: [] }))).problems, []);
+  // and a Node built-in is never offered as a fix any more
+  const node = await bundleServer(
+    await game(tmp, `import { createHash } from 'node:crypto';\nexport const h = () => createHash;\n${OK}`),
+  );
+  const said = node.problems.find(p => /node:crypto/.test(p));
+  assert.ok(said && !/nodejs_compat/.test(said) && /crypto\.subtle/.test(said), JSON.stringify(node.problems));
+});
+
+// What the host refuses in a server bundle (docs/SERVER.md, "Not allowed"): an import, a re-export or an import() of a
+// module that opens raw network connections or loads modules by name, and an import() of anything but a plain string.
+const SOCKETS = [
+  'cloudflare:sockets',
+  'node:net',
+  'node:tls',
+  'node:dgram',
+  'node:http2',
+  'node:module',
+  'node:child_process',
+];
+const REFUSED_CASES = [
+  ["import { connect } from 'cloudflare:sockets';\nexport const c = () => connect;", 'imports cloudflare:sockets'],
+  ["export * from 'cloudflare:sockets';", 'imports cloudflare:sockets'],
+  ["export { connect } from 'cloudflare:sockets';", 'imports cloudflare:sockets'],
+  ["export const c = () => import('cloudflare:sockets');", 'imports cloudflare:sockets'],
+  ["export const c = () => import('cloudflare:sockets?raw');", 'imports cloudflare:sockets'],
+  ...SOCKETS.slice(1).map(m => [`import * as x from '${m}';\nexport const c = () => x;`, `imports ${m}`]),
+  ['export const z = p => import(p);', 'a module named at run time'],
+  ['export const z = p => import(p.name, { with: { type: "json" } });', 'a module named at run time'],
+  ['export const z = p => import((0, p));', 'a module named at run time'],
+];
+const ACCEPTED_CASES = [
+  "import { DurableObject } from 'cloudflare:workers';\nexport class Room extends DurableObject {}",
+  "export const z = () => import('./more.js');",
+  // a path esbuild can list at bundle time is bundled, file by file: no import() is left for the host to refuse
+  "export const z = p => import('./levels/' + p + '.js');",
+  'export const z = p => import(`./levels/${p}.js`);',
+  // words, never imports
+  'const s = "import(\'cloudflare:sockets\')"; // import(p) and node:net\nexport const f = () => s;',
+];
+async function serverGame(tmp, code) {
+  const dir = await game(tmp, `${code}\n${OK}`);
+  await writeFile(path.join(dir, 'server', 'more.js'), 'export const x = 1;\n');
+  await mkdir(path.join(dir, 'server', 'levels'), { recursive: true });
+  await writeFile(path.join(dir, 'server', 'levels', 'forest.js'), 'export default { name: "forest" };\n');
+  return dir;
+}
+
+test('the bundle is refused, in words naming the file, for what the host refuses: raw sockets and import() of a name made at run time', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  for (const [code, said] of REFUSED_CASES) {
+    const r = await bundleServer(await serverGame(tmp, code));
+    const hit = r.problems.find(p => p.includes(said));
+    assert.ok(hit, `${code.split('\n')[0]}: ${JSON.stringify(r.problems)}`);
+    assert.match(hit, /^server\/index\.js(:\d+)? /, hit);
+    assert.match(hit, /xgames\.fun refuses/, hit);
+    assert.ok(!/nodejs_compat/.test(hit), hit);
+    assert.equal(r.ok, false);
+  }
+  for (const code of ACCEPTED_CASES) {
+    const r = await bundleServer(await serverGame(tmp, code));
+    assert.deepEqual(r.problems, [], code);
+  }
+});
+
+test('the same, from a package the server bundles: the package is named', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await game(tmp, `import { dial } from 'dialer';\nexport const d = () => dial;\n${OK}`);
+  const pkg = path.join(dir, 'node_modules', 'dialer');
+  await mkdir(pkg, { recursive: true });
+  await writeFile(path.join(pkg, 'package.json'), JSON.stringify({ name: 'dialer', main: 'index.js' }));
+  await writeFile(
+    path.join(pkg, 'index.js'),
+    "import { connect } from 'cloudflare:sockets';\nexport const dial = (h, name) => [connect(h), import(name)];\n",
+  );
+  const r = await bundleServer(dir);
+  assert.ok(
+    r.problems.some(p => /^node_modules\/dialer\/index\.js imports cloudflare:sockets/.test(p)),
+    JSON.stringify(r.problems),
+  );
+  assert.ok(
+    r.problems.some(p => /^node_modules\/dialer\/index\.js:2 imports a module named at run time/.test(p)),
+    JSON.stringify(r.problems),
+  );
+});
+
+// The host parses the bundle it is sent; the kit reads the same bundle with esbuild. A parse of the kit's own output
+// with another parser (acorn, which the dev tools carry) finds exactly what the kit refused, case by case.
+// Games whose server bundles a package, or has code esbuild leaves out, or imports in a shape of its own: for each, the
+// kit's verdict (a socket module, or an import() of a name made at run time) must be the verdict of a parse of the very
+// bundle the kit would send, as xgames.fun parses it. [name, files]
+const pkg = (name, code, extra = {}) => ({
+  [`node_modules/${name}/package.json`]: JSON.stringify({ name, main: 'index.js', ...extra }),
+  [`node_modules/${name}/index.js`]: code,
+});
+const LEVELS = {
+  'server/levels/forest.js': 'export default {n:1}',
+  'server/levels/cave.js': 'export default {n:2}',
+  'server/more.js': 'export const x=1',
+  'server/data.json': '{"a":1}',
+};
+const dblib = sideEffects => ({
+  'node_modules/dblib/package.json': JSON.stringify({
+    name: 'dblib',
+    module: 'index.js',
+    ...(sideEffects === undefined ? {} : { sideEffects }),
+  }),
+  'node_modules/dblib/index.js':
+    "export { query } from './http.js';\nexport { Client } from './socket.js';\nexport { loader } from './loader.js';",
+  'node_modules/dblib/http.js': 'export const query = q => fetch("https://x.example/"+q);',
+  'node_modules/dblib/socket.js':
+    "import { connect } from 'cloudflare:sockets';\nexport class Client { open(h){ return connect(h); } }",
+  'node_modules/dblib/loader.js': 'export const loader = n => import(n);',
+});
+const SHAPES = [
+  ['literal import()', { 'server/index.js': "export const z=()=>import('./more.js');", ...LEVELS }],
+  ['template, no substitution', { 'server/index.js': 'export const z=()=>import(`./more.js`);', ...LEVELS }],
+  ['template a folder', { 'server/index.js': 'export const z=p=>import(`./levels/${p}.js`);', ...LEVELS }],
+  ['a string + a name + a string', { 'server/index.js': "export const z=p=>import('./levels/'+p+'.js');", ...LEVELS }],
+  ['a string + a name', { 'server/index.js': "export const z=p=>import('./levels/'+p);", ...LEVELS }],
+  ['json with', { 'server/index.js': "export const z=()=>import('./data.json',{with:{type:'json'}});", ...LEVELS }],
+  ['import(a name)', { 'server/index.js': 'export const z=p=>import(p);' }],
+  [
+    'import(a choice of two)',
+    { 'server/index.js': "export const z=p=>import(p?'./more.js':'./levels/cave.js');", ...LEVELS },
+  ],
+  ['cloudflare:workers by import()', { 'server/index.js': "export const z=()=>import('cloudflare:workers');" }],
+  ['cloudflare:workers by a template', { 'server/index.js': 'export const z=()=>import(`cloudflare:workers`);' }],
+  ['cloudflare: and a template name', { 'server/index.js': 'export const z=x=>import(`cloudflare:${x}`);' }],
+  ['cloudflare: + a name', { 'server/index.js': "export const z=x=>import('cloudflare:'+x);" }],
+  ['https:// + a name', { 'server/index.js': "export const z=x=>import('https://esm.sh/'+x);" }],
+  ['https:// literal', { 'server/index.js': "export const z=()=>import('https://esm.sh/x');" }],
+  [
+    'a re-export through an own file',
+    {
+      'server/index.js': "export * from './sock.js';",
+      'server/sock.js': "export { connect } from 'cloudflare:sockets';",
+    },
+  ],
+  [
+    'a re-export through a package',
+    {
+      'server/index.js': "import {d} from 'dial';export const q=()=>d;",
+      ...pkg('dial', "export * from 'cloudflare:sockets'; export const d=1;"),
+    },
+  ],
+  [
+    "a package's import(a name)",
+    { 'server/index.js': "import {d} from 'dyn';export const q=()=>d;", ...pkg('dyn', 'export const d=n=>import(n);') },
+  ],
+  [
+    "a CommonJS package's import(a name)",
+    {
+      'server/index.js': "import d from 'dync';export const q=()=>d;",
+      ...pkg('dync', 'module.exports = n=>import(n);'),
+    },
+  ],
+  [
+    "a CommonJS package's require of sockets",
+    {
+      'server/index.js': "import d from 'reqs';export const q=()=>d;",
+      ...pkg('reqs', "module.exports = ()=>require('cloudflare:sockets');"),
+    },
+  ],
+  ['its own require of sockets', { 'server/index.js': "export const q=()=>require('cloudflare:sockets');" }],
+  ['require(a name)', { 'server/index.js': 'export const q=n=>require(n);' }],
+  [
+    'an import in a string given to eval',
+    { 'server/index.js': 'export const q=()=>eval("import(\'cloudflare:sockets\')");' },
+  ],
+  [
+    'an import in new Function',
+    { 'server/index.js': 'export const q=()=>new Function("return import(\'cloudflare:sockets\')");' },
+  ],
+  ['a name built from strings', { 'server/index.js': "export const q=()=>globalThis['imp'+'ort'];" }],
+  [
+    'cloudflare:sockets#x',
+    { 'server/index.js': "import {connect} from 'cloudflare:sockets#x';export const q=()=>connect;" },
+  ],
+  [
+    'import() of sockets with a second argument',
+    { 'server/index.js': "export const q=()=>import('cloudflare:sockets',{});" },
+  ],
+  [
+    'import() of a file with a second argument',
+    { 'server/index.js': "export const q=()=>import('./more.js', {with:{}});", ...LEVELS },
+  ],
+  ['import.meta', { 'server/index.js': 'export const q=()=>import.meta.url;' }],
+  [
+    "a package's workerd build opens a socket",
+    {
+      'server/index.js': "import {d} from 'pg2';export const q=()=>d;",
+      'node_modules/pg2/package.json': JSON.stringify({
+        name: 'pg2',
+        exports: { '.': { workerd: './w.js', default: './n.js' } },
+      }),
+      'node_modules/pg2/w.js': "import {connect} from 'cloudflare:sockets'; export const d=connect;",
+      'node_modules/pg2/n.js': 'export const d=1;',
+    },
+  ],
+  [
+    "a package's unused socket and import(a name), sideEffects false",
+    { 'server/index.js': "import {query} from 'dblib';export const q=()=>query;", ...dblib(false) },
+  ],
+  [
+    "a package's unused socket and import(a name), no sideEffects",
+    { 'server/index.js': "import {query} from 'dblib';export const q=()=>query;", ...dblib(undefined) },
+  ],
+  ['its own dead code', { 'server/index.js': 'if (false) import(globalThis.x);' }],
+  ['its own unused function', { 'server/index.js': 'function unused(n){return import(n)}' }],
+  [
+    'an own file whose socket export is unused',
+    {
+      'server/index.js': "import {a} from './u.js'; export const q=()=>a;",
+      'server/u.js': "import {connect} from 'cloudflare:sockets'; export const a=1; export const b=()=>connect;",
+    },
+  ],
+  ['an empty import of sockets', { 'server/index.js': "import {} from 'cloudflare:sockets';" }],
+  [
+    'a package used whole',
+    { 'server/index.js': "import * as db from 'dblib';export const q=()=>db;", ...dblib(false) },
+  ],
+];
+async function shapeGame(tmp, name, files) {
+  const dir = path.join(tmp.dir, `s${SHAPES.findIndex(([n]) => n === name)}`);
+  for (const [f, text] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(dir, f)), { recursive: true });
+    await writeFile(path.join(dir, f), /^server\/index\./.test(f) ? `${text}\n${OK}` : text);
+  }
+  await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>g</title>');
+  const main = Object.keys(files).find(f => /^server\/index\./.test(f));
+  await writeFile(path.join(dir, 'gamesfun.json'), JSON.stringify({ server: { main } }));
+  return dir;
+}
+const kitSays = r =>
+  r.problems
+    .map(
+      p =>
+        / imports (cloudflare:sockets|node:\w+), which opens raw/.exec(p)?.[1] ??
+        (/imports a module named at run time/.test(p) ? 'run time' : null),
+    )
+    .filter(Boolean);
+
+test("the kit's verdict on a bundle is a parse of the very bundle it would send: code esbuild leaves out refuses nothing", async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const verdicts = {};
+  for (const [name, files] of SHAPES) {
+    const r = await bundleServer(await shapeGame(tmp, name, files));
+    assert.ok(r.code, `${name}: ${JSON.stringify(r.problems)}`);
+    verdicts[name] = { said: [...new Set(kitSays(r))].sort(), code: r.code };
+  }
+  // without another parser at hand, the cases that matter most, as the host reads them
+  const said = name => verdicts[name].said;
+  assert.deepEqual(said("a package's unused socket and import(a name), sideEffects false"), []);
+  assert.deepEqual(said('its own dead code'), []);
+  assert.deepEqual(said('its own unused function'), []);
+  assert.deepEqual(said('a package used whole'), ['cloudflare:sockets', 'run time']);
+  assert.deepEqual(said('import() of sockets with a second argument'), ['cloudflare:sockets']);
+  assert.deepEqual(said('import() of a file with a second argument'), []);
+  assert.deepEqual(said('a re-export through a package'), ['cloudflare:sockets']);
+  assert.deepEqual(said("a CommonJS package's import(a name)"), ['run time']);
+  assert.deepEqual(said('cloudflare: + a name'), ['run time']);
+  assert.deepEqual(said('a string + a name'), []);
+  // and every case against a parse of the bundle with acorn (the dev tools carry it), by the rule xgames.fun publishes
+  const acorn = await import('acorn').catch(() => null);
+  if (!acorn) return t.skip('acorn is not installed (it comes with the dev tools)');
+  const refused = new Set(SOCKETS.flatMap(m => (m.startsWith('node:') ? [m, m.slice(5)] : [m])));
+  const hostSays = code => {
+    const ast = acorn.parse(new TextDecoder().decode(code), { ecmaVersion: 'latest', sourceType: 'module' });
+    const found = new Set();
+    const mod = v => {
+      const s = String(v)
+        .replace(/[?#].*$/, '')
+        .toLowerCase();
+      return refused.has(s) ? (s.includes(':') ? s : `node:${s}`) : null;
+    };
+    const visit = node => {
+      if (!node || typeof node.type !== 'string') return;
+      if (/^(Import|ExportAll|ExportNamed)Declaration$/.test(node.type) && node.source && mod(node.source.value))
+        found.add(mod(node.source.value));
+      if (node.type === 'ImportExpression') {
+        if (node.source.type !== 'Literal' || typeof node.source.value !== 'string') found.add('run time');
+        else if (mod(node.source.value)) found.add(mod(node.source.value));
+      }
+      for (const v of Object.values(node))
+        if (Array.isArray(v)) v.forEach(visit);
+        else if (v && typeof v === 'object') visit(v);
+    };
+    visit(ast);
+    return [...found].sort();
+  };
+  for (const [name, v] of Object.entries(verdicts)) assert.deepEqual(v.said, hostSays(v.code), name);
+  // and the cases of the test above
+  for (const code of [...REFUSED_CASES.filter(([c]) => !/node:/.test(c)).map(([c]) => c), ...ACCEPTED_CASES]) {
+    const r = await bundleServer(await serverGame(tmp, code));
+    assert.deepEqual([...new Set(kitSays(r))].sort(), hostSays(r.code), code);
+  }
 });
 
 test('a named export the runtime cannot start with (a plain value) is refused; functions, classes and objects are not', async t => {
@@ -75,4 +375,30 @@ test('a named export the runtime cannot start with (a plain value) is refused; f
     ),
   );
   assert.deepEqual(fine.problems, []);
+});
+
+test("the platform's numbers by plan: Free's boards are 8 (16 rules), Creator's and Scale's 16 (32)", async () => {
+  const contract = await import('../lib/server/contract.mjs');
+  const plans = contract.PLAN_LIMITS ?? {};
+  assert.deepEqual(Object.keys(plans), ['free', 'creator', 'scale']);
+  assert.deepEqual(
+    Object.values(plans).map(p => [p.scores.boards, p.scores.rules, p.scores.entriesPerBoard]),
+    [
+      [8, 16, 10_000],
+      [16, 32, 1_000_000],
+      [16, 32, 1_000_000],
+    ],
+  );
+  assert.deepEqual(
+    Object.values(plans).map(p => [p.saves.gameBytes, p.saves.writesPerMinute, p.reads.perMinute, p.cpuMs]),
+    [
+      [10 * 1048576, 600, 1_200, 50],
+      [1024 * 1048576, 12_000, 12_000, 200],
+      [10 * 1024 * 1048576, 60_000, 60_000, 1_000],
+    ],
+  );
+  // what holds on every plan, and a game's own default (Free) where a single number is read
+  assert.equal(contract.PLATFORM_LIMITS.scores.boards, 8);
+  assert.equal(contract.PLATFORM_LIMITS.scores.rules, 16);
+  assert.equal(contract.PLATFORM_LIMITS.saves.keysPerPlayer, 16);
 });

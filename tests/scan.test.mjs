@@ -3,8 +3,23 @@
 // holds nothing a secret scanner (GitHub's push protection, xgames.fun's own) would stop.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { scanFile, secretsMessage, isPublicKey, SECRET_PATTERNS, SCAN_OVERLAP } from '../lib/publish/scan.mjs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import * as scan from '../lib/publish/scan.mjs';
 import { MAX_MATCH, SECRET_PATTERNS as ALL_PATTERNS } from '../lib/secret-patterns.mjs';
+
+// a namespace, so this file also runs (and fails, rather than not load) on a scan without the newer exports
+const {
+  scanFile,
+  secretsMessage,
+  isPublicKey,
+  SECRET_PATTERNS,
+  SCAN_OVERLAP,
+  SCAN_CHUNK,
+  backendOrigin,
+  backendOrigins,
+} = scan;
+const refusedType = scan.refusedType ?? (() => null);
 
 const bytes = text => new TextEncoder().encode(text);
 const kinds = (path, text) => scanFile(path, typeof text === 'string' ? bytes(text) : text).map(h => h.kind);
@@ -141,7 +156,7 @@ test('JWTs: a Supabase anon key passes, a service-role key and any other signed 
   assert.match(kinds('x.js', `"${jwt({ role: 'authenticated' })}"`).join(), /role "authenticated"/);
 });
 
-test('a long key is still a key: a service-role JWT with a big payload, a long *_SECRET literal (1,132 characters and more)', () => {
+test('a long key is still a key: a service-role JWT with a big payload', () => {
   /** A token whose payload is `n` characters of base64url: its claims padded to that length. */
   const sized = (claims, n) => {
     let pad = '';
@@ -163,14 +178,24 @@ test('a long key is still a key: a service-role JWT with a big payload, a long *
         /service-role/,
         `payload ${n}, cut at ${chunk}`,
       );
-    const value = alnum(32)
+  }
+});
+
+// A *_SECRET literal is read as xgames.fun reads it: names up to 64 characters on either side of the word, up to 16
+// spaces around the = or :, and a value of 16 to 1,024 characters. What the host would publish, the kit does not refuse.
+test("a secret assigned a literal: the host's bounds, no wider and no narrower", () => {
+  const val = n =>
+    alnum(32)
       .repeat(Math.ceil(n / 32))
       .slice(0, n);
-    assert.ok(
-      kinds('config.js', `const GAME_SECRET = "${value}";`).includes('secret assigned a literal'),
-      `literal ${n}`,
-    );
-  }
+  const literal = text => kinds('config.js', text).includes('secret assigned a literal');
+  for (const n of [16, 200, 1024]) assert.ok(literal(`const GAME_SECRET = "${val(n)}";`), `value ${n}`);
+  for (const n of [1025, 1132, 16_000])
+    assert.ok(!literal(`x_SECRET='${val(n)}'`), `value ${n}: the host publishes it`);
+  assert.ok(literal(`${'a'.repeat(63)}_SECRET = "${val(20)}"`));
+  assert.ok(!literal(`${'a'.repeat(65)}SECRET = "${val(20)}"`), 'a name of 65 characters before the word');
+  assert.ok(literal(`MY_SECRET${' '.repeat(16)}=${' '.repeat(16)}"${val(20)}"`));
+  assert.ok(!literal(`MY_SECRET${' '.repeat(17)}= "${val(20)}"`), '17 spaces');
 });
 
 test("a Firebase web config's apiKey passes; the same Google key shape anywhere else (Gemini) is refused", () => {
@@ -374,4 +399,123 @@ test('a run of base58 letters cut by the end of a piece is not taken for a key: 
     scanFile('art.js', bytes(data), { chunk, overlap: 1024 }).map(h => h.kind),
     [],
   );
+});
+
+// ---- Time: every pattern runs in time linear in the file, as xgames.fun's scan does -----------------------------------
+
+const SCAN = fileURLToPath(new URL('../lib/publish/scan.mjs', import.meta.url));
+// Text written to hold a scanner up: a long run of what a pattern reads, its start repeated inside it.
+const HOSTILE = {
+  rpc: "n => repeat('http://helius-rpc.com', n)",
+  alchemy: "n => repeat('https://a.alchemy.com/v2/', n)",
+  secret: "n => repeat('SECRET', n)",
+  names: "n => repeat('a_SECRET = \"', n)",
+  spaces: "n => ' '.repeat(n)",
+  newlines: "n => '\\n'.repeat(n)",
+  ternary: "n => '?' + ' '.repeat(n - 1)",
+  jwt: "n => repeat('eyJ-', n)",
+  keypair: "n => 'fromSecretKey(' + ' '.repeat(n - 14)",
+  seed: "n => repeat('wallet_seed: \"', n)",
+  bytes: "n => repeat('SECRET = [1, ', n)",
+  keyfile: 'n => repeat(\'"seed": "\', n)',
+  database: "n => repeat('postgres://a', n)",
+};
+/** scanFile on each hostile text at each size, in a child process stopped after `limit` ms. → {which: [ms]} or null */
+function hostileTimes(sizes, limit, runs = 5) {
+  const script = `const {scanFile} = await import(${JSON.stringify(pathToFileURL(SCAN).href)});
+    const repeat = (s, n) => s.repeat(Math.ceil(n / s.length)).slice(0, n);
+    const HOSTILE = {${Object.entries(HOSTILE)
+      .map(([k, f]) => `${k}: ${f}`)
+      .join(',')}};
+    const out = {};
+    for (const [k, f] of Object.entries(HOSTILE)) {
+      // the sizes taken in turn, run after run, so a burst of load falls on each alike; the best run of each is kept
+      const texts = ${JSON.stringify(sizes)}.map(n => new TextEncoder().encode(f(n))), best = texts.map(() => Infinity);
+      for (let i = 0; i < ${runs}; i++) texts.forEach((b, j) => { const t = process.cpuUsage(); scanFile('notes.js', b); const d = process.cpuUsage(t); best[j] = Math.min(best[j], (d.user + d.system) / 1000); });
+      out[k] = best;
+    }
+    console.log(JSON.stringify(out));`;
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], { timeout: limit, encoding: 'utf8' });
+  return r.status === 0 ? JSON.parse(r.stdout) : null;
+}
+
+// Each text at 2 MiB and at 8 MiB, the best of five runs of each, taken in turn, timed by the CPU the scan itself
+// spends (process.cpuUsage), not by the clock: on a busy machine a long run is shared out with other work, and the clock
+// would count that too. Linear is about 4x the time for 4x the text, and a pattern that reads a run once for each place it could
+// start is 16x or more (the quadratic patterns this replaced took over ten seconds on 256 KiB of spaces, and would not
+// finish here). So 4x the text may take at most 12x the time; a time under FLOOR_MS is too small to judge a ratio by,
+// so the bigger text is then held to 12x the floor instead.
+const FLOOR_MS = 50,
+  RATIO = 12;
+test('scan time: every pattern is linear; 8 MiB of any hostile text scans in seconds, not minutes', () => {
+  const sizes = [SCAN_CHUNK / 2, SCAN_CHUNK * 2];
+  const times = hostileTimes(sizes, 300_000);
+  assert.ok(times, `scanFile on ${sizes.at(-1)} bytes of hostile text did not finish in five minutes`);
+  for (const [which, [small, big]] of Object.entries(times)) {
+    assert.ok(big < 20_000, `${which}: 8 MiB took ${big.toFixed(0)} ms`);
+    assert.ok(
+      big <= Math.max(small, FLOOR_MS) * RATIO,
+      `${which}: ${small.toFixed(1)} → ${big.toFixed(1)} ms for 4x the text (at most ${RATIO}x the time, or ${FLOOR_MS * RATIO} ms)`,
+    );
+  }
+});
+
+test('the bounded patterns still find every key xgames.fun refuses', () => {
+  const hx = n => '0123456789abcdef'.repeat(8).slice(0, n);
+  const found = text => kinds('game.js', text);
+  assert.ok(found(`rpc = "https://mainnet.helius-rpc.com/?api-key=${hx(32)}"`).some(k => /RPC URL/.test(k)));
+  assert.ok(
+    found(`rpc = "https://rpc.helius-rpc.com/v0/x?cluster=devnet&api-key=${hx(36)}"`).some(k => /RPC URL/.test(k)),
+  );
+  assert.ok(found(`u = 'https://solana-mainnet.g.alchemy.com/v2/${hx(32)}'`).some(k => /RPC URL/.test(k)));
+  assert.ok(found(`const MY_SERVICE_SECRET = "${hx(40)}";`).includes('secret assigned a literal'));
+  assert.ok(found(`{"api_key":   "${hx(24)}"}`).includes('secret assigned a literal'));
+  assert.ok(found(`const GAME_SECRET =                "${hx(24)}";`).includes('secret assigned a literal'));
+  assert.ok(!found(`x = ok ? 'MySecretsTextHere' : 'other';`).includes('secret assigned a literal'));
+  assert.ok(
+    found(`Keypair.fromSecretKey(  new Uint8Array( [1,2])`).includes('a Solana keypair in code (fromSecretKey)'),
+  );
+  // a private key block whose type is a long word, as xgames.fun reads it
+  assert.ok(found('-----BEGIN ' + 'ENCRYPTEDPRIVATEKEYMATERIALX ' + 'PRIVATE KEY-----').includes('private key block'));
+  // a token with a long header and signature: xgames.fun reads each up to 8,192 characters
+  const long = `${b64url({ alg: 'RS512', typ: 'JWT', x5c: alnum(32).repeat(150) })}.${b64url({ role: 'service_role' })}.${alnum(32).repeat(150)}`;
+  assert.match(found(`const t = "${long}";`).join(), /service-role/);
+  // a run of base64url letters that only has "eyJ" inside it is not a token
+  assert.deepEqual(found(`x = "${'eyJ-'.repeat(5000)}";`), []);
+});
+
+test('programs, installers and archives other than .zip are refused by their type, as xgames.fun refuses them', () => {
+  for (const name of [
+    'setup.exe',
+    'bin/Game.DLL',
+    'tools/run.bat',
+    'game.apk',
+    'mac/Game.dmg',
+    'linux/game.AppImage',
+    'server.jar',
+    'saves.7z',
+    'levels.rar',
+    'build.tar.gz',
+    'build.tgz',
+    'pack.tar',
+    'disc.iso',
+  ])
+    assert.match(refusedType(name) ?? '', /a program or an installer|an archive/, name);
+  for (const name of [
+    'levels.zip',
+    'Build/game.data.gz',
+    'Build/game.wasm.br',
+    'index.html',
+    'game.pck',
+    'readme.txt',
+    'exe.js',
+    'notes.tar.md',
+  ])
+    assert.equal(refusedType(name), null, name);
+});
+
+test("a backend origin whose host the page's security policy cannot name is refused, as xgames.fun refuses it", () => {
+  assert.equal(backendOrigin('https://abcd.supabase.co'), 'https://abcd.supabase.co');
+  assert.throws(() => backendOrigin('https://my_api.example.net'), /content-security policy cannot name/);
+  assert.deepEqual(backendOrigins({ origins: ['https://my_api.example.net'] }).origins, []);
 });

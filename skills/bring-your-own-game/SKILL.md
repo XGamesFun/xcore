@@ -79,7 +79,9 @@ console errors, nothing missing, nothing from the root, something on screen), it
 screenshots in `evidence/verify-N/` and look at them. A failing check 4 names the origin and why: declare it in
 `backend.json` if the game really calls it, or remove the call. The page check does not say the game plays well:
 that is the person's own game; ask them what to try, and try it with `xcore dev <folder>` (the game as xgames.fun
-hosts it, with its server, sign-in, saves, rooms and economy RPC) or their own.
+hosts it, with its server, sign-in, saves, rooms and economy RPC, refusing what xgames.fun refuses on the Free plan;
+`--plan creator` for a Creator game) or their own. A refusal there (`rate`, `full`, `too-many`, `order`) is one the
+published game would get: fix the game, not the stand-in.
 
 ## 4. Players, a database, a backend (only when the game has or needs them)
 
@@ -111,7 +113,11 @@ supabase|railway` with the kit installed). Without the kit, they set one up them
   ([docs/SERVER.md](../../docs/SERVER.md)): a Worker on `/api/*`, Durable Objects for rooms, `env.GF` for sign-in, saves
   and scores. Their page calls it with a relative address (`fetch('api/scores')`): `/api/*` at the published origin,
   `/game/api/*` under `xcore dev`, which runs it under workerd with a local `env.GF`. A Node-only server stays on
-  their own host.
+  their own host, and so does anything that opens raw sockets (a database driver, a mail or chat client): xgames.fun
+  refuses `cloudflare:sockets`, `node:net` and the like, an `import()` of a name made at run time, and `nodejs_compat`.
+  Every route that does work checks the player's token first (`env.GF.verifyPlayer`; 401 at once without one): a
+  stranger's request that does work counts toward what caps the game. Key a player's data on `sub` (the account:
+  `x:…`, or `g:…` for Google, different in every game), never on the wallet; `wallet` is its own claim, maybe null.
 
 ## 5. An economy (only when they ask: tokens, NFTs, a shop, prizes, staking)
 
@@ -200,11 +206,14 @@ xcore publish <folder>          # or gamesfun_login, then gamesfun_publish {"gam
 ```
 
 It builds, runs the page check on exactly those files, uploads the published folder and the `server/` bundle. A failed
-check makes a private draft only. Tell them the link, what you changed in their files, what the checks proved and what
+check makes a private draft only. `xcore login` asks the person to tick, on xgames.fun's approval page, the games this
+computer may work on (or their whole account), and says which it got; a command refused with code `not-granted` means
+the sign-in was not given that game: they run `xcore login` again and tick it (never work around it). Tell them the link, what you changed in their files, what the checks proved and what
 nothing checked (their gameplay, their backend's own behaviour).
 
 A game with a `server/`, saves or scores runs under its **plan** (`xcore plan <folder>`): Free by default (50 ms of CPU
-and 600 requests a minute, $1 of use a month, then capped and slow until the month ends). When the game needs more
+and 600 requests a minute, $1 of use a month; past it the game is capped until the month ends: its server is switched
+off and saves and scores slow down). When the game needs more
 (a server that replays play, many players at once), tell them: a paid slot makes it Creator
 (`xcore plan activate <folder>` once they have one), and the paid slot moves between their games at any time. Everyone
 has 2 free slots: a third game is refused on publish (`no-free-slot`) until they archive one on their console
