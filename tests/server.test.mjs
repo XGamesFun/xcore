@@ -45,6 +45,12 @@ test('nodejs_compat is not offered: gamesfun.json that asks for it is refused, i
   const b = await bundleServer(dir);
   assert.equal(b.ok, false);
   assert.ok(b.problems.some(p => /nodejs_compat/.test(p)));
+  // another flag: what to do, in words
+  const other = await readServerConfig(await game(tmp, OK, { compatibilityFlags: ['streams_enable_constructors'] }));
+  assert.ok(
+    other.problems.some(p => /must be an empty list: remove "streams_enable_constructors"/.test(p)),
+    other.problems.join('\n'),
+  );
   // an empty list is what every game has
   assert.deepEqual((await readServerConfig(await game(tmp, OK, { compatibilityFlags: [] }))).problems, []);
   // and a Node built-in is never offered as a fix any more
@@ -136,45 +142,215 @@ test('the same, from a package the server bundles: the package is named', async 
 
 // The host parses the bundle it is sent; the kit reads the same bundle with esbuild. A parse of the kit's own output
 // with another parser (acorn, which the dev tools carry) finds exactly what the kit refused, case by case.
-test('what the kit refuses is what a parse of the bundle it sends finds', async t => {
-  const acorn = await import('acorn').catch(() => null);
-  if (!acorn) return t.skip('acorn is not installed (it comes with the dev tools)');
+// Games whose server bundles a package, or has code esbuild leaves out, or imports in a shape of its own: for each, the
+// kit's verdict (a socket module, or an import() of a name made at run time) must be the verdict of a parse of the very
+// bundle the kit would send, as xgames.fun parses it. [name, files]
+const pkg = (name, code, extra = {}) => ({
+  [`node_modules/${name}/package.json`]: JSON.stringify({ name, main: 'index.js', ...extra }),
+  [`node_modules/${name}/index.js`]: code,
+});
+const LEVELS = {
+  'server/levels/forest.js': 'export default {n:1}',
+  'server/levels/cave.js': 'export default {n:2}',
+  'server/more.js': 'export const x=1',
+  'server/data.json': '{"a":1}',
+};
+const dblib = sideEffects => ({
+  'node_modules/dblib/package.json': JSON.stringify({
+    name: 'dblib',
+    module: 'index.js',
+    ...(sideEffects === undefined ? {} : { sideEffects }),
+  }),
+  'node_modules/dblib/index.js':
+    "export { query } from './http.js';\nexport { Client } from './socket.js';\nexport { loader } from './loader.js';",
+  'node_modules/dblib/http.js': 'export const query = q => fetch("https://x.example/"+q);',
+  'node_modules/dblib/socket.js':
+    "import { connect } from 'cloudflare:sockets';\nexport class Client { open(h){ return connect(h); } }",
+  'node_modules/dblib/loader.js': 'export const loader = n => import(n);',
+});
+const SHAPES = [
+  ['literal import()', { 'server/index.js': "export const z=()=>import('./more.js');", ...LEVELS }],
+  ['template, no substitution', { 'server/index.js': 'export const z=()=>import(`./more.js`);', ...LEVELS }],
+  ['template a folder', { 'server/index.js': 'export const z=p=>import(`./levels/${p}.js`);', ...LEVELS }],
+  ['a string + a name + a string', { 'server/index.js': "export const z=p=>import('./levels/'+p+'.js');", ...LEVELS }],
+  ['a string + a name', { 'server/index.js': "export const z=p=>import('./levels/'+p);", ...LEVELS }],
+  ['json with', { 'server/index.js': "export const z=()=>import('./data.json',{with:{type:'json'}});", ...LEVELS }],
+  ['import(a name)', { 'server/index.js': 'export const z=p=>import(p);' }],
+  [
+    'import(a choice of two)',
+    { 'server/index.js': "export const z=p=>import(p?'./more.js':'./levels/cave.js');", ...LEVELS },
+  ],
+  ['cloudflare:workers by import()', { 'server/index.js': "export const z=()=>import('cloudflare:workers');" }],
+  ['cloudflare:workers by a template', { 'server/index.js': 'export const z=()=>import(`cloudflare:workers`);' }],
+  ['cloudflare: and a template name', { 'server/index.js': 'export const z=x=>import(`cloudflare:${x}`);' }],
+  ['cloudflare: + a name', { 'server/index.js': "export const z=x=>import('cloudflare:'+x);" }],
+  ['https:// + a name', { 'server/index.js': "export const z=x=>import('https://esm.sh/'+x);" }],
+  ['https:// literal', { 'server/index.js': "export const z=()=>import('https://esm.sh/x');" }],
+  [
+    'a re-export through an own file',
+    {
+      'server/index.js': "export * from './sock.js';",
+      'server/sock.js': "export { connect } from 'cloudflare:sockets';",
+    },
+  ],
+  [
+    'a re-export through a package',
+    {
+      'server/index.js': "import {d} from 'dial';export const q=()=>d;",
+      ...pkg('dial', "export * from 'cloudflare:sockets'; export const d=1;"),
+    },
+  ],
+  [
+    "a package's import(a name)",
+    { 'server/index.js': "import {d} from 'dyn';export const q=()=>d;", ...pkg('dyn', 'export const d=n=>import(n);') },
+  ],
+  [
+    "a CommonJS package's import(a name)",
+    {
+      'server/index.js': "import d from 'dync';export const q=()=>d;",
+      ...pkg('dync', 'module.exports = n=>import(n);'),
+    },
+  ],
+  [
+    "a CommonJS package's require of sockets",
+    {
+      'server/index.js': "import d from 'reqs';export const q=()=>d;",
+      ...pkg('reqs', "module.exports = ()=>require('cloudflare:sockets');"),
+    },
+  ],
+  ['its own require of sockets', { 'server/index.js': "export const q=()=>require('cloudflare:sockets');" }],
+  ['require(a name)', { 'server/index.js': 'export const q=n=>require(n);' }],
+  [
+    'an import in a string given to eval',
+    { 'server/index.js': 'export const q=()=>eval("import(\'cloudflare:sockets\')");' },
+  ],
+  [
+    'an import in new Function',
+    { 'server/index.js': 'export const q=()=>new Function("return import(\'cloudflare:sockets\')");' },
+  ],
+  ['a name built from strings', { 'server/index.js': "export const q=()=>globalThis['imp'+'ort'];" }],
+  [
+    'cloudflare:sockets#x',
+    { 'server/index.js': "import {connect} from 'cloudflare:sockets#x';export const q=()=>connect;" },
+  ],
+  [
+    'import() of sockets with a second argument',
+    { 'server/index.js': "export const q=()=>import('cloudflare:sockets',{});" },
+  ],
+  [
+    'import() of a file with a second argument',
+    { 'server/index.js': "export const q=()=>import('./more.js', {with:{}});", ...LEVELS },
+  ],
+  ['import.meta', { 'server/index.js': 'export const q=()=>import.meta.url;' }],
+  [
+    "a package's workerd build opens a socket",
+    {
+      'server/index.js': "import {d} from 'pg2';export const q=()=>d;",
+      'node_modules/pg2/package.json': JSON.stringify({
+        name: 'pg2',
+        exports: { '.': { workerd: './w.js', default: './n.js' } },
+      }),
+      'node_modules/pg2/w.js': "import {connect} from 'cloudflare:sockets'; export const d=connect;",
+      'node_modules/pg2/n.js': 'export const d=1;',
+    },
+  ],
+  [
+    "a package's unused socket and import(a name), sideEffects false",
+    { 'server/index.js': "import {query} from 'dblib';export const q=()=>query;", ...dblib(false) },
+  ],
+  [
+    "a package's unused socket and import(a name), no sideEffects",
+    { 'server/index.js': "import {query} from 'dblib';export const q=()=>query;", ...dblib(undefined) },
+  ],
+  ['its own dead code', { 'server/index.js': 'if (false) import(globalThis.x);' }],
+  ['its own unused function', { 'server/index.js': 'function unused(n){return import(n)}' }],
+  [
+    'an own file whose socket export is unused',
+    {
+      'server/index.js': "import {a} from './u.js'; export const q=()=>a;",
+      'server/u.js': "import {connect} from 'cloudflare:sockets'; export const a=1; export const b=()=>connect;",
+    },
+  ],
+  ['an empty import of sockets', { 'server/index.js': "import {} from 'cloudflare:sockets';" }],
+  [
+    'a package used whole',
+    { 'server/index.js': "import * as db from 'dblib';export const q=()=>db;", ...dblib(false) },
+  ],
+];
+async function shapeGame(tmp, name, files) {
+  const dir = path.join(tmp.dir, `s${SHAPES.findIndex(([n]) => n === name)}`);
+  for (const [f, text] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(dir, f)), { recursive: true });
+    await writeFile(path.join(dir, f), /^server\/index\./.test(f) ? `${text}\n${OK}` : text);
+  }
+  await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>g</title>');
+  const main = Object.keys(files).find(f => /^server\/index\./.test(f));
+  await writeFile(path.join(dir, 'gamesfun.json'), JSON.stringify({ server: { main } }));
+  return dir;
+}
+const kitSays = r =>
+  r.problems
+    .map(
+      p =>
+        / imports (cloudflare:sockets|node:\w+), which opens raw/.exec(p)?.[1] ??
+        (/imports a module named at run time/.test(p) ? 'run time' : null),
+    )
+    .filter(Boolean);
+
+test("the kit's verdict on a bundle is a parse of the very bundle it would send: code esbuild leaves out refuses nothing", async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
+  const verdicts = {};
+  for (const [name, files] of SHAPES) {
+    const r = await bundleServer(await shapeGame(tmp, name, files));
+    assert.ok(r.code, `${name}: ${JSON.stringify(r.problems)}`);
+    verdicts[name] = { said: [...new Set(kitSays(r))].sort(), code: r.code };
+  }
+  // without another parser at hand, the cases that matter most, as the host reads them
+  const said = name => verdicts[name].said;
+  assert.deepEqual(said("a package's unused socket and import(a name), sideEffects false"), []);
+  assert.deepEqual(said('its own dead code'), []);
+  assert.deepEqual(said('its own unused function'), []);
+  assert.deepEqual(said('a package used whole'), ['cloudflare:sockets', 'run time']);
+  assert.deepEqual(said('import() of sockets with a second argument'), ['cloudflare:sockets']);
+  assert.deepEqual(said('import() of a file with a second argument'), []);
+  assert.deepEqual(said('a re-export through a package'), ['cloudflare:sockets']);
+  assert.deepEqual(said("a CommonJS package's import(a name)"), ['run time']);
+  assert.deepEqual(said('cloudflare: + a name'), ['run time']);
+  assert.deepEqual(said('a string + a name'), []);
+  // and every case against a parse of the bundle with acorn (the dev tools carry it), by the rule xgames.fun publishes
+  const acorn = await import('acorn').catch(() => null);
+  if (!acorn) return t.skip('acorn is not installed (it comes with the dev tools)');
   const refused = new Set(SOCKETS.flatMap(m => (m.startsWith('node:') ? [m, m.slice(5)] : [m])));
-  const hostWould = code => {
+  const hostSays = code => {
     const ast = acorn.parse(new TextDecoder().decode(code), { ecmaVersion: 'latest', sourceType: 'module' });
-    const found = [];
+    const found = new Set();
+    const mod = v => {
+      const s = String(v)
+        .replace(/[?#].*$/, '')
+        .toLowerCase();
+      return refused.has(s) ? (s.includes(':') ? s : `node:${s}`) : null;
+    };
     const visit = node => {
       if (!node || typeof node.type !== 'string') return;
-      const mod = s =>
-        refused.has(
-          String(s)
-            .replace(/[?#].*$/, '')
-            .toLowerCase(),
-        );
       if (/^(Import|ExportAll|ExportNamed)Declaration$/.test(node.type) && node.source && mod(node.source.value))
-        found.push('module');
+        found.add(mod(node.source.value));
       if (node.type === 'ImportExpression') {
-        if (node.source.type !== 'Literal' || typeof node.source.value !== 'string') found.push('computed');
-        else if (mod(node.source.value)) found.push('module');
+        if (node.source.type !== 'Literal' || typeof node.source.value !== 'string') found.add('run time');
+        else if (mod(node.source.value)) found.add(mod(node.source.value));
       }
       for (const v of Object.values(node))
         if (Array.isArray(v)) v.forEach(visit);
         else if (v && typeof v === 'object') visit(v);
     };
     visit(ast);
-    return found.length > 0;
+    return [...found].sort();
   };
-  for (const [code] of REFUSED_CASES.filter(([c]) => !/node:/.test(c))) {
-    // the bundle as it would be sent, with the kit's refusal set aside: the host would refuse it too
-    const r = await bundleServer(await serverGame(tmp, code), { minify: true });
-    assert.ok(r.code, code);
-    assert.ok(hostWould(r.code), code);
-  }
-  for (const code of ACCEPTED_CASES) {
+  for (const [name, v] of Object.entries(verdicts)) assert.deepEqual(v.said, hostSays(v.code), name);
+  // and the cases of the test above
+  for (const code of [...REFUSED_CASES.filter(([c]) => !/node:/.test(c)).map(([c]) => c), ...ACCEPTED_CASES]) {
     const r = await bundleServer(await serverGame(tmp, code));
-    assert.ok(!hostWould(r.code), code);
+    assert.deepEqual([...new Set(kitSays(r))].sort(), hostSays(r.code), code);
   }
 });
 

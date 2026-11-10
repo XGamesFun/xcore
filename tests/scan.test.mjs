@@ -156,7 +156,7 @@ test('JWTs: a Supabase anon key passes, a service-role key and any other signed 
   assert.match(kinds('x.js', `"${jwt({ role: 'authenticated' })}"`).join(), /role "authenticated"/);
 });
 
-test('a long key is still a key: a service-role JWT with a big payload, a long *_SECRET literal (1,132 characters and more)', () => {
+test('a long key is still a key: a service-role JWT with a big payload', () => {
   /** A token whose payload is `n` characters of base64url: its claims padded to that length. */
   const sized = (claims, n) => {
     let pad = '';
@@ -178,14 +178,24 @@ test('a long key is still a key: a service-role JWT with a big payload, a long *
         /service-role/,
         `payload ${n}, cut at ${chunk}`,
       );
-    const value = alnum(32)
+  }
+});
+
+// A *_SECRET literal is read as xgames.fun reads it: names up to 64 characters on either side of the word, up to 16
+// spaces around the = or :, and a value of 16 to 1,024 characters. What the host would publish, the kit does not refuse.
+test("a secret assigned a literal: the host's bounds, no wider and no narrower", () => {
+  const val = n =>
+    alnum(32)
       .repeat(Math.ceil(n / 32))
       .slice(0, n);
-    assert.ok(
-      kinds('config.js', `const GAME_SECRET = "${value}";`).includes('secret assigned a literal'),
-      `literal ${n}`,
-    );
-  }
+  const literal = text => kinds('config.js', text).includes('secret assigned a literal');
+  for (const n of [16, 200, 1024]) assert.ok(literal(`const GAME_SECRET = "${val(n)}";`), `value ${n}`);
+  for (const n of [1025, 1132, 16_000])
+    assert.ok(!literal(`x_SECRET='${val(n)}'`), `value ${n}: the host publishes it`);
+  assert.ok(literal(`${'a'.repeat(63)}_SECRET = "${val(20)}"`));
+  assert.ok(!literal(`${'a'.repeat(65)}SECRET = "${val(20)}"`), 'a name of 65 characters before the word');
+  assert.ok(literal(`MY_SECRET${' '.repeat(16)}=${' '.repeat(16)}"${val(20)}"`));
+  assert.ok(!literal(`MY_SECRET${' '.repeat(17)}= "${val(20)}"`), '17 spaces');
 });
 
 test("a Firebase web config's apiKey passes; the same Google key shape anywhere else (Gemini) is refused", () => {
