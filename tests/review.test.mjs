@@ -342,6 +342,75 @@ const TOKEN_CASES = [
     ['medium server-no-token-check'],
   ],
   [
+    'checked first through a method of an object of its own (Auth.check())',
+    {
+      'auth.js':
+        "export const Auth = { async check(request, env) { const t = (request.headers.get('authorization')||'').slice(7); if (!t) return null; const p = await env.GF.verifyPlayer(t); return p.ok ? p : null; } };\n",
+      'index.js':
+        "import { Auth } from './auth.js';\nexport default { async fetch(request, env) { const p = await Auth.check(request, env); if (!p) return new Response('no', {status: 401}); return Response.json(await env.GF.saves.get(p.sub, 'k')); } };\n",
+    },
+    null,
+    [],
+  ],
+  [
+    'checked first through a static method of a class of its own',
+    {
+      'auth.js':
+        "export class Auth {\n  static async check(request, env) { const t = (request.headers.get('authorization')||'').slice(7); if (!t) return null; const p = await env.GF.verifyPlayer(t); return p.ok ? p : null; }\n}\n",
+      'index.js':
+        "import { Auth } from './auth.js';\nexport default { async fetch(request, env) { const p = await Auth.check(request, env); if (!p) return new Response('no', {status: 401}); return Response.json(await env.GF.saves.get(p.sub, 'k')); } };\n",
+    },
+    null,
+    [],
+  ],
+  [
+    'checked first through an arrow on an object of its own',
+    {
+      'auth.js':
+        "export const Auth = { check: async (request, env) => { const t = (request.headers.get('authorization')||'').slice(7); if (!t) return null; const p = await env.GF.verifyPlayer(t); return p.ok ? p : null; } };\n",
+      'index.js':
+        "import { Auth } from './auth.js';\nexport default { async fetch(request, env) { const p = await Auth.check(request, env); if (!p) return new Response('no', {status: 401}); return Response.json(await env.GF.saves.get(p.sub, 'k')); } };\n",
+    },
+    null,
+    [],
+  ],
+  [
+    "a package whose name has 'auth' inside a word (authority, authorName): still said",
+    {
+      'index.js':
+        "import { authorName } from 'authority';\nexport default { async fetch(request, env) { return Response.json(await env.GF.scores.top('b')); } };\n",
+    },
+    null,
+    ['medium server-no-token-check'],
+  ],
+  [
+    'a sign-in package by its path (@acme/auth): not decided, so not said',
+    {
+      'index.js':
+        "import { requireUser } from '@acme/auth';\nexport default { async fetch(request, env) { return Response.json(await env.GF.scores.top('b')); } };\n",
+    },
+    null,
+    [],
+  ],
+  [
+    'a sign-in package by its name (x-auth): not decided, so not said',
+    {
+      'index.js':
+        "import guard from 'x-auth';\nexport default { async fetch(request, env) { return Response.json(await env.GF.scores.top('b')); } };\n",
+    },
+    null,
+    [],
+  ],
+  [
+    'a sign-in package by its name (auth-kit): not decided, so not said',
+    {
+      'index.js':
+        "import { guard } from 'auth-kit';\nexport default { async fetch(request, env) { return Response.json(await env.GF.scores.top('b')); } };\n",
+    },
+    null,
+    [],
+  ],
+  [
     "xcore's own parts (its index, api/rpc)",
     {
       'index.js':

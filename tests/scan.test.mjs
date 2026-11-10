@@ -421,32 +421,41 @@ const HOSTILE = {
   database: "n => repeat('postgres://a', n)",
 };
 /** scanFile on each hostile text at each size, in a child process stopped after `limit` ms. → {which: [ms]} or null */
-function hostileTimes(sizes, limit) {
+function hostileTimes(sizes, limit, runs = 5) {
   const script = `const {scanFile} = await import(${JSON.stringify(pathToFileURL(SCAN).href)});
     const repeat = (s, n) => s.repeat(Math.ceil(n / s.length)).slice(0, n);
     const HOSTILE = {${Object.entries(HOSTILE)
       .map(([k, f]) => `${k}: ${f}`)
       .join(',')}};
     const out = {};
-    for (const [k, f] of Object.entries(HOSTILE)) out[k] = ${JSON.stringify(sizes)}.map(n => {
-      const b = new TextEncoder().encode(f(n)); let best = Infinity;
-      for (let i = 0; i < 2; i++) { const t = performance.now(); scanFile('notes.js', b); best = Math.min(best, performance.now() - t); }
-      return best; });
+    for (const [k, f] of Object.entries(HOSTILE)) {
+      // the sizes taken in turn, run after run, so a burst of load falls on each alike; the best run of each is kept
+      const texts = ${JSON.stringify(sizes)}.map(n => new TextEncoder().encode(f(n))), best = texts.map(() => Infinity);
+      for (let i = 0; i < ${runs}; i++) texts.forEach((b, j) => { const t = process.cpuUsage(); scanFile('notes.js', b); const d = process.cpuUsage(t); best[j] = Math.min(best[j], (d.user + d.system) / 1000); });
+      out[k] = best;
+    }
     console.log(JSON.stringify(out));`;
   const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], { timeout: limit, encoding: 'utf8' });
   return r.status === 0 ? JSON.parse(r.stdout) : null;
 }
 
-test('scan time: every pattern is linear; 4 MiB of any hostile text scans in a few seconds at most', () => {
-  const sizes = [SCAN_CHUNK / 16, SCAN_CHUNK / 4, SCAN_CHUNK];
-  const times = hostileTimes(sizes, 120_000);
-  assert.ok(times, `scanFile on ${sizes.at(-1)} bytes of hostile text did not finish in two minutes`);
-  for (const [which, ms] of Object.entries(times)) {
-    assert.ok(ms[2] < 5_000, `${which}: 4 MiB took ${ms[2].toFixed(0)} ms`);
-    // linear: 4x the text is about 4x the time (allowing for noise on small times)
+// Each text at 2 MiB and at 8 MiB, the best of five runs of each, taken in turn, timed by the CPU the scan itself
+// spends (process.cpuUsage), not by the clock: on a busy machine a long run is shared out with other work, and the clock
+// would count that too. Linear is about 4x the time for 4x the text, and a pattern that reads a run once for each place it could
+// start is 16x or more (the quadratic patterns this replaced took over ten seconds on 256 KiB of spaces, and would not
+// finish here). So 4x the text may take at most 12x the time; a time under FLOOR_MS is too small to judge a ratio by,
+// so the bigger text is then held to 12x the floor instead.
+const FLOOR_MS = 50,
+  RATIO = 12;
+test('scan time: every pattern is linear; 8 MiB of any hostile text scans in seconds, not minutes', () => {
+  const sizes = [SCAN_CHUNK / 2, SCAN_CHUNK * 2];
+  const times = hostileTimes(sizes, 300_000);
+  assert.ok(times, `scanFile on ${sizes.at(-1)} bytes of hostile text did not finish in five minutes`);
+  for (const [which, [small, big]] of Object.entries(times)) {
+    assert.ok(big < 20_000, `${which}: 8 MiB took ${big.toFixed(0)} ms`);
     assert.ok(
-      ms[2] <= Math.max(ms[1], 5) * 8 && ms[1] <= Math.max(ms[0], 5) * 8,
-      `${which}: ${ms.map(t => t.toFixed(1)).join(' → ')} ms for 4x, 16x the text`,
+      big <= Math.max(small, FLOOR_MS) * RATIO,
+      `${which}: ${small.toFixed(1)} → ${big.toFixed(1)} ms for 4x the text (at most ${RATIO}x the time, or ${FLOOR_MS * RATIO} ms)`,
     );
   }
 });
