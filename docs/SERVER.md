@@ -63,11 +63,10 @@ export default {
   `env.GF_GAME_ID`, `env.GF_SLUG` and `env.GF_CONTRACT` (`"gf-server-v1"`), and your own secrets as `env.<NAME>`
   (below, "Secrets"). No key of xgames.fun's. Keep keys out of server code: publish refuses one it finds.
 - **Runtime**: Cloudflare Workers, compatibility date `2025-06-01`.
-- **Outbound `fetch`**: the calls the entry makes (the Worker's own `fetch`, while it answers a request) reach only
-  the origins in your `backend.json` and xgames.fun's own; any other answers 403 with the header
-  `x-gf-outbound: refused`. A Durable Object's calls (a room's handler, its alarm) are **not** filtered by
-  `backend.json`: what a room calls is up to its own code, so keep it to what it needs. No number of calls out a
-  request is promised. To read Solana devnet from the server, call xgames.fun's relay,
+- **Outbound `fetch`**: the list in `backend.json` (and xgames.fun's own origins) applies to the calls your server's
+  entry makes while it answers a request; any other answers 403 with the header `x-gf-outbound: refused`. Do not rely
+  on it for anything else: keep what your Durable Objects call to what they need, in their own code. No number of calls
+  out a request is promised. To read Solana devnet from the server, call xgames.fun's relay,
   `https://play.xgames.fun/loot/v1/rpc` (the methods loot's client uses, one request a call): the public devnet RPC
   (`api.devnet.solana.com`) answers the Workers runtime with 403 ("Your IP or provider is blocked"), under `xcore dev`
   as well.
@@ -123,12 +122,9 @@ export default {
 
 ### Check the token first
 
-A request with no good game token is a stranger's. xgames.fun counts strangers apart: together they have half of the
-game's minute (above), and on Free their requests are left out of what caps the game, all but the CPU each one takes
-past its first **2 ms**. So a server that turns such a caller away at once costs the game nothing, while one that does
-real work for them (reads the database, wakes a room, calls out) can be capped by strangers in a few days, and a
-capped game's server is switched off until the month ends ("Publishing it", below). Check the token before anything
-else, and answer 401 without one:
+A request with no good game token is a stranger's. Check the token before any work, and answer 401 at once without
+one: the work your server does for callers with no token (reading the database, waking a room, calling out) counts
+toward what caps your game, and a capped game's server is switched off until the month ends ("Publishing it", below).
 
 ```js
 export default {
