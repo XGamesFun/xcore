@@ -32,3 +32,30 @@ test('dev limits: past 120 a minute names Free, past 600 names Creator, once eac
   again();
   assert.equal(lines.length, 4, 'one word per route');
 });
+
+test('dev limits: the plan imitated names its own numbers; the edge’s reads of /platform/v1, said once a minute', () => {
+  let t = 0;
+  const lines = [];
+  const w = createLimitWatch({ log: l => lines.push(l), now: () => t, plan: 'creator' });
+  for (let i = 0; i < 601; i++) w.request('GET', '/api/state')();
+  assert.equal(lines.length, 1);
+  assert.match(
+    lines[0],
+    /Published on Creator, one player's requests past 600 a minute are refused .*; Scale allows 1200/,
+  );
+  for (let i = 0; i < 120; i++) w.platformRead('GET /platform/v1/saves/main');
+  assert.equal(lines.length, 1, '120 reads a minute pass the edge');
+  w.platformRead('GET /platform/v1/saves/main');
+  w.platformRead('GET /platform/v1/saves/main');
+  assert.equal(lines.length, 2, 'said once');
+  assert.match(lines[1], /^limits: 121 reads of \/platform\/v1 .* past 120 a minute \(429 'rate'\), on every plan/);
+  t += 60_000;
+  for (let i = 0; i < 121; i++) w.platformRead('GET /platform/v1/me');
+  assert.equal(lines.length, 3, 'a new minute says it again');
+  const scale = [];
+  const s = createLimitWatch({ log: l => scale.push(l), now: () => t, plan: 'scale' });
+  const done = s.request('GET', '/api/slow');
+  t += 900;
+  done();
+  assert.equal(scale.length, 0, 'Scale gives 1,000 ms');
+});

@@ -1,5 +1,6 @@
 import { guard, parse, printJson } from '../lib/cli.mjs';
 import { logout, studioOrigin } from '../lib/publish/client.mjs';
+import { forgetReach } from '../lib/login-reach.mjs';
 
 const usage = `Usage: xcore logout [--json]
 
@@ -26,6 +27,7 @@ export default {
       const { values } = parse(args, {}, usage);
       const origin = studioOrigin();
       const r = await logout(origin);
+      await forgetReach(origin);
       if (values.json) printJson({ studio: origin, ...r });
       else
         console.log(

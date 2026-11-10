@@ -253,10 +253,12 @@ test('xcore dev serves the game marked, the platform, the RPC forward, and no se
   assert.equal(rebound, 403, 'the dev host answers only localhost');
   const put = await http(`${dev.origin}/platform/v1/saves/main`, {
     method: 'PUT',
-    headers: auth,
+    headers: { ...auth, 'content-type': 'application/json' },
     body: '{"value":{"level":2}}',
   });
   assert.equal(put.json.ok, true);
+  const untyped = await http(`${dev.origin}/platform/v1/saves/main`, { method: 'PUT', headers: auth, body: '{}' });
+  assert.deepEqual([untyped.status, untyped.json.code], [415, 'failed'], 'a body is JSON, said so, as hosted');
   assert.deepEqual((await http(`${dev.origin}/platform/v1/saves/main`, { headers: auth })).json.value, { level: 2 });
   const none = await http(`${dev.url}api/rooms`);
   assert.equal(none.status, 404);

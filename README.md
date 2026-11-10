@@ -191,14 +191,35 @@ has behind it, so the whole game runs before it is published:
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `http://127.0.0.1:8787/game/` | the published files (it runs `page.build` first, unless `--no-build`), with the play host's headers                                                                                                                                                                                                                                                                                                                |
 | `/game/api/*`                 | the game's `server/` under workerd, the runtime xgames.fun runs it on: Durable Objects with their storage kept, WebSockets, `env.GF`, the game's database (a local D1 in `.gamesfun/dev/d1/`, its migrations applied), and its secrets from `.dev.vars`. A change under `server/` or to `.dev.vars` reloads it. Miniflare (with workerd, about 140 MB) is installed once, the first time a game with a server runs |
-| `/platform/v1/*`              | sign-in, saves and leaderboards: `gamesfun.js` signs in a local player (each tab its own, so two tabs play a room together), and `env.GF.verifyPlayer` accepts its token. Saves and scores are kept in `.gamesfun/dev-platform.json`, never published                                                                                                                                                              |
+| `/platform/v1/*`              | sign-in, saves and leaderboards: `gamesfun.js` signs in a local player (each tab its own, so two tabs play a room together), and `env.GF.verifyPlayer` accepts its token. Saves and scores are kept in `.gamesfun/dev-platform.json`, never published, and held to the limits of the plan it imitates (below)                                                                                                      |
 | `/platform/v1/live`           | the game's live settings (`gf.live`, below): its announcement, config and maintenance, from `.gamesfun/live.json` (read again on each request, never published). With maintenance on there, the game's pages show the holding page and its `api/` and `/platform/v1/*` answer `503` with code `maintenance`, as hosted                                                                                             |
 | `http://127.0.0.1:8788/`      | the game's public project files (`env.GF.files`, `xcore files`), kept in `.gamesfun/dev/files/`: another origin, as `<slug>.xgamesusercontent.com` is to the published game                                                                                                                                                                                                                                        |
 | `/loot/v1/rpc`                | the economy's Solana devnet RPC: xgames.fun's shared relay (what a published page talks to unless the game brings its own: `xcore add rpc`), or your own with `XSOLANA_RPC_URL` in `.env` (its URL is never shown; a call the shared relay would refuse is said in the terminal). The economy's calls answer once it is live on devnet (`xcore loot approve`)                                                      |
 
 Games made with any engine get all of it through `gamesfun.js` (`xcore add signin`): on a plain local server it stands
-in with this browser's storage; under `xcore dev` it uses the real thing. What is not the same as hosted: no CPU or
-request limits, and the server's outbound `fetch` is not limited to `backend.json`'s origins.
+in with this browser's storage; under `xcore dev` it uses the real thing.
+
+**The plan's limits, refused as published.** `xcore dev` imitates one plan, Free unless `--plan creator` or `--plan
+scale` (it says which when it starts), and its platform refuses what xgames.fun refuses on that plan, with the same
+codes: the plan's boards (8 on Free) and board rules (16), entries a board (10,000), save bytes a game (10 MB), and
+reads (1,200) and writes (600 saves, 600 scores) a minute, the server's and the pages' counted apart; project files'
+total and the plan's file calls a minute (120). What a page may do is the same on every plan: it makes `high` boards
+only, two a player and half the plan's boards in all (the game's server makes the rest, `low` ones too, and
+`GF.scores.list` shows who made each); one player's saves from the page keep at most 1/128 of the game's save bytes
+(80 KB on Free), and with the game's saves full a player still keeps 4 KB; one player writes 60 saves and 30 scores a
+minute; a body is JSON (`content-type: application/json`) of at most 96 KB. A board read from the page shows each player
+as an id of the game's own (16 letters and digits), never their account, with `me: true` on the caller's entry; without
+a player token it reads the top 100 only (`offset` plus `limit` past 100 answers 401), may get the same answer again
+for 5 seconds, and has its own minute (a tenth of the plan's reads). Ranks and offsets are counted to 10,000 (past it a
+rank is `10001` with `rankAtLeast: true`). A public project file is an image, audio, video, a font, JSON or plain text
+whose first bytes are that type (else private), and `env.GF.files.put` holds at most 1 MB of a string or ArrayBuffer
+body (a bigger file goes as a stream with its `length`).
+
+What is not imitated, and said instead: one player's requests to the game's server a minute and its CPU a request (the
+dev log says when a request would pass them), and one address's reads of `/platform/v1` at the play edge (120 a minute;
+here every tab is one address). Not imitated at all: the network's delays, the owner's moderation (bans, blocked
+words), the board ids of the published game (these are this machine's own), and the server's outbound `fetch`, which is
+not limited to `backend.json`'s origins. The counts a minute start again when `xcore dev` does.
 
 ## 3. Players, a database, a backend
 
@@ -232,7 +253,9 @@ from the page, so anyone can submit any score for themselves from the browser's 
 makes a board nobody can write that way: `env.GF.scores.setup('ranked', {writer: 'server'})` (or a pattern for boards
 to come, `'daily-*'`), then the page's submits
 to it are refused (their answer's `code` is `'server-only'`, HTTP 403) and the server submits each run it checked; the page reads the board as before
-([docs/SERVER.md](docs/SERVER.md)).
+([docs/SERVER.md](docs/SERVER.md)). A board a page makes ranks higher first; a lower-first board (a time) is made by
+the game's server, and a page's `order: 'low'` for a new board is refused (`code: 'order'`). `scores.top` gives each
+entry's `player` as an id of this game's own and marks the signed-in player's own entry `me: true`.
 
 Where the sign-in comes from:
 
@@ -248,7 +271,9 @@ Where the sign-in comes from:
 
 The token lasts an hour and stays in the page's memory. The game's `server/` checks it with `env.GF.verifyPlayer`; a
 backend of your own checks it with any JWT library against `https://<slug>-play.xgames.fun/player/v1/key` (issuer
-`xgames.fun`, audience `game:<slug>`).
+`xgames.fun`, audience `game:<slug>`). xgames.fun replaces its signing key from time to time: a backend that keeps the
+key set must fetch it again when a token names a key id (`kid`) it does not hold, once, not in a loop (most JWT
+libraries' remote key sets do). `gamesfun.js` and the Godot and Unity clients check no token themselves.
 
 The page calls the game's own server with `GamesFun.api(path, init)` (Godot `GamesFun.api(path, init)`, Unity
 `GamesFun.Api(path, initJson)`): `path` is relative to the game's `api/` (`'finish'` is `api/finish`, at the
@@ -549,7 +574,10 @@ vouchers changed since its last review (it never refuses for it).
 ## 5. Publish
 
 `xcore login` signs this computer in (your browser signs in to xgames.fun and hands it a publish token for 30
-days; xcore never sees your password). `xcore publish <folder>` then builds the game, checks it (the page
+days; xcore never sees your password). On the approval page you tick the games this computer may work on, or your
+whole account, and `xcore login` says which it got (`login --status` says it again). A game you publish as new from
+that sign-in is added to it; a command for any other game is refused with code `not-granted` ("your sign-in was not
+given this game"): run `xcore login` again and tick it. `xcore publish <folder>` then builds the game, checks it (the page
 check on exactly the files built), and uploads its published folder with its `server/` bundle:
 
 1. **The files**: the published folder, without hidden files, `evidence/`, `node_modules/`, `server/`, `supabase/` and the makers' notes at its top (`README.md`, `NOTES.md`, `LAUNCH.md` and the like). A `.env` file or a link
