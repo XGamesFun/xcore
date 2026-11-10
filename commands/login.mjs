@@ -2,7 +2,7 @@ import { createInterface } from 'node:readline/promises';
 import { guard, parse, printJson } from '../lib/cli.mjs';
 import { openUrl } from '../lib/open.mjs';
 import { signInState, studioOrigin } from '../lib/publish/client.mjs';
-import { loginWithReach, loginWords, readReach, reachWords } from '../lib/login-reach.mjs';
+import { currentReach, loginWithReach, loginWords, reachWords } from '../lib/login-reach.mjs';
 import { storeName } from '../lib/credentials.mjs';
 import { CMD } from '../lib/command.mjs';
 
@@ -27,12 +27,12 @@ export default {
       const origin = studioOrigin();
       if (values.status) {
         const { token: _token, words, ...s } = await signInState(origin);
-        const reach = s.state === 'signed-in' ? await readReach(origin) : null;
+        const reach = s.state === 'signed-in' ? await currentReach(origin) : null;
         if (values.json)
           printJson({
             ...s,
             signedIn: s.state === 'signed-in',
-            ...(reach ? { scope: reach.scope, games: reach.games } : {}),
+            ...(reach ? { scope: reach.scope, games: reach.games, reachChecked: reach.checked } : {}),
           });
         else
           console.log(

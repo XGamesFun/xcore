@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { loginWithReach, loginWords, readReach } from '../lib/login-reach.mjs';
-import { run, runAsync, standIn, tempDir } from './helpers.mjs';
+import { runAsync, standIn, tempDir } from './helpers.mjs';
 
 /** The person's browser, approving at once (as tests/helpers.mjs signIn does). */
 const approve = g => async url => {
@@ -57,9 +57,9 @@ test('xcore login says which games the sign-in reaches, by name, and --status sa
   assert.match(words, /This sign-in reaches 2 of your games: Moth Run \(moth-run\), Lantern\./);
   assert.match(words, /A game you publish as new from here is added to it; for another, run .*login again and tick it/);
   assert.deepEqual((await readReach(g.origin, { env })).games, r.games);
-  const status = run(['login', '--status'], { env: cli });
+  const status = await runAsync(['login', '--status'], { env: cli });
   assert.match(status.stdout, /Signed in to .* This sign-in reaches 2 of your games: Moth Run \(moth-run\), Lantern/);
-  const json = JSON.parse(run(['login', '--status', '--json'], { env: cli }).stdout);
+  const json = JSON.parse((await runAsync(['login', '--status', '--json'], { env: cli })).stdout);
   assert.deepEqual([json.scope, json.games.map(x => x.id)], ['games', ['g1', 'g2']]);
   // signed out, it is forgotten with the token
   assert.equal((await runAsync(['logout'], { env: cli })).status, 0);
@@ -102,4 +102,45 @@ test('a call refused for a game the sign-in was not given says so, and what to d
   const out = JSON.parse(r.stdout);
   assert.equal(out.code, 'not-granted');
   assert.match(out.next, / login$/);
+});
+
+test('what a sign-in reaches is read from xgames.fun when asked: a game published since shows; offline, the saved list, said so', async t => {
+  const { tmp, g, env, cli } = await setUp(t, { scope: 'games', games: [] });
+  let games = [];
+  g.state.handle = (method, url) =>
+    url === '/api/kit/plan'
+      ? [200, { ok: true, games }]
+      : url === '/api/kit/games/g9/plan'
+        ? [403, { error: NOT_GRANTED, code: 'not-granted' }]
+        : null;
+  await loginWithReach({ origin: g.origin, env, open: approve(g) });
+  // a first publish makes a new game, which xgames.fun adds to this sign-in: no new login
+  games = [{ id: 'g1', title: 'Moth Run', slug: 'moth-run' }];
+  const now = await runAsync(['login', '--status'], { env: cli });
+  assert.match(now.stdout, /This sign-in reaches 1 of your games: Moth Run \(moth-run\)\./);
+  assert.doesNotMatch(now.stdout, /none of your games|out of date/);
+  assert.deepEqual(
+    (await readReach(g.origin, { env })).games.map(x => x.id),
+    ['g1'],
+    'the saved copy is refreshed',
+  );
+  const json = JSON.parse((await runAsync(['login', '--status', '--json'], { env: cli })).stdout);
+  assert.deepEqual([json.games.map(x => x.id), json.reachChecked], [['g1'], true]);
+  assert.ok(!JSON.stringify(json).includes('gfk_'), 'no token printed');
+  // a refusal names what the sign-in reaches now
+  const dir = path.join(tmp.dir, 'other');
+  await mkdir(path.join(dir, '.gamesfun'), { recursive: true });
+  await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>other</title>');
+  await writeFile(path.join(dir, '.gamesfun', 'publish.json'), JSON.stringify({ [g.origin]: { projectId: 'g9' } }));
+  const refused = await runAsync(['plan'], { cwd: dir, env: cli });
+  assert.match(refused.stderr, /This sign-in reaches: Moth Run \(moth-run\)\./);
+  // xgames.fun out of reach: the saved list, said to be possibly out of date
+  await g.close();
+  const offline = await runAsync(['login', '--status'], { env: cli });
+  assert.equal(offline.status, 0);
+  assert.match(offline.stdout, /This sign-in reaches 1 of your games: Moth Run \(moth-run\)\./);
+  assert.match(
+    offline.stdout,
+    /xgames\.fun could not be asked just now, so this is the list saved .* and may be out of date/,
+  );
 });
