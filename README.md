@@ -235,8 +235,9 @@ engine takes:
 | A Godot 4 project | `addons/gamesfun/gamesfun.gd`, autoloaded as `GamesFun`                                             | `await GamesFun.sign_in()`, `await GamesFun.saves_put("main", {})` |
 | A Unity project   | `Assets/Plugins/GamesFun/` (`GamesFun.jslib`, `GamesFun.cs`)                                        | `await GamesFun.SignIn()`, `await GamesFun.SavesPut("main", json)` |
 
-The same calls everywhere: sign in and out, the player (`id`, `name`, `level`, `wallet`, `x`), saves (any JSON, 64 KB
-each, 16 a player), leaderboards (submit, top, the player's own), the game's database (below) and its own server
+The same calls everywhere: sign in and out, the player (`id`, `name`, `level`, `wallet`, `x`; `id` is the player's
+account, `x:<X id>` or for a Google account `g:<id>`, an id different in every game, and never the wallet, which is
+`wallet`, empty when the account has none), saves (any JSON, 64 KB each, 16 a player), leaderboards (submit, top, the player's own), the game's database (below) and its own server
 (`api`). Every call answers `{data, error, status}` and none throws, so a game plays on as a guest wherever xgames.fun is
 not there.
 
@@ -269,11 +270,15 @@ Where the sign-in comes from:
   can be made and tested before it is published. Under `xcore dev`, a local sign-in (one player a tab) and the
   platform answer as xgames.fun does, and the game's `server/` accepts its token.
 
-The token lasts an hour and stays in the page's memory. The game's `server/` checks it with `env.GF.verifyPlayer`; a
-backend of your own checks it with any JWT library against `https://<slug>-play.xgames.fun/player/v1/key` (issuer
-`xgames.fun`, audience `game:<slug>`). xgames.fun replaces its signing key from time to time: a backend that keeps the
-key set must fetch it again when a token names a key id (`kid`) it does not hold, once, not in a loop (most JWT
-libraries' remote key sets do). `gamesfun.js` and the Godot and Unity clients check no token themselves.
+The token lasts an hour and stays in the page's memory. The game's `server/` checks it with `env.GF.verifyPlayer`,
+first thing, before any work: a request without one answers 401 at once, since strangers' requests that do work count
+toward what caps a game ([docs/SERVER.md](docs/SERVER.md), "Check the token first"). A backend of your own checks it
+with any JWT library against `https://<slug>-play.xgames.fun/player/v1/key` (issuer `xgames.fun`, audience
+`game:<slug>`). Its `sub` is the player's account (`x:<X id>`, or `g:<id>` for Google, different in every game);
+`wallet` is a claim of its own, and may be absent: a game that keeps a player's data by wallet reads `wallet`.
+xgames.fun replaces its signing key from time to time: a backend that keeps the key set must fetch it again when a
+token names a key id (`kid`) it does not hold, once, not in a loop (most JWT libraries' remote key sets do).
+`gamesfun.js` and the Godot and Unity clients check no token themselves.
 
 The page calls the game's own server with `GamesFun.api(path, init)` (Godot `GamesFun.api(path, init)`, Unity
 `GamesFun.Api(path, initJson)`): `path` is relative to the game's `api/` (`'finish'` is `api/finish`, at the
@@ -651,8 +656,11 @@ free their slot unless their link is still live. What the game's server, saves a
 | Sites that embed it  | 3 (`xcore embed`)                                                  | 10                                                   | 25                      |
 | Domains of your own  | none                                                               | 1 (`xcore domain`)                                   | 5                       |
 
-Past what is included, a game is **capped** until the month ends: its server answers at most 60 requests a minute (20
-from one player) and saves and scores slow down, but nothing is lost and the game keeps working. Paid slots are $15 for
+Past what is included, a game is **capped** until the month ends: **its server is switched off** (every `api/*` request
+answers 451 with `reason: "capped"`, and a room that is running stops within about five minutes), and saves and scores
+slow down (60 save writes, 30 score submits and 60 reads a minute). Its pages keep loading and nothing is lost: the server comes
+back by itself when the cap lifts ([docs/SERVER.md](docs/SERVER.md), "Publishing it"). An unpublished or taken-down
+game's server is switched off the same way. Paid slots are $15 for
 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans; no automatic renewal, 7 days' grace after the period
 ends; when they end, their games go back to free slots and nothing is taken down).
 Usage credit, bought the same way, lets Creator games go past what their slots include, at twice what xgames.fun pays,
@@ -734,9 +742,9 @@ without one needs none: the D1 database, `xcore db` and `xcore files` are new.
   WebAssembly). Such a server runs on a host of your own, declared with `backend use custom`; or its logic moves into
   `server/`, or into the page itself (WebAssembly is allowed: Pyodide runs Python in the browser). Each is a change to
   how the game is built: the person who made it decides.
-- **A Node server as the backend on xgames.fun**: `server/` is a Worker, not Node (Node built-ins only with
-  `nodejs_compat`, and no `fs`, `child_process` or listening sockets). A Node backend runs on a host of your own,
-  declared with `backend use custom`.
+- **A Node server as the backend on xgames.fun**: `server/` is a Worker, not Node (no Node built-ins: `nodejs_compat`
+  is not offered; no `fs`, `child_process`, raw sockets or listening sockets). A Node backend runs on a host of your
+  own, declared with `backend use custom`.
 - **Scripts, style sheets and fonts from a CDN**: the page loads code and styles from its own files only, so a copy goes
   in the game (or the package is bundled).
 - **A fallback to `index.html` for every path**: deep links of a client-side router reload to "not found"; use a hash

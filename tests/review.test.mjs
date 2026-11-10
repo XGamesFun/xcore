@@ -166,6 +166,70 @@ test("a server that checks players' tokens itself must name the game's audience"
   assert.ok(!ids(await review(dir)).includes('high token-any-game'));
 });
 
+test('a server that works for anyone without checking a token is named; one that checks first, or does no work, is not', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const server = async (name, files) => {
+    const dir = path.join(tmp.dir, name);
+    await mkdir(path.join(dir, 'server'), { recursive: true });
+    await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>x</title>');
+    for (const [f, text] of Object.entries(files)) await writeFile(path.join(dir, 'server', f), text);
+    return dir;
+  };
+  const found = async dir => ids(await review(dir)).filter(f => /token/.test(f));
+  // never checks a token, and reads the board, writes a save, asks a room, calls out: every stranger's request does it
+  const open = await server('open', {
+    'index.js':
+      "export default {\n  async fetch(request, env) {\n    const top = await env.GF.scores.top('best');\n    return Response.json(top);\n  },\n};\n",
+  });
+  assert.deepEqual(await found(open), ['medium server-no-token-check']);
+  const r = await review(open);
+  const f = r.findings.find(x => x.id === 'server-no-token-check');
+  assert.match(f.message, /server\/index\.js does work for every request \(scores\) and never checks a player's token/);
+  assert.match(f.message, /2 ms/);
+  assert.match(f.fix, /verifyPlayer/);
+  assert.match(f.fix, /401/);
+  for (const [name, code] of [
+    [
+      'db',
+      'export default { async fetch(request, env) { return Response.json(await env.DB.prepare("SELECT 1").all()); } };\n',
+    ],
+    [
+      'room',
+      "export default { fetch(request, env) { return env.ROOM.get(env.ROOM.idFromName('a')).fetch(request); } };\n",
+    ],
+    ['out', "export default { async fetch() { return fetch('https://api.example.net/x'); } };\n"],
+  ])
+    assert.deepEqual(await found(await server(name, { 'index.js': code })), ['medium server-no-token-check'], name);
+  // checks first: nothing to say
+  const first = await server('first', {
+    'index.js':
+      "export default {\n  async fetch(request, env) {\n    const token = (request.headers.get('authorization') ?? '').replace(/^Bearer\\s+/i, '');\n    if (!token) return new Response('sign in', { status: 401 });\n    const player = await env.GF.verifyPlayer(token);\n    if (!player.ok) return new Response('sign in', { status: 401 });\n    return Response.json(await env.GF.saves.get(player.sub));\n  },\n};\n",
+  });
+  assert.deepEqual(await found(first), []);
+  // work before the check in the entry's fetch: a lower note (a public read is fine, but strangers run it)
+  const late = await server('late', {
+    'index.js':
+      "export default {\n  async fetch(request, env) {\n    const top = await env.GF.scores.top('best');\n    const player = await env.GF.verifyPlayer(request.headers.get('authorization'));\n    if (!player.ok) return Response.json(top);\n    return Response.json({ top, me: player.sub });\n  },\n};\n",
+  });
+  assert.deepEqual(await found(late), ['low work-before-token']);
+  // no work at all (it answers from what it has): nothing to say
+  assert.deepEqual(
+    await found(
+      await server('static', { 'index.js': 'export default { fetch: () => Response.json({ ok: true }) };\n' }),
+    ),
+    [],
+  );
+  // xcore's own parts check where they must (vouchers, the database) or are public by design (api/rpc): not named
+  const ours = await server('ours', {
+    'index.js':
+      "// The game's server on xgames.fun (docs/SERVER.md in @xgamesfun/xcore). Written by `xcore add rpc`:\nimport { handleRpc } from './rpc.js';\nexport default { async fetch(request, env) { const rpc = await handleRpc(request, env); if (rpc) return rpc; return new Response('not found', { status: 404 }); } };\n",
+    'rpc.js':
+      "export async function handleRpc(request, env) { return fetch(env.XSOLANA_RPC_URL, { method: 'POST' }); }\n",
+  });
+  assert.deepEqual(await found(ours), []);
+});
+
 test('PAY.check read from the code: comments left out, env read or not', () => {
   const code = `// export const PAY = { check() { return { grant: 1 } } }
 export const PAY = {

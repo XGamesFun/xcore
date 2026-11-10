@@ -113,7 +113,11 @@ supabase|railway` with the kit installed). Without the kit, they set one up them
   ([docs/SERVER.md](../../docs/SERVER.md)): a Worker on `/api/*`, Durable Objects for rooms, `env.GF` for sign-in, saves
   and scores. Their page calls it with a relative address (`fetch('api/scores')`): `/api/*` at the published origin,
   `/game/api/*` under `xcore dev`, which runs it under workerd with a local `env.GF`. A Node-only server stays on
-  their own host.
+  their own host, and so does anything that opens raw sockets (a database driver, a mail or chat client): xgames.fun
+  refuses `cloudflare:sockets`, `node:net` and the like, an `import()` of a name made at run time, and `nodejs_compat`.
+  Every route that does work checks the player's token first (`env.GF.verifyPlayer`; 401 at once without one): a
+  stranger's request that does work counts toward what caps the game. Key a player's data on `sub` (the account:
+  `x:…`, or `g:…` for Google, different in every game), never on the wallet; `wallet` is its own claim, maybe null.
 
 ## 5. An economy (only when they ask: tokens, NFTs, a shop, prizes, staking)
 
@@ -208,7 +212,8 @@ the sign-in was not given that game: they run `xcore login` again and tick it (n
 nothing checked (their gameplay, their backend's own behaviour).
 
 A game with a `server/`, saves or scores runs under its **plan** (`xcore plan <folder>`): Free by default (50 ms of CPU
-and 600 requests a minute, $1 of use a month, then capped and slow until the month ends). When the game needs more
+and 600 requests a minute, $1 of use a month; past it the game is capped until the month ends: its server is switched
+off and saves and scores slow down). When the game needs more
 (a server that replays play, many players at once), tell them: a paid slot makes it Creator
 (`xcore plan activate <folder>` once they have one), and the paid slot moves between their games at any time. Everyone
 has 2 free slots: a third game is refused on publish (`no-free-slot`) until they archive one on their console
