@@ -3,8 +3,23 @@
 // holds nothing a secret scanner (GitHub's push protection, xgames.fun's own) would stop.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { scanFile, secretsMessage, isPublicKey, SECRET_PATTERNS, SCAN_OVERLAP } from '../lib/publish/scan.mjs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import * as scan from '../lib/publish/scan.mjs';
 import { MAX_MATCH, SECRET_PATTERNS as ALL_PATTERNS } from '../lib/secret-patterns.mjs';
+
+// a namespace, so this file also runs (and fails, rather than not load) on a scan without the newer exports
+const {
+  scanFile,
+  secretsMessage,
+  isPublicKey,
+  SECRET_PATTERNS,
+  SCAN_OVERLAP,
+  SCAN_CHUNK,
+  backendOrigin,
+  backendOrigins,
+} = scan;
+const refusedType = scan.refusedType ?? (() => null);
 
 const bytes = text => new TextEncoder().encode(text);
 const kinds = (path, text) => scanFile(path, typeof text === 'string' ? bytes(text) : text).map(h => h.kind);
@@ -374,4 +389,114 @@ test('a run of base58 letters cut by the end of a piece is not taken for a key: 
     scanFile('art.js', bytes(data), { chunk, overlap: 1024 }).map(h => h.kind),
     [],
   );
+});
+
+// ---- Time: every pattern runs in time linear in the file, as xgames.fun's scan does -----------------------------------
+
+const SCAN = fileURLToPath(new URL('../lib/publish/scan.mjs', import.meta.url));
+// Text written to hold a scanner up: a long run of what a pattern reads, its start repeated inside it.
+const HOSTILE = {
+  rpc: "n => repeat('http://helius-rpc.com', n)",
+  alchemy: "n => repeat('https://a.alchemy.com/v2/', n)",
+  secret: "n => repeat('SECRET', n)",
+  names: "n => repeat('a_SECRET = \"', n)",
+  spaces: "n => ' '.repeat(n)",
+  newlines: "n => '\\n'.repeat(n)",
+  ternary: "n => '?' + ' '.repeat(n - 1)",
+  jwt: "n => repeat('eyJ-', n)",
+  keypair: "n => 'fromSecretKey(' + ' '.repeat(n - 14)",
+  seed: "n => repeat('wallet_seed: \"', n)",
+  bytes: "n => repeat('SECRET = [1, ', n)",
+  keyfile: 'n => repeat(\'"seed": "\', n)',
+  database: "n => repeat('postgres://a', n)",
+};
+/** scanFile on each hostile text at each size, in a child process stopped after `limit` ms. → {which: [ms]} or null */
+function hostileTimes(sizes, limit) {
+  const script = `const {scanFile} = await import(${JSON.stringify(pathToFileURL(SCAN).href)});
+    const repeat = (s, n) => s.repeat(Math.ceil(n / s.length)).slice(0, n);
+    const HOSTILE = {${Object.entries(HOSTILE)
+      .map(([k, f]) => `${k}: ${f}`)
+      .join(',')}};
+    const out = {};
+    for (const [k, f] of Object.entries(HOSTILE)) out[k] = ${JSON.stringify(sizes)}.map(n => {
+      const b = new TextEncoder().encode(f(n)); let best = Infinity;
+      for (let i = 0; i < 2; i++) { const t = performance.now(); scanFile('notes.js', b); best = Math.min(best, performance.now() - t); }
+      return best; });
+    console.log(JSON.stringify(out));`;
+  const r = spawnSync(process.execPath, ['--input-type=module', '-e', script], { timeout: limit, encoding: 'utf8' });
+  return r.status === 0 ? JSON.parse(r.stdout) : null;
+}
+
+test('scan time: every pattern is linear; 4 MiB of any hostile text scans in a few seconds at most', () => {
+  const sizes = [SCAN_CHUNK / 16, SCAN_CHUNK / 4, SCAN_CHUNK];
+  const times = hostileTimes(sizes, 120_000);
+  assert.ok(times, `scanFile on ${sizes.at(-1)} bytes of hostile text did not finish in two minutes`);
+  for (const [which, ms] of Object.entries(times)) {
+    assert.ok(ms[2] < 5_000, `${which}: 4 MiB took ${ms[2].toFixed(0)} ms`);
+    // linear: 4x the text is about 4x the time (allowing for noise on small times)
+    assert.ok(
+      ms[2] <= Math.max(ms[1], 5) * 8 && ms[1] <= Math.max(ms[0], 5) * 8,
+      `${which}: ${ms.map(t => t.toFixed(1)).join(' → ')} ms for 4x, 16x the text`,
+    );
+  }
+});
+
+test('the bounded patterns still find every key xgames.fun refuses', () => {
+  const hx = n => '0123456789abcdef'.repeat(8).slice(0, n);
+  const found = text => kinds('game.js', text);
+  assert.ok(found(`rpc = "https://mainnet.helius-rpc.com/?api-key=${hx(32)}"`).some(k => /RPC URL/.test(k)));
+  assert.ok(
+    found(`rpc = "https://rpc.helius-rpc.com/v0/x?cluster=devnet&api-key=${hx(36)}"`).some(k => /RPC URL/.test(k)),
+  );
+  assert.ok(found(`u = 'https://solana-mainnet.g.alchemy.com/v2/${hx(32)}'`).some(k => /RPC URL/.test(k)));
+  assert.ok(found(`const MY_SERVICE_SECRET = "${hx(40)}";`).includes('secret assigned a literal'));
+  assert.ok(found(`{"api_key":   "${hx(24)}"}`).includes('secret assigned a literal'));
+  assert.ok(found(`const GAME_SECRET =                "${hx(24)}";`).includes('secret assigned a literal'));
+  assert.ok(!found(`x = ok ? 'MySecretsTextHere' : 'other';`).includes('secret assigned a literal'));
+  assert.ok(
+    found(`Keypair.fromSecretKey(  new Uint8Array( [1,2])`).includes('a Solana keypair in code (fromSecretKey)'),
+  );
+  // a private key block whose type is a long word, as xgames.fun reads it
+  assert.ok(found('-----BEGIN ' + 'ENCRYPTEDPRIVATEKEYMATERIALX ' + 'PRIVATE KEY-----').includes('private key block'));
+  // a token with a long header and signature: xgames.fun reads each up to 8,192 characters
+  const long = `${b64url({ alg: 'RS512', typ: 'JWT', x5c: alnum(32).repeat(150) })}.${b64url({ role: 'service_role' })}.${alnum(32).repeat(150)}`;
+  assert.match(found(`const t = "${long}";`).join(), /service-role/);
+  // a run of base64url letters that only has "eyJ" inside it is not a token
+  assert.deepEqual(found(`x = "${'eyJ-'.repeat(5000)}";`), []);
+});
+
+test('programs, installers and archives other than .zip are refused by their type, as xgames.fun refuses them', () => {
+  for (const name of [
+    'setup.exe',
+    'bin/Game.DLL',
+    'tools/run.bat',
+    'game.apk',
+    'mac/Game.dmg',
+    'linux/game.AppImage',
+    'server.jar',
+    'saves.7z',
+    'levels.rar',
+    'build.tar.gz',
+    'build.tgz',
+    'pack.tar',
+    'disc.iso',
+  ])
+    assert.match(refusedType(name) ?? '', /a program or an installer|an archive/, name);
+  for (const name of [
+    'levels.zip',
+    'Build/game.data.gz',
+    'Build/game.wasm.br',
+    'index.html',
+    'game.pck',
+    'readme.txt',
+    'exe.js',
+    'notes.tar.md',
+  ])
+    assert.equal(refusedType(name), null, name);
+});
+
+test("a backend origin whose host the page's security policy cannot name is refused, as xgames.fun refuses it", () => {
+  assert.equal(backendOrigin('https://abcd.supabase.co'), 'https://abcd.supabase.co');
+  assert.throws(() => backendOrigin('https://my_api.example.net'), /content-security policy cannot name/);
+  assert.deepEqual(backendOrigins({ origins: ['https://my_api.example.net'] }).origins, []);
 });
