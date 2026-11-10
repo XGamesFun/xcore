@@ -59,6 +59,9 @@ and `@xgamesfun/solana` is 0.26.0.
   says when a sale is waiting (`endAuction`); a loan's repayment brings the NFT home (`repay`); `lotteries` and
   `ticketWeight` show a time-weighted lottery's weights and its sales close; `unstakeNft` can leave without a prize that
   cannot be given; `collect` can give up a prize the player cannot receive.
+- Before a player hands an NFT of another collection to the project (a stake in escrow, a loan, an NFT bid, ticket or
+  stake), the page client reads the listing and the holds an earlier owner may have left on it and refuses in words;
+  `acceptLeftover: true` goes ahead.
 - New in a spec (`xcore loot check` explains each): a lottery's `closesBefore` and `timeWeighted`, a place's
   `whenShort`, a box's `whenOut: "giveNothing"`. Many limits are gone and are warnings now: read the check's warnings
   again for an economy written for 0.25.
