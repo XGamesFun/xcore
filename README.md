@@ -253,6 +253,43 @@ its own link the browser does, and in a frame that allows none (a post on X on a
 its own. It answers `{on, how: 'page' | 'browser' | 'tab' | 'none'}` (`none`: an iPhone's Safari, which has no full
 screen for a page); pressed again it comes back, and `GamesFun.onFullscreen(on => …)` follows every change.
 
+**A wallet app, for a claim.** A player who opens a game from a post in X's app is in X's own browser, which has no
+wallet. Inside xgames.fun's play page, the page can open the game in a wallet app's browser (Phantom or Solflare), or
+in the person's own browser, already signed in. Three calls:
+
+- `GamesFun.canOpenWallet()` → `true` (no wallet in this browser, and the play page opens a wallet app when asked),
+  `false` (it will not: a wallet is here), or `null` (not known: no play page around the game, or an older one).
+  `GamesFun.onCanOpenWallet(can => …)` follows each change: a wallet can show up a moment after the page loads.
+- `GamesFun.walletNeeded()`: call it when the Claim button shows, so the play page gets ready and the later tap opens
+  the app at once. Safe to call each time the button shows: the page is told once a page load. It answers
+  `{data: {told: true}}`, or `code: 'no-page'` (no play page around the game: nothing sent).
+- `GamesFun.openWallet(app = 'phantom', {view, href} = {})`: `app` is `'phantom'`, `'solflare'` or `'browser'`;
+  `view` left out opens this play page as it is, `'claim'` with `href` (an address of this game's own play page,
+  `https://xgames.fun/play/<name>?…`) opens that address, `'wallet'` xgames.fun's page that adds a wallet. It answers
+  `{data: {asked: true}}`; the page answers nothing more (it opens the app, or shows its own sheet with the links).
+  Errors, with nothing opened: `code: 'invalid'` (a bad argument), `'no-page'` (no play page around the game),
+  `'not-offered'` (`canOpenWallet()` is not `true`).
+
+**Call `openWallet` inside the player's tap**, in the click handler itself, with no `await` or timer before it: the
+message goes out in the call, and a browser lets the page open an app only from a tap. So a Claim button chooses:
+
+```js
+const gf = GamesFun; // walletHere: (await gf.loot.ready()).data.wallets.length > 0, asked before
+gf.walletNeeded(); // when the Claim button shows
+claimButton.onclick = () => {
+  if (walletHere) return claim(); // a wallet in this browser: the game's own claim
+  if (gf.canOpenWallet() === true) {
+    gf.openWallet('phantom', { view: 'claim', href: claimLink }); // no await before this line
+    return showNote('Opening your wallet app…');
+  }
+  copyLink(); // no wallet and no play page that opens one: the game's own fallback
+};
+```
+
+`gamesfun.js` builds no wallet links itself. Under `xcore dev` and on this machine there is no play page around the
+game, so `canOpenWallet()` is `null` and `openWallet` answers `no-page`: test the fallback there, and the wallet app
+on xgames.fun.
+
 **A leaderboard is the player's own word until the server takes it.** A signed-in player submits their own scores
 from the page, so anyone can submit any score for themselves from the browser's console. A game with its own server
 makes a board nobody can write that way: `env.GF.scores.setup('ranked', {writer: 'server'})` (or a pattern for boards
@@ -761,7 +798,7 @@ A game made with xcore 0.1.0 that has `server/database.js` (`xcore add database`
 without one needs none: the D1 database, `xcore db` and `xcore files` are new.
 
 1. **Run `xcore add database` again.** It brings `server/database.js` up to date (your `RULES` and `LIMITS` are
-   kept), with `gamesfun.js` (1.6.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
+   kept), with `gamesfun.js` (1.7.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
    needs an owner (step 3) as `file:line` with its change; `xcore publish` lists them again until each names its
    owner. On its first start the new `database.js` moves the documents to a table keyed by collection, owner and id,
    each under its owner. After that, do not roll the game back to a version with 0.1.0's `database.js`: its writes
