@@ -182,13 +182,13 @@ test('gamesfun loot approve opens nothing unless told how it is signed; a key fi
   await mkdir(path.join(game, 'k'));
   const missing = run(['loot', 'approve', 'public/xsolana.json', '--keypair', 'k/none.json'], { cwd: game });
   assert.equal(missing.status, 1);
-  assert.match(
-    missing.stderr,
-    new RegExp(`${path.join(game, 'k', 'none.json').replace(/[.]/g, '\\.')} does not exist`),
-  );
+  // (the game's own k/ folder, however the system writes a path; never the economy file's folder)
+  assert.match(missing.stderr, /game[\\/]k[\\/]none\.json does not exist/);
+  assert.doesNotMatch(missing.stderr, /public[\\/]k[\\/]none\.json/);
   const first = run(['loot', 'approve', '--keypair=k/none.json', 'public/xsolana.json'], { cwd: game });
-  assert.match(first.stderr, /k\/none\.json does not exist/);
-  assert.doesNotMatch(first.stderr, /public\/none\.json/);
+  assert.equal(first.status, 1);
+  assert.match(first.stderr, /game[\\/]k[\\/]none\.json does not exist/);
+  assert.doesNotMatch(first.stderr, /public[\\/](k[\\/])?none\.json/);
 });
 
 test('a key file named beside flags is given whole; approve never goes to the shared relay', () => {
