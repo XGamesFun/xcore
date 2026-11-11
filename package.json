@@ -1,6 +1,6 @@
 {
   "name": "@xgamesfun/xcore",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "description": "xgames.fun from the command line: bring a web game you already made, check it as xgames.fun hosts it, give it a backend and a Solana economy, and publish it at a link anyone can play.",
   "keywords": [
     "game",

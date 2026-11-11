@@ -12,7 +12,7 @@ here is `@xgamesfun/xcore` (the `xcore` command: `npx -y @xgamesfun/xcore …`, 
 @xgamesfun/xcore`; never a bare `npx xcore`, which is another package), which needs no kit; with the kit, its MCP tools
 (`gamesfun_adopt` and the rest, named below) do the same.
 
-The order: **adopt → fix the list → check → (backend) → (economy) → (review, when it pays) → publish when they ask → (review --live).**
+The order: **adopt → fix the list → check → (backend) → (economy) → (review, when it pays) → its preview picture → publish when they ask → (review --live).**
 
 ## 1. Adopt
 
@@ -76,7 +76,8 @@ xcore check <folder>            # with the kit's tools: gamesfun_verify {"dir": 
 
 Four checks: it builds, it fits the hosting, the page starts (phone and desktop, under the play host's page policy, no
 console errors, nothing missing, nothing from the root, something on screen), it stays inside its origins. Open the two
-screenshots in `evidence/verify-N/` and look at them. A failing check 4 names the origin and why: declare it in
+screenshots in `evidence/verify-N/` and look at them. Its report also says whether the game has a preview picture
+(§7): a warning, never a failure. A failing check 4 names the origin and why: declare it in
 `backend.json` if the game really calls it, or remove the call. The page check does not say the game plays well:
 that is the person's own game; ask them what to try, and try it with `xcore dev <folder>` (the game as xgames.fun
 hosts it, with its server, sign-in, saves, rooms and economy RPC, refusing what xgames.fun refuses on the Free plan;
@@ -202,15 +203,44 @@ nothing it sends can spend or sign) and checks its voucher key and economy again
 give its address: `--live http://127.0.0.1:<port>/game/`. `xcore publish` reminds you when the economy or `server/`
 changed since the last review.
 
-## 7. Publish (only when they ask)
+## 7. Its preview picture (before the first publish)
+
+A link to the game, shared on X or in a chat, shows a square card: the game's own picture behind "XGames.fun" and its
+title (drawn large across the top band) and a "Tap to play" button (bottom left). The picture is `assets/card.jpg` (or
+`assets/card.png`) in the published files, best a 960×960 JPEG. With none, or one xgames.fun cannot draw (over
+1,500,000 bytes, not a JPEG or PNG, a PNG named `.jpg` or a JPEG named `.png`, cut short, a kind of JPEG it does not
+draw), the card is a plain gradient and `xcore publish` stops before anything goes up (code `card`; `card` in the JSON
+says what it found). One it draws but small (under 600 px a side: blurry) or far from square (cropped to its middle)
+goes up with a warning and its fix.
 
 ```bash
-xcore publish <folder> --check  # the offline part: what goes up, what refuses it
+xcore card <folder>                      # a picture of the game as it plays, at 960×960
+xcore card <folder> --tap --wait 6       # a game that starts on a tap, or takes longer to show something
+xcore card <folder> --from key-art.png   # from a picture they have: scaled to cover, cropped to the middle
+```
+
+Then **open the picture and look at it** (read the image file): a loading screen, a blank page or a menu makes a poor
+card, and so does a page that had errors (xcore card says so and fails unless `--force`). Try `--wait`, `--tap` or
+`--path <page?query>`, or ask the person for key art or a screenshot (`--from`, then `--force` to replace the one
+there; `--from assets/card.jpg --force` re-crops theirs in place). Keep the subject clear of the top third (the title)
+and the bottom left (the button). For a game with a build it writes into the folder the build copies as it is
+(`page.static`, such as `public/`), so the build carries it into what is published; it says where, and for a build
+with no such folder it writes nothing and says where the picture has to live. Only when the person says they want no
+picture: `xcore publish <folder> --no-card`, or `"card": false` in `gamesfun.json` so they are not asked again. A link
+shared before can keep its old card for a while (X and chat apps cache it).
+
+## 8. Publish (only when they ask)
+
+```bash
+xcore card <folder>             # once, before the first publish (§7); look at it
+xcore publish <folder> --check  # the offline part: what goes up, what refuses it, its preview picture
 xcore publish <folder>          # or gamesfun_login, then gamesfun_publish {"game": "<folder>"}
 ```
 
 It builds, runs the page check on exactly those files, uploads the published folder and the `server/` bundle. A failed
-check makes a private draft only. `xcore login` asks the person to tick, on xgames.fun's approval page, the games this
+check makes a private draft only. With no preview picture xgames.fun can draw it stops before anything goes up (code
+`card`; `next` is the command that fixes it, when there is one): fix it or make one (§7) rather than reaching for
+`--no-card`. `xcore login` asks the person to tick, on xgames.fun's approval page, the games this
 computer may work on (or their whole account), and says which it got; a command refused with code `not-granted` means
 the sign-in was not given that game: they run `xcore login` again and tick it (never work around it). Tell them the link, what you changed in their files, what the checks proved and what
 nothing checked (their gameplay, their backend's own behaviour).

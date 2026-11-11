@@ -32,6 +32,7 @@ xcore backend use custom ./my-game --url https://api.my-game.example   # only if
 xcore loot add ./my-game                   # only if it gets an economy (a Solana economy on loot)
 xcore add vouchers ./my-game               # its server pays results it checked from a grant, with its own key
 xcore review ./my-game                     # the security review: what a cheater gets (--live once published)
+xcore card ./my-game                       # its preview picture: what a shared link to it shows
 xcore login && xcore publish ./my-game
 xcore embed add https://mygame.com ./my-game     # your own site may show it (an <iframe>)
 xcore domain add play.mygame.com ./my-game       # Creator or Scale: it plays at your own domain
@@ -177,6 +178,9 @@ about games made on the kit; the kit's `verify` runs this same check for one):
    the root, something on screen (screenshots in `evidence/verify-N/`)
 4. **it stays inside its origins**: every request is one the hosted page may make; a script, style, font or frame from
    another site, or a connection to an origin `backend.json` does not list, fails it
+
+The report also says whether the game has a [preview picture](#preview-picture-xcore-card) (`assets/card.jpg`): a
+warning when it has none, or one xgames.fun cannot draw or will crop or blur, never a failed check.
 
 A backend that does not answer this machine is a note, not a failure. The game's play is its own: the page check says
 it starts clean and stays inside what the hosting allows, nothing more. Publish's gate runs the same check, and a game
@@ -621,11 +625,14 @@ check on exactly the files built), and uploads its published folder with its `se
    name) can fail to find it, so have the game reload when that happens. A game installed as an app (a web
    manifest and a service worker) installs from its own link, `https://<slug>-play.xgames.fun/`.
 
-`publish --check` runs steps 1 to 4 above without publishing (`--check --verify` adds the check and remembers a pass), `--status`
+Before any of that goes up, it needs the game's **preview picture** (below): with none, or one xgames.fun cannot use,
+publish stops and says what is wrong, until you make one (`xcore card`) or say it goes without (`--no-card`).
+
+`publish --check` runs steps 1 to 4 above without publishing (and says whether the preview picture is there) (`--check --verify` adds the check and remembers a pass), `--status`
 shows the link and the account, `--draft` saves a private version, `--new` makes a new game with a new link.
 
 **For scripts and agents**: every command takes `--json`. A failure is then also printed on stdout as
-`{ "ok": false, "error", "code", "state", "next" }`: `code` is why (`usage`, `login`, `files`, `secrets`, `build`,
+`{ "ok": false, "error", "code", "state", "next" }`: `code` is why (`usage`, `login`, `files`, `secrets`, `build`, `card`,
 `size`…), `next` the command that moves it on. `login --status --json` and `publish --status --json` name the sign-in's
 `state` (`signed-in`, `signed-out`, `expired`, or `unreadable` when the token is kept where this session cannot read
 it, such as the Secret Service over SSH); `publish --status --json` also names the game's `link` (`never`, `started`,
@@ -653,8 +660,45 @@ jobs:
       - run: npx -y @xgamesfun/xcore@<version> publish ./my-game
 ```
 
+Commit the game's preview picture (`assets/card.jpg`, made once with `xcore card`): a publish without one stops, in a
+job as anywhere.
+
 **Limits**: one game 3,000 files, 100 MiB (one file may be all of it); one account 30 publishes and 1 GB of new files a day, 100
 games. `GAMESFUN_STUDIO=<origin>` publishes to another xgames.fun (a Studio on your own machine while developing it).
+
+### Preview picture: `xcore card`
+
+A link to the game shared on X, in a chat or anywhere that shows link previews gets a 960×960 card from xgames.fun:
+the game's own picture as the background (scaled to cover the square), darkened a little at the top and bottom, with
+"XGames.fun" and the game's title drawn large across the top band and a "Tap to play" button at the bottom left.
+Without a picture the card is a plain dark gradient with the title, which is easy to scroll past.
+
+- **The file**: `assets/card.jpg` (else `assets/card.png`) among the published files (for a brought game with a build,
+  in what the build makes: `page.out`). `card.jpg` wins when both are there.
+- **What xgames.fun can draw** (publish stops for anything else): a JPEG or PNG named for what it is (a PNG in
+  `card.jpg`, or a JPEG in `card.png`, fails to draw: rename it), whole (not cut short; a PNG's image data is checked too), at most 1,500,000 bytes
+  (it ignores a bigger one), and for a JPEG a baseline or progressive one (other kinds, such as lossless or
+  arithmetic-coded, cannot be drawn: `xcore card <folder> --from <it> --force` makes one that can).
+- **What looks right** (publish goes on, with a warning and the fix): square, 960×960, as drawn. A side under 600 px is
+  scaled up and looks blurry; a picture far from square (the longer side over 1.25 times the shorter) is cropped to
+  its middle, and `xcore card <folder> --from assets/card.jpg --force` does that crop here so you can see it. Keep the
+  subject clear of the top third (the title) and the bottom left (the button).
+- **`xcore card <folder>`** makes one: it serves the game as the page check does, opens it in Chrome at 960×960, waits
+  4 seconds (`--wait <seconds>`), and saves a JPEG. `--tap` taps the middle once first (a game that starts on a tap),
+  `--path <page?query>` opens another page of the game, and `--from <picture>` makes it from key art or a screenshot
+  you have instead (scaled to cover and cropped to its middle; at most 40 MB). It never replaces an `assets/card.jpg`,
+  or an `assets/card.png` xgames.fun can draw, without `--force` (and then says which file wins). For a game with a
+  build it writes into the folder the build copies as it is (`page.static`, such as `public/`), so the build carries
+  it into what is published; a build with no such folder is told where the picture has to live, and nothing is
+  written. A page that answers an error makes no picture; one that throws or logs errors makes one, says so, and fails
+  unless `--force`. Open the picture and look at it before you publish.
+- **Publish asks for it**: with no picture, or one xgames.fun cannot draw, `xcore publish` stops before anything is
+  uploaded, says what is wrong, and names the ways on (`--json`: `"code": "card"`, `"card"` what it found, `"next"`
+  the command that fixes it). `--draft`, `--status` and `--check` do not stop for it (`--check --json` carries it in
+  `card` and `cardWarnings`). `xcore publish --no-card` publishes without one (the link shows the
+  plain card), and `"card": false` in `gamesfun.json` says so for good, so the game is not asked again.
+- **After a publish** with a picture, xcore prints the card's address, `https://xgames.fun/play/<slug>/card.png`. A
+  link shared before can keep its old card for a while: X and chat apps cache it.
 
 ### Its plan: `xcore plan`
 
