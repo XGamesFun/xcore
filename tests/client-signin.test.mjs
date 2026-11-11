@@ -153,6 +153,9 @@ function standIn({ shared = 'real', sharedType = 'text/javascript', sharedWait =
           'content-security-policy': `default-src 'self'; script-src 'self'; connect-src 'self' http://xgames.test:${port}`,
         }
       : {};
+    // a page of the same site that is not the play page (another game's host) framing this game
+    if (url.pathname === '/frame')
+      return send(200, `<iframe id="g" src="http://moth-play.xgames.test:${port}/"></iframe>`, 'text/html');
     if (url.pathname === SIGNIN_PATH) {
       if (sharedWait) await new Promise(r => setTimeout(r, sharedWait));
       if (shared === 'none') return send(404, { ok: false, code: 'unknown' });
@@ -443,6 +446,17 @@ test(
     await tab.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     assert.deepEqual(await state(tab), { id: null, token: '' });
     assert.equal((await tab.evaluate(() => changes)).at(-1), null);
+    // the forget is owed: told again as the reload loaded, and at each load after until xgames.fun answers it
+    while (s.forgets.length < 2) await page.waitForTimeout(20);
+    s.forgetStatus = 200;
+    await page.reload();
+    while (s.forgets.length < 3) await page.waitForTimeout(20);
+    assert.ok(!s.clicked.has('moth'), 'xgames.fun has forgotten');
+    await page.waitForFunction(() => localStorage.getItem('gamesfun:moth:forget') === null);
+    await page.reload();
+    await page.evaluate(() => GamesFun.ready);
+    await page.waitForTimeout(300);
+    assert.equal(s.forgets.length, 3, 'answered: not again');
   },
 );
 
@@ -499,25 +513,27 @@ test(
 );
 
 test(
-  'framed by another site: asked with no tap, as xgames.fun allows; in a post on X a reload keeps the sign-in',
+  'framed by another site or a page of the same site: nothing asked, loaded or kept; Sign in is the window, for that page',
   { skip, timeout: 60_000 },
   async t => {
     const { s, ctx, open, g } = await world(t);
-    s.clicked.add('moth'); // xgames.fun would sign this browser in on the game's own link
-    const framing = await open(`http://evil.test:${g.port}/`);
-    const inside = await (await framing.waitForSelector('#g')).contentFrame();
-    await inside.waitForFunction(() => window.GamesFun);
-    await inside.evaluate(() => GamesFun.ready);
-    await inside.waitForFunction(() => GamesFun.signInClient);
-    // the game's own origin asks, as it would in its own tab; this stand-in's cookie (SameSite=Lax) is not sent from
-    // inside another site, so it names nobody, and the framing page gets a signed-out game
-    while (!s.sessions.length) await inside.waitForTimeout(20);
-    assert.deepEqual(s.sessions, [{ origin: `http://moth-play.xgames.test:${g.port}`, cookie: null, slug: 'moth' }]);
-    assert.equal(await inside.evaluate(() => GamesFun.player), null);
-    assert.equal(await inside.evaluate(() => GamesFun.signInLink()), '', 'a frame cannot take the tab to X');
-    await framing.close();
+    s.clicked.add('moth'); // xgames.fun would name this browser's player to the game's own top window
+    // another site (its frame gets no cookie of xgames.fun's), and a page of the same site (whose frame would)
+    for (const url of [`http://evil.test:${g.port}/`, `http://evil-play.xgames.test:${g.port}/frame`]) {
+      const framing = await open(url);
+      const inside = await (await framing.waitForSelector('#g')).contentFrame();
+      await inside.waitForFunction(() => window.GamesFun);
+      assert.equal(await inside.evaluate(() => GamesFun.ready), null, `a signed-out game in ${url}`);
+      await inside.waitForFunction(() => GamesFun.signInClient);
+      await inside.waitForTimeout(300);
+      assert.equal(await inside.evaluate(() => GamesFun.player), null, url);
+      assert.equal(await inside.evaluate(() => GamesFun.signInLink()), '', 'a frame cannot take the tab to X');
+      await framing.close();
+    }
+    assert.deepEqual(s.sessions, [], 'no question from a frame, with the cookie or without');
+    assert.ok(!s.seen.some(l => l.endsWith(SIGNIN_PATH)), 'and no sign-in client loaded into one');
 
-    // a post on X: the player signs in by a click, in the window; a reload of the post keeps it
+    // a post on X: the player signs in by a tap, in the window; it is the frame's for that page only
     const post = await open(`http://x.test:${g.port}/`);
     let frame = await (await post.waitForSelector('#g')).contentFrame();
     await frame.waitForFunction(() => window.GamesFun);
@@ -528,15 +544,14 @@ test(
     s.approved = true;
     assert.equal((await frame.evaluate(() => window.signedIn)).id, 'x:42');
     s.approved = false;
+    assert.equal(await frame.evaluate(() => sessionStorage.length + localStorage.length), 0, 'nothing kept');
     await post.reload();
     frame = await (await post.waitForSelector('#g')).contentFrame();
     await frame.waitForFunction(() => window.GamesFun);
-    assert.equal((await frame.evaluate(() => GamesFun.ready)).id, 'x:42');
-    assert.equal(await frame.evaluate(() => GamesFun.token), 'tok-own');
-    assert.equal(s.sessions.length, 2, 'asked as the post first loaded, not again for the kept token');
+    assert.equal(await frame.evaluate(() => GamesFun.ready), null, 'a reload of the post is signed out');
+    await frame.waitForTimeout(300);
+    assert.deepEqual([s.sessions, s.forgets], [[], []]);
     assert.equal(tabs(ctx), 1, 'no window');
-    // X's page reads nothing of the frame: it is another origin's
-    assert.equal(await post.evaluate(() => sessionStorage.length + localStorage.length), 0);
   },
 );
 

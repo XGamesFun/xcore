@@ -42,14 +42,17 @@ function storage(seed = {}) {
 
 /**
  * The client in a fake window at `href`. `session`: what xgames.fun answers the question ({status, body, headers}, or
- * a body); `framed`: a page above (it keeps what it is sent), else the game is the top window; `referrer`: the framing
- * page's address as the frame sees it. → {gf, fetched, went, replaced, sent, from, tick, show, changes, tab, browser}
+ * a body); `forget`: the status it answers Sign out's forget with (or a function giving it); `approve`: the sign-in
+ * request (the window's) is answered signed in; `framed`: a page above (it keeps what it is sent), else the game is
+ * the top window. A frame here has no referrer and no ancestorOrigins, as xgames.fun's play page makes it in Firefox.
+ * → {gf, fetched, went, replaced, sent, from, tick, show, changes, tab, browser}
  */
 function load({
   href = OWN,
   session = { player: null },
+  forget = 200,
+  approve = false,
   framed = false,
-  referrer = '',
   tab = {},
   browser = {},
   before = {},
@@ -82,7 +85,8 @@ function load({
       if (a && a.status) return answer(a.status, a.body ?? {}, a.headers);
       return answer(200, a && a.token ? { ...a, expires: Date.now() + 3600e3 } : a);
     }
-    if (url === FORGET && init.method === 'POST') return answer(200, { ok: true });
+    if (url === FORGET && init.method === 'POST')
+      return answer(typeof forget === 'function' ? forget() : forget, { ok: true });
     if (url === '/platform/v1/me') return answer(200, ME);
     if (url === '/player/v1/request' && init.method === 'POST')
       return answer(200, {
@@ -93,13 +97,19 @@ function load({
         url: `${SITE}/go/CODE-0001`,
         site: 'xgames.test',
       });
-    if (url === '/player/v1/request/status') return answer(200, { state: 'waiting' });
+    if (url === '/player/v1/request/status')
+      return answer(
+        200,
+        approve
+          ? { state: 'signed-in', player: NAMED.player, token: 'tok-own', expires: Date.now() + 3600e3 }
+          : { state: 'waiting' },
+      );
     return answer(404, { ok: false });
   };
   const doc = {
     readyState: 'complete',
     visibilityState: 'visible',
-    referrer,
+    referrer: '',
     currentScript: null,
     addEventListener: (type, fn) => docListeners.push([type, fn]),
   };
@@ -362,25 +372,114 @@ test("framed by xgames.fun's play page: none of these requests is made", async (
   );
 });
 
-test("framed by xgames.fun's page that has not answered yet: the game waits for it and asks nothing", async () => {
-  const w = load({ framed: true, session: NAMED, referrer: `${SITE}/play/moth` });
-  w.tick(); // a second and a half, and nobody answered
+test("framed by xgames.fun's play page that answers late, with no referrer: it asks xgames.fun nothing, keeps nothing", async () => {
+  // Firefox: the play page's frame has no referrer (referrerpolicy="no-referrer") and there is no ancestorOrigins, so
+  // the game cannot tell who frames it before that page answers
+  const w = load({ framed: true, session: NAMED });
+  w.tick(); // a second and a half, and nobody answered: the game signs in by itself, by the window at a tap only
   assert.equal(await w.gf.ready, null);
+  await settled(w);
+  w.show();
   await moment();
-  assert.deepEqual(w.toSite(), []);
+  assert.deepEqual(w.toSite(), [], 'no question with no tap');
+  assert.deepEqual([w.tab.size, w.browser.size], [0, 0], 'nothing kept');
+  // the play page answers, late: it signs in, and the game still asks xgames.fun nothing of its own
   w.from({ type: 'gf:host', v: 1, auth: true });
+  void w.gf.signIn();
   w.tick();
   await moment();
   assert.deepEqual(w.toSite(), []);
+  assert.deepEqual(
+    w.sent().map(m => m.type),
+    ['gf:auth-signin'],
+  );
 });
 
-test('framed by another page (a post on X): asked with no tap; Sign in opens the window, the tab stays', async () => {
-  const w = load({ framed: true, session: { player: null }, referrer: 'https://x.test/post/1' });
-  w.tick(); // no play page answered: the game signs in by itself
+test('framed by another page (a post on X, a page of the same site): nothing asked or kept; Sign in is the window', async () => {
+  const w = load({ framed: true, session: NAMED, approve: true });
+  w.tick(); // no play page answered
+  assert.equal(await w.gf.ready, null);
   await settled(w);
-  assert.deepEqual(w.toSite(), [`GET ${SESSION}`]);
+  assert.deepEqual(w.toSite(), [], 'not signed in with no tap: a frame is no place for it');
   assert.equal(w.gf.signInLink(), '', 'no link: a frame cannot move the tab');
   void w.gf.signIn();
   assert.deepEqual(w.went, []);
   assert.deepEqual(w.opened, [`${SITE}/go`], 'the window on xgames.fun, from the tap');
+  for (let i = 0; i < 20 && !w.gf.player; i++) {
+    w.tick();
+    await moment();
+  }
+  assert.equal(w.gf.player.id, 'x:42', 'signed in by the window');
+  assert.deepEqual([w.tab.size, w.browser.size], [0, 0], 'and kept for this page only');
+  await w.gf.signOut();
+  assert.deepEqual(w.toSite(), [], 'no question and no forget, ever');
+});
+
+// ---- Sign out in the first moment of a page, and a forget owed ----
+
+test('Sign out before the sign-in client is chosen: the kept sign-in does not come back, and xgames.fun is told', async () => {
+  const kept = {
+    s: { token: 'tok-k', expires: Date.now() + 3000e3, player: ME.player, said: NAMED.player },
+  };
+  // a reload of a signed-in tab, and Sign out at once (before its client is chosen, a second in at most)
+  const w = load({
+    session: NAMED,
+    tab: { 'gamesfun:moth:signin': JSON.stringify(kept) },
+    browser: { 'gamesfun:moth:signed': '"in"' },
+  });
+  await w.gf.signOut();
+  assert.equal(await w.gf.ready, null);
+  await settled(w);
+  await moment();
+  assert.deepEqual([w.gf.player, w.gf.token], [null, '']);
+  assert.deepEqual(w.toSite(), [`POST ${FORGET}`], 'told, and nothing asked');
+  assert.equal(w.browser.get('gamesfun:moth:signed'), '"out"');
+  assert.equal(JSON.parse(w.tab.get('gamesfun:moth:signin') ?? '{}').s ?? null, null, 'the kept token is gone');
+  // a first visit, where the question would name the player: Sign out at once wins over it
+  const first = load({ session: NAMED });
+  await first.gf.signOut();
+  assert.equal(await first.gf.ready, null);
+  await settled(first);
+  await moment();
+  assert.deepEqual([first.gf.player, first.toSite()], [null, [`POST ${FORGET}`]]);
+});
+
+test('a forget that got no answer is owed: posted again as the next page loads until answered; a tap cancels it', async () => {
+  let status = 503;
+  const w = load({ session: NAMED, forget: () => status });
+  await w.gf.ready;
+  await w.gf.signOut();
+  await moment();
+  assert.equal(w.browser.get('gamesfun:moth:forget'), 'true', 'owed');
+  // the next load, still no answer: told again, first, and still owed
+  const next = load({ session: NAMED, forget: () => status, browser: Object.fromEntries(w.browser) });
+  assert.equal(await next.gf.ready, null);
+  await settled(next);
+  await moment();
+  assert.deepEqual(next.toSite(), [`POST ${FORGET}`]);
+  assert.equal(next.browser.get('gamesfun:moth:forget'), 'true');
+  // answered: not owed any more, and the load after asks nothing
+  status = 200;
+  const third = load({ session: NAMED, forget: () => status, browser: Object.fromEntries(next.browser) });
+  await third.gf.ready;
+  await settled(third);
+  await moment();
+  assert.deepEqual(third.toSite(), [`POST ${FORGET}`]);
+  assert.equal(third.browser.has('gamesfun:moth:forget'), false);
+  const fourth = load({ session: NAMED, browser: Object.fromEntries(third.browser) });
+  await fourth.gf.ready;
+  await settled(fourth);
+  assert.deepEqual(fourth.toSite(), []);
+
+  // owed, and the player taps Sign in: it is not posted after (it would undo that sign-in)
+  status = 503;
+  const owing = load({ session: NAMED, forget: () => status });
+  await owing.gf.ready;
+  await owing.gf.signOut();
+  await moment();
+  void owing.gf.signIn();
+  assert.equal(owing.browser.has('gamesfun:moth:forget'), false);
+  const back = load({ session: NAMED, tab: Object.fromEntries(owing.tab), browser: Object.fromEntries(owing.browser) });
+  assert.equal(plain(await back.gf.ready).id, 'x:42');
+  assert.deepEqual(back.toSite(), [`GET ${SESSION}`]);
 });
