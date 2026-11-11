@@ -932,6 +932,8 @@ test(
     assert.equal(post.url(), `http://x.test:${g.port}/`);
     // a phone, and a game that asked to stay: the window
     const stay = await open();
+    // (this browser signed in to the game a moment ago, on its own domain: xgames.fun answers this page with no tap)
+    await stay.waitForFunction(() => GamesFun.player);
     await stay.evaluate(() => GamesFun.signOut());
     const kept = stay.waitForEvent('popup');
     await stay.evaluate(() => {

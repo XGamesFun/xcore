@@ -293,17 +293,18 @@ Where the sign-in comes from:
 **A player who comes back is signed in with no click.** On the game's own link, a player who signed in to the game
 before, by their own click, is signed in again as the page loads: `GamesFun.ready` answers with them, and
 `GamesFun.onChange` says so, exactly as after a click, so a game needs no change. It holds across a reload, a new tab
-and a new day, for as long as xgames.fun remembers the browser; a first visit to a game is still one click. Before
+and a new day, in the browser where they signed in, for as long as xgames.fun remembers it; a first visit to a game is
+still one click. Before
 the token's hour ends it is renewed, with no click and nothing shown (`onChange` is told the same player again, with
 the new token in `GamesFun.token`). Inside a post on X and on a domain of the game's own, xgames.fun cannot be asked
 (a browser sends its cookie only from the top page of a host under xgames.fun), so there a returning player clicks
 Sign in once, a reload inside the hour keeps the sign-in (the tab keeps the token until it ends), and when the hour is
 up the game is told the player is signed out.
 
-**Sign out sticks.** After `GamesFun.signOut()` nothing signs the player in to that game by itself until they click
-Sign in again: in that browser at once (other tabs of the game sign out when they are next looked at), and in their
-other browsers once xgames.fun has heard of it, which it does from the game's own link. Their xgames.fun account
-stays signed in, and so do their other games; signing out on xgames.fun's account page ends all of it.
+**Sign out sticks.** After `GamesFun.signOut()` nothing signs the player in to that game by itself, in that
+browser, until they click Sign in again (other tabs of the game sign out when they are next looked at). Their
+xgames.fun account stays signed in, and so do their other games; signing out on xgames.fun's account page ends all of
+it. What xgames.fun remembers is the browser where the player clicked: on another device the first visit is one click.
 
 **What is kept, and where.** The token lasts an hour. The tab keeps it until then (`sessionStorage`), and only on a
 host that serves this one game (its xgames.fun link, its own domain, `xcore dev`): never where games share a host. A
