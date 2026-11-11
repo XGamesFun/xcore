@@ -1068,8 +1068,10 @@ where you operate and where your players are. Depending on what your game does, 
 Nothing in this repository, its documentation or its output is legal, financial, investment or tax advice. Get advice
 from a qualified professional before you offer anything of real value.
 
-**On-chain features.** The loot program runs on Solana **devnet** and **has not been audited**: do not use it with
-real value. Blockchain transactions are public and irreversible. You alone control your wallet and keys. Never put a
+**On-chain features.** The loot program runs on Solana devnet and on **mainnet**, and **has not been independently
+audited**. An economy is on devnet, where nothing has value, unless its `xsolana.json` says `"network": "mainnet"`:
+there every transaction moves real SOL and real tokens, and what is sent to the program can be lost. Try an economy on
+devnet first, and put it on mainnet only once you accept that risk. Blockchain transactions are public and irreversible. You alone control your wallet and keys. Never put a
 private key, seed phrase or secret in a game, and approve only transactions you understand. The key file an economy
 goes live with owns it: keep it outside the game's folder, and never paste it anywhere.
 

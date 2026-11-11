@@ -1207,3 +1207,18 @@ test('rpc: the game’s server passes either cluster’s loot transactions', asy
   ]);
   for (const p of R.loot) assert.ok(R.scanPrograms.includes(p), p);
 });
+
+test('vouchers on mainnet: the steps never suggest the test key, and say to take it out when a grant names it', async () => {
+  const tmp = await tempDir();
+  const dir = await fixture(tmp, 'static');
+  const spec = {
+    network: 'mainnet',
+    grants: [{ key: 'clear', name: 'Clear', id: GRANT.id }],
+    live: { project: GRANT.project },
+  };
+  await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify(spec));
+  const r = await addVouchers(dir);
+  const said = r.steps.join('\n');
+  assert.match(said, /The economy is on mainnet: never add the test key to a grant/);
+  assert.doesNotMatch(said, /add the test key's address too/);
+});

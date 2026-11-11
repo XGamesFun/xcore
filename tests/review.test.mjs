@@ -594,6 +594,16 @@ test(".dev.vars: tracked by git, not ignored, in the published folder; a seed or
   r = await review(dir);
   assert.deepEqual(ids(r), ['medium test-key-in-grant']);
   assert.equal(r.server.facts.testKey, test);
+  // on mainnet the same grant signs real-money claims with a key whose seed sits in .dev.vars: high
+  await editJson(path.join(dir, 'xsolana.json'), s => {
+    s.network = 'mainnet';
+  });
+  r = await review(dir);
+  assert.ok(ids(r).includes('high test-key-in-grant'), ids(r).join(', '));
+  assert.ok(r.findings.find(f => f.id === 'test-key-in-grant').fix.startsWith('The economy is on mainnet'));
+  await editJson(path.join(dir, 'xsolana.json'), s => {
+    delete s.network;
+  });
   // a brought game whose static folder (what its build copies as it is) holds a .dev.vars
   const brought = await sample(tmp, 'decided', 'brought');
   await writeFile(
