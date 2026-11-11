@@ -2,6 +2,158 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.6.2 — 2026-11-11
+
+**A game opened by itself on its own host can open in the player's wallet app too.** A post's card in X's app opens
+the game as the whole tab at `https://<name>-play.xgames.fun/`, with no play page around it, so 0.6.0's calls answered
+`null` and `no-page` there and the wallet's browser arrived signed out. `gamesfun.js` is 1.8.0:
+
+- `GamesFun.openWallet(app, {view, href})` on the game's own host, as the top window, sends the tab, inside the call,
+  to xgames.fun's wallet page: `<site>/wallet/open?slug=<name>&app=<app>&back=<this page>` (the site and the name the
+  game's own sign-in uses; `back` without its fragment, or `href` with `view: 'claim'` when it is an address on this
+  same host). That page opens the app or shows its links, and the wallet's browser comes back to `back` signed in. It
+  answers `{data: {asked: true, left: true}}`. Framed by anything other than the play page (X's timeline, another
+  site) it is still `no-page`: a frame cannot move the tab.
+- `GamesFun.canOpenWallet()` there is `true` when loot's page client (`gf/loot/wallets.js`) finds no wallet in the
+  browser, `false` when it finds one, and `null` until that has settled (or with no `gf/loot/`). In the play page it
+  follows the page, as before.
+- `GamesFun.walletNeeded()` there answers `{data: {told: false}}` (nobody to tell) instead of an error, so one Claim
+  button works in both places (README §3, "A wallet app, for a claim").
+
+## 0.6.1 — 2026-11-11
+
+**`xcore loot approve --browser` takes what Phantom signs.** The tools are `@xgamesfun/solana` 0.28.1 (on loot 0.28.0,
+unchanged). The page for a browser wallet sent a transaction only as it had prepared it, byte for byte; Phantom adds
+its own checks to what it signs (instructions of the Lighthouse program), so it could not approve wherever it adds
+them. The page now sends the wallet's own transaction when the wallet only added those to a transaction it alone
+signs: everything that was prepared and shown is in it untouched and in order, no account of it gained or lost a
+privilege, and nothing else rides with it, no other program's instruction and no fee of the wallet's own. Anything
+else is still refused, saying what the wallet did. Going live with a key file (`--keypair`), the usual way, is as it
+was.
+
+## 0.6.0 — 2026-11-11
+
+**A game with a claim can open itself in the player's wallet app.** A player who opens a game from a post in X's app
+is in X's own browser, which has no wallet. Inside xgames.fun's play page, the page can now open the game in Phantom's
+or Solflare's browser (or the person's own), signed in, when the game asks. `gamesfun.js` is 1.7.0, with three calls:
+
+- `GamesFun.canOpenWallet()` → `true` (no wallet here, and the play page opens a wallet app when asked), `false`, or
+  `null` (no play page around the game, or one that does not say); `GamesFun.onCanOpenWallet(fn)` follows each change.
+- `GamesFun.walletNeeded()`: the game shows a Claim button, and the play page gets ready; it is told once a page load.
+  → `{data: {told: true}}`, or `code: 'no-page'`.
+- `GamesFun.openWallet(app = 'phantom', {view, href})`: from inside the player's tap, with no `await` before it (the
+  message goes in the call). `app`: `'phantom'`, `'solflare'` or `'browser'`; `view`: `'claim'` with `href` (an
+  address of the game's own play page) or `'wallet'`. → `{data: {asked: true}}`, or `code: 'invalid'`, `'no-page'` or
+  `'not-offered'`, with nothing opened: the game shows its own fallback.
+
+The README (§3, "A wallet app, for a claim") has a Claim button that chooses between the three. Under `xcore dev` and
+on this machine there is no play page around the game, so `openWallet` answers `no-page` there. `xcore add signin`
+again brings a game's copy of `gamesfun.js` up to 1.7.0; the Godot and Unity glue carry the new file but have no
+calls of their own for these yet.
+
+## 0.5.2 — 2026-11-11
+
+**loot is at its official address on devnet**, `xgamesVsZBpCVgJuatfYAFJRmQoccfQf5qtUFNp2Eet`, and the tools are
+`@xgamesfun/solana` 0.28.0, built for it. It is the same program as 0.27.0 at a new address, so every address the
+program derives is new too: nothing set up under the address before (`9cwq…7NFQ`) exists under this one, and an
+economy from before goes live again.
+
+- `xcore dev`'s relay and every `xcore loot` command take loot's address from the installed tools now, so the next
+  move needs no change here.
+- A new game's `server/rpc.js` (`xcore add rpc`) names the official address. One written before names the old one in
+  `scanPrograms`: put the new address first there, or the game's own RPC refuses the economy's transactions.
+
+## 0.5.1 — 2026-11-11
+
+**An economy goes live signed by a key file on your own computer; no page opens unless you ask for one.** The tools
+are now `@xgamesfun/solana` 0.27.2 (on loot 0.27.0, unchanged: an economy that is live stays live).
+
+- `xcore loot keygen <file>` makes a key file for a game's economy, outside any repository, and prints its address,
+  never the key. `xcore loot approve --keypair <keyfile>` shows everything going live would send, with a code, and
+  sends nothing; the same command with `--yes <code>` sends exactly that. The key file is the project's owner, for
+  good: whoever can read it controls the project, every later change is signed by it, and nothing restores a lost one.
+- **Plain `xcore loot approve` opens nothing now**: it says the two ways and stops. The page for a browser wallet is
+  `xcore loot approve --browser`, for when you ask for it.
+- `xcore loot approve` no longer sends through xgames.fun's shared relay, which passes only loot's own transactions:
+  about one in eight of a setup's transactions (a token's mint, the token accounts an economy pays into) are not, and
+  the relay refused them. It sends through `XSOLANA_RPC_URL` when you set one, else through Solana's public devnet
+  RPC. Every other `xcore loot` command still reads through the relay.
+- A key file named beside the flags (`--keypair keys/game.json`) is never taken for the economy file, and is found
+  from where you stand when the economy file is in another folder.
+- Fixed in the tools: a transaction the network took, whose answer was lost, could be sent again at the next
+  `approve` (a setup's seeds paid in twice); a browser wallet that adds its own priority fee was refused after a
+  setup's first transaction.
+- The README, the skill and `xcore loot add`'s next steps say how going live is signed now.
+
+## 0.5.0 — 2026-11-11
+
+**`xcore publish` now stops when the game has no preview picture xgames.fun can draw.** A link to a game shared on X
+or in a chat shows a 960×960 card from xgames.fun with the game's own picture behind its title; without one it is a
+plain gradient. The picture is `assets/card.jpg` (or `assets/card.png`) among the published files. To go on, either:
+
+- make one: `xcore card <folder>` (a picture of the game as it plays, or `--from <picture>` from one you have), look
+  at it, and publish again; or
+- publish without one: `xcore publish <folder> --no-card`, or put `"card": false` in the game's `gamesfun.json` so it
+  is not asked again.
+
+A job that publishes from GitHub Actions stops the same way: commit `assets/card.jpg`, or add `--no-card`.
+
+- The preview picture is checked on exactly the files that go up. Publish stops for what xgames.fun cannot draw: over
+  1,500,000 bytes, not a JPEG or PNG, a PNG named `.jpg` or a JPEG named `.png` (rename it), cut short, a PNG whose
+  image data is damaged, or a JPEG
+  other than baseline or progressive. One it draws but small (under 600 px a side: blurry) or far from square (the
+  longer side over 1.25 times the shorter: cropped to its middle) goes up with a warning and its fix. Width, height
+  and kind are read from the file's own bytes; no image library was added.
+- `xcore card [dir]` writes `assets/card.jpg` at 960×960: the game served as the page check serves it, opened in Chrome,
+  after `--wait <seconds>` (4 by default), `--tap` to start a game that waits for one, `--path` for another of its
+  pages; or `--from <picture>` (at most 40 MB), scaled to cover and cropped to its middle. It never replaces a picture
+  that is there without `--force`, writes nothing outside the game's folder, makes no picture of a page that answers
+  an error, and fails (unless `--force`) when the page threw or logged errors. A game with a build gets it in the
+  folder its build copies as it is (`page.static`); a build with no such folder is told where it has to live.
+- With no picture xgames.fun can draw, publish stops before anything is uploaded (`--json`: `"code": "card"`, `"card"`
+  what it found, `"next"` the command that fixes it). `--draft`, `--status` and `--check` do not stop for it; `--check` and `xcore check` report it
+  (a warning, never a failed check; `--check --json` carries it in `card` and `cardWarnings`). After a publish with a picture, xcore prints the card's address
+  (`<site>/play/<slug>/card.png`); a link shared before can keep its old card for a while.
+- `publishCommand` and `publishGame` take `card`: by default the picture is asked for only with this package's own
+  check (a kit that passes its own check makes its own card), and `card: false` turns it off.
+
+## 0.4.4 — 2026-11-11
+
+`@xgamesfun/solana` is 0.27.1 (loot 0.27.0, as devnet runs it; the page client alone changed).
+
+- The rest of what hands out an NFT finishes when the NFT is gone: a lottery's pull, a contest's claim, an auction's
+  end and a raffle taken back. `claims()` says which of them would hand out a gone NFT, and `closeGone` also takes a
+  gone NFT's row off the project's stash.
+
+## 0.4.3 — 2026-11-11
+
+`@xgamesfun/solana` is 0.27.0, for loot 0.27.0 (on devnet since 2026-11-11). No stored record changed shape and no
+instruction changed, so an economy that went live under 0.26 stays live as it is.
+
+- A hold, a loan or a listing whose NFT is gone (taken or burned by whoever controls a collection the project does
+  not) can be closed: `claims()` lists it, `closeGone(asset)` closes it, and a deposit clears what an earlier owner
+  left instead of refusing. Buying or renting a gone listing is refused in words.
+- A farm gives the rounding share of weight that leaves back to the project. A walk takes 400 ends a transaction
+  (it was 500).
+
+## 0.4.2 — 2026-11-11
+
+`@xgamesfun/solana` is 0.26.4 (loot 0.26.1, as devnet runs it).
+
+- A live token's name, ticker or picture link can be changed: edit it in `xsolana.json` and run `xcore loot approve`
+  again. It is written to the token's record on chain when the token has one its owner can still change.
+- Going live that is cut short (a transaction refused, or one whose confirmation was not seen) finishes when it is
+  gone on with: the accounts the economy pays into and the project's lookup table are still made.
+
+## 0.4.1 — 2026-11-10
+
+`@xgamesfun/solana` is 0.26.3 (loot 0.26.1, as devnet runs it).
+
+- `xcore loot token <mint>` reads a coin made elsewhere from the chain and prints its entry for an economy's `tokens`,
+  with what its mint's own keys can do. A token the economy makes itself is named on chain as it goes live (its
+  `name`, `symbol` and `uri`), so wallets show it by name.
+- The README's economy section and the bring-your-own-game skill say which kind of token is which.
+
 ## 0.4.0 — 2026-11-10
 
 The kit now refuses at build time what xgames.fun refuses at publish, `xcore dev` behaves like the platform on a plan,

@@ -16,6 +16,7 @@ const CLIENT = readFileSync(path.join(ROOT, 'lib', 'client', 'gamesfun.js'), 'ut
 
 const GAME = `<!doctype html><html><head><script src="./gamesfun.js"></script></head><body>
 <button id="in" onclick="window.signedIn = GamesFun.signIn()">Sign in</button>
+<button id="wallet" onclick="window.walletAnswer = GamesFun.openWallet('solflare', { view: 'claim', href: 'https://xgames.fun/play/moth?claim=1' })">Open in your wallet app</button>
 <script>window.codes = []; GamesFun.onCode(c => codes.push(c)); window.changes = []; GamesFun.onChange(p => changes.push(p));</script>
 </body></html>`;
 
@@ -47,8 +48,14 @@ function standIn() {
           200,
           `<iframe id="g" src="http://moth-play.xgames.test:${port}/"></iframe><script>
           window.asked = [];
+          // ?wallet=1: this browser has no wallet and the page opens a wallet app when asked (?wallet=0: it will not)
+          const offer = ${JSON.stringify(url.searchParams.has('wallet') ? url.searchParams.get('wallet') === '1' : null)};
+          window.host = extra => document.getElementById('g').contentWindow.postMessage({ type: 'gf:host', v: 1, auth: true, ...extra }, '*');
+          window.walletAsked = [];
           addEventListener('message', e => {
-            if (e.data?.type === 'gf:host-ready') e.source.postMessage({ type: 'gf:host', v: 1, auth: true }, '*');
+            if (e.data?.type === 'gf:host-ready') e.source.postMessage({ type: 'gf:host', v: 1, auth: true, ...(offer === null ? {} : { openWallet: offer }) }, '*');
+            if (e.data?.type === 'gf:wallet-need' || e.data?.type === 'gf:open-wallet')
+              walletAsked.push({ ...e.data, tap: navigator.userActivation.isActive });
             if (e.data?.type === 'gf:fullscreen') { window.fullAsked = (window.fullAsked ?? []).concat(e.data.on);
               e.source.postMessage({ type: 'gf:fullscreen-state', v: 1, on: e.data.on, native: false }, '*'); }
             if (e.data?.type === 'gf:auth-signin') { asked.push(e.data);
@@ -404,6 +411,63 @@ test(
     );
     assert.deepEqual(await page.evaluate(() => window.fullAsked), [true, false]);
     assert.deepEqual(await frame.evaluate(() => window.fulls), [true, false]);
+  },
+);
+
+test(
+  "a wallet app: the play page says it opens one, is told a Claim shows, and is asked from the player's tap",
+  { skip, timeout: 60_000 },
+  async t => {
+    const g = await standIn();
+    t.after(g.close);
+    const browser = await chrome();
+    t.after(() => browser.close());
+    const page = await browser.newPage();
+    await page.goto(`http://xgames.test:${g.port}/play/moth?wallet=1`);
+    const frame = await (await page.waitForSelector('#g')).contentFrame();
+    await frame.waitForFunction(() => window.GamesFun);
+    await frame.evaluate(() => GamesFun.ready);
+    assert.equal(await frame.evaluate(() => GamesFun.canOpenWallet()), true);
+    await frame.evaluate(() => {
+      window.offers = [];
+      GamesFun.onCanOpenWallet(v => window.offers.push(v));
+    });
+    assert.deepEqual(await frame.evaluate(() => Promise.all([GamesFun.walletNeeded(), GamesFun.walletNeeded()])), [
+      { data: { told: true }, error: null, status: 200 },
+      { data: { told: true }, error: null, status: 200 },
+    ]);
+    await frame.click('#wallet');
+    assert.deepEqual(await frame.evaluate(() => window.walletAnswer), {
+      data: { asked: true },
+      error: null,
+      status: 200,
+    });
+    await page.waitForFunction(() => window.walletAsked.length >= 2);
+    const asked = await page.evaluate(() => window.walletAsked);
+    assert.deepEqual(
+      asked.map(({ tap, ...m }) => m),
+      [
+        { type: 'gf:wallet-need', v: 1 },
+        { type: 'gf:open-wallet', v: 1, app: 'solflare', view: 'claim', href: 'https://xgames.fun/play/moth?claim=1' },
+      ],
+    );
+    assert.equal(asked[1].tap, true, "the page above heard it inside the player's tap");
+
+    // a wallet showed up after all: the page says so, and the game is told
+    await page.evaluate(() => window.host({ openWallet: false }));
+    await frame.waitForFunction(() => window.offers.length > 0);
+    assert.deepEqual(await frame.evaluate(() => [GamesFun.canOpenWallet(), window.offers]), [false, [false]]);
+    assert.equal((await frame.evaluate(() => GamesFun.openWallet())).code, 'not-offered');
+
+    // an older play page says nothing: not known, and nothing is asked of it
+    const older = await browser.newPage();
+    await older.goto(`http://xgames.test:${g.port}/play/moth`);
+    const f2 = await (await older.waitForSelector('#g')).contentFrame();
+    await f2.waitForFunction(() => window.GamesFun);
+    await f2.evaluate(() => GamesFun.ready);
+    assert.equal(await f2.evaluate(() => GamesFun.canOpenWallet()), null);
+    assert.equal((await f2.evaluate(() => GamesFun.openWallet('phantom'))).code, 'not-offered');
+    assert.deepEqual(await older.evaluate(() => window.walletAsked), []);
   },
 );
 

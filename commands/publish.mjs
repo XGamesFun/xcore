@@ -9,8 +9,9 @@ import { gate } from '../lib/publish/gate.mjs';
 import { buildFailure, pageRoots, runBuild } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
 import { reviewNudge } from '../lib/review.mjs';
+import { cardPrinted, drawable } from '../lib/card.mjs';
 
-const usage = `Usage: xcore publish [dir] [--draft] [--new] [--title <name>] [--status] [--check [--verify [--port <n>]]] [--json]
+const usage = `Usage: xcore publish [dir] [--draft] [--new] [--title <name>] [--no-card] [--status] [--check [--verify [--port <n>]]] [--json]
 
 Put a game on xgames.fun at a link anyone can play: xgames.fun hosts it, you need no server. Sign in first
 (${CMD} login). The game's checks gate it: they must pass on the files you publish (they run now unless nothing
@@ -24,9 +25,17 @@ public file.
 In a GitHub Actions job with permissions id-token: write, the job's own OIDC token signs it in place of a login.
 A brought game (${CMD} adopt) is built first when it has a build; its published folder (gamesfun.json page.out)
 goes up, with its server/ bundle when it has one.
+Its preview picture: a link to the game, shared on X or in a chat, shows a square card with the game's picture behind
+its title. The picture is assets/card.jpg (or assets/card.png) in the published files: a JPEG or PNG named for what it
+is, at most 1,500,000 bytes, best square at 960×960. Publish stops before anything goes up when there is none or
+xgames.fun cannot draw it (too big, not a JPEG or PNG, named for the other one, cut short, a kind of JPEG it does not
+draw): make one with ${CMD} card [dir], or publish without one with --no-card (or "card": false in gamesfun.json). A
+picture it can draw but that is small (under 600 px a side: blurry) or far from square (cropped to its middle) goes up
+with a warning and its fix. A link shared before can keep its old card for a while (X and chat apps cache it).
   --draft        a private version in your xgames.fun Studio, no public link
   --new          publish as a new game (a new link), not an update of this folder's game
   --title <name> the game's name on xgames.fun (default: its title)
+  --no-card      publish without a preview picture: its link shows a plain card (a gradient with the title)
   --status       this folder's link and the account it is published from; publishes nothing
   --check        the offline checks only (files, secrets, backend origins, the server bundle); publishes nothing
   --verify       with --check: also run the publish gate's checks on these files and remember a pass, so the
@@ -36,10 +45,13 @@ GAMESFUN_STUDIO=<origin> publishes to another xgames.fun (a local Studio while d
 
 /**
  * The publish command. check, label, prepare, rpcFile: as publishGame takes them (the kit's six gates, its name, its
- * upkeep, its workspace's .env); resolveGame and shown: how the command finds a game and names its folder.
+ * upkeep, its workspace's .env); resolveGame and shown: how the command finds a game and names its folder. card:
+ * whether publish asks for the game's preview picture (../lib/card.mjs); by default only with this package's own check
+ * (a kit with its own check makes its own card), and false turns it off.
  */
 export function publishCommand({
   check = pageCheck,
+  card = check === pageCheck,
   label = LABEL,
   prepare,
   rpcFile,
@@ -64,9 +76,11 @@ export function publishCommand({
             check: { type: 'boolean' },
             verify: { type: 'boolean' },
             port: { type: 'string' },
+            'no-card': { type: 'boolean' },
           },
           usage,
         );
+        const askCard = card && !values['no-card'];
         const dir = await resolveGame(positionals[0]);
         const origin = studioOrigin();
         // a game that pays results through vouchers, changed since its last security review: one line, never a refusal
@@ -120,12 +134,18 @@ export function publishCommand({
             out.ok = ok && g.report.pass;
           }
           if (values.json) printJson(out);
-          else
+          else {
             console.log(
               ok
                 ? checkLines(named(dir), out, p).join('\n')
                 : [...p.problems, p.secrets, p.names].filter(Boolean).join('\n'),
             );
+            // reported, never a refusal here: publish is what stops for it
+            if (card)
+              console.log(
+                `  ${cardPrinted(askCard ? p.cardWords : { ...p.cardWords, level: p.cardWords.level === 'stop' ? 'off' : p.cardWords.level })}`,
+              );
+          }
           if (!values.json && out.verify) console.log(verifyLine(out.verify, shown(dir)));
           return out.ok ? 0 : 1;
         }
@@ -135,6 +155,7 @@ export function publishCommand({
           draft: values.draft,
           newGame: values.new,
           title: values.title ?? null,
+          card: askCard,
           progress: values.json ? () => {} : l => console.error(l),
         }).catch(e => {
           // A new game needs one of the account's 2 free slots (xgames.fun's words say so); name the commands that free one.
@@ -148,13 +169,18 @@ export function publishCommand({
           throw e;
         });
         if (values.json) printJson(r);
-        else
+        else {
           console.log(
             (r.url
               ? publishedLines(r.title ? `“${r.title}”` : named(dir), r)
               : draftLines(named(dir), r, shown(dir))
             ).join('\n'),
           );
+          if (r.url) {
+            const line = cardAfter(r, origin, { asked: card, shown: shown(dir) });
+            if (line) console.log(line);
+          }
+        }
         return r.url || values.draft ? 0 : 1;
       }, args),
   };
@@ -244,6 +270,16 @@ function publishedLines(where, r) {
     );
   }
   return lines;
+}
+
+/** After a publish that went live: the card its link shows. */
+function cardAfter(r, origin, { asked, shown: where }) {
+  if (drawable(r.card) && r.slug)
+    return `  its link's card: ${origin}/play/${r.slug}/card.png (a link shared before may keep its old card for a while: X and chat apps cache it)`;
+  // without one (--no-card or gamesfun.json "card": false); a caller that makes its own card says its own
+  if (asked && r.card && !drawable(r.card))
+    return `  its link shows a plain card (a gradient with the title): no preview picture xgames.fun can draw (${CMD} card ${where} makes one)`;
+  return null;
 }
 
 /** A publish saved as a private draft: asked for with --draft, refused by xgames.fun, or its checks failed. */

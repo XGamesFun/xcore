@@ -32,6 +32,7 @@ xcore backend use custom ./my-game --url https://api.my-game.example   # only if
 xcore loot add ./my-game                   # only if it gets an economy (a Solana economy on loot)
 xcore add vouchers ./my-game               # its server pays results it checked from a grant, with its own key
 xcore review ./my-game                     # the security review: what a cheater gets (--live once published)
+xcore card ./my-game                       # its preview picture: what a shared link to it shows
 xcore login && xcore publish ./my-game
 xcore embed add https://mygame.com ./my-game     # your own site may show it (an <iframe>)
 xcore domain add play.mygame.com ./my-game       # Creator or Scale: it plays at your own domain
@@ -178,6 +179,9 @@ about games made on the kit; the kit's `verify` runs this same check for one):
 4. **it stays inside its origins**: every request is one the hosted page may make; a script, style, font or frame from
    another site, or a connection to an origin `backend.json` does not list, fails it
 
+The report also says whether the game has a [preview picture](#preview-picture-xcore-card) (`assets/card.jpg`): a
+warning when it has none, or one xgames.fun cannot draw or will crop or blur, never a failed check.
+
 A backend that does not answer this machine is a note, not a failure. The game's play is its own: the page check says
 it starts clean and stays inside what the hosting allows, nothing more. Publish's gate runs the same check, and a game
 whose check fails goes up as a private draft only.
@@ -249,6 +253,57 @@ play page the page around the game goes full screen (or fills the screen in an a
 its own link the browser does, and in a frame that allows none (a post on X on a computer) the game opens in a tab of
 its own. It answers `{on, how: 'page' | 'browser' | 'tab' | 'none'}` (`none`: an iPhone's Safari, which has no full
 screen for a page); pressed again it comes back, and `GamesFun.onFullscreen(on => …)` follows every change.
+
+**A wallet app, for a claim.** A player who opens a game from a post in X's app is in X's own browser, which has no
+wallet. The game can be opened in a wallet app's browser (Phantom or Solflare), or in the person's own browser,
+already signed in, from either of the two places a player meets it:
+
+- **inside xgames.fun's play page** (`xgames.fun/play/<name>`): the page around the game opens the app when asked;
+- **on its own host, as the whole tab** (`https://<name>-play.xgames.fun/`: a post's card on X opens the game there
+  by itself): the tab goes to xgames.fun's wallet page
+  (`https://xgames.fun/wallet/open?slug=<name>&app=<app>&back=<this page>`), which opens the app or shows its links,
+  and the wallet's browser comes back to this page signed in.
+
+Framed by anything else (X's timeline shows the game in a frame inside X's own site; another site embeds it) a frame
+cannot move the tab, so nothing opens and the game shows its own fallback. Three calls, the same in both places:
+
+- `GamesFun.canOpenWallet()` → `true` (no wallet in this browser, and the game can be opened in one), `false` (a wallet
+  is here), or `null` (not known: framed by something other than the play page, an older play page, or on its own host
+  before the look for a wallet has settled). On its own host the look is loot's page client's (`gf/loot/wallets.js`,
+  as `gf.loot.ready()` asks it, once more about 1.5 s after it starts: a wallet can register late), started by the
+  first of these calls; a game without `gf/loot/` gets `null` there. `GamesFun.onCanOpenWallet(can => …)` follows each
+  change.
+- `GamesFun.walletNeeded()`: call it when the Claim button shows. In the play page, the page gets ready so the later tap
+  opens the app at once (it is told once a page load): `{data: {told: true}}`. On its own host there is nobody to
+  tell, and it starts the look for a wallet: `{data: {told: false}}`. Framed by anything else: `code: 'no-page'`.
+- `GamesFun.openWallet(app = 'phantom', {view, href} = {})`: `app` is `'phantom'`, `'solflare'` or `'browser'`. In the
+  play page, `view` left out opens the play page as it is, `'claim'` with `href` (an address of this game's own play
+  page, `https://xgames.fun/play/<name>?…`) that address, `'wallet'` xgames.fun's page that adds a wallet; it answers
+  `{data: {asked: true}}`, or `code: 'not-offered'` when `canOpenWallet()` is not `true` there. On its own host the
+  tab goes to the wallet page and it answers `{data: {asked: true, left: true}}` (the page is leaving); the way back
+  is this page's address without its fragment, or `href` with `'claim'` when that is an address on this same host.
+  Errors, with nothing opened: `code: 'invalid'` (a bad argument), `'no-page'` (framed by something else).
+
+**Call `openWallet` inside the player's tap**, in the click handler itself, with no `await` or timer before it: the
+message (or the tab's move) goes in the call, and a browser opens an app only from a tap. One Claim button for both
+places:
+
+```js
+const gf = GamesFun; // walletHere: (await gf.loot.ready()).data.wallets.length > 0, asked before
+gf.walletNeeded(); // when the Claim button shows (on its own host it starts the look for a wallet)
+claimButton.onclick = () => {
+  if (walletHere) return claim(); // a wallet in this browser: the game's own claim
+  if (gf.canOpenWallet() === true) {
+    gf.openWallet('phantom', { view: 'claim', href: claimLink }); // no await before this line
+    return showNote('Opening your wallet app…');
+  }
+  copyLink(); // no wallet and no way to open one here: the game's own fallback
+};
+```
+
+`gamesfun.js` builds no wallet app's links itself: xgames.fun's pages do. Under `xcore dev` and on this machine there is
+no play page and no xgames.fun, so `canOpenWallet()` is `null` and `openWallet` answers `no-page`: test the fallback
+there, and the wallet app on xgames.fun.
 
 **A leaderboard is the player's own word until the server takes it.** A signed-in player submits their own scores
 from the page, so anyone can submit any score for themselves from the browser's console. A game with its own server
@@ -529,6 +584,21 @@ and the `xsolana-economy` skill, which turn a one-line idea into a checked econo
 fail or lose money on chain (a prize a pool cannot pay, a pool nothing fills, a farm that empties a lottery, a claim with
 no limit), `xsolana_simulate` shows where the money goes day by day, and `xsolana_cost` what going live costs.
 
+**A token.** An economy's tokens are of three kinds, and the `xsolana-economy` skill asks which one is meant ("When
+they ask for a token"):
+
+- **A token the economy makes** (`"source": "project"`): points, tickets and shards the project mints as its rules
+  say, or with `supply` a fixed supply minted once to your wallet and never again. It is named on chain as it goes
+  live, so wallets show it by name: give it a `name`, a `symbol` and a `uri`, a link to a JSON file that names its
+  picture (`{ "name": "Ember", "symbol": "EMBR", "image": "https://…/ember.png" }`), hosted anywhere that stays up.
+  Without a `uri` it shows by name and ticker with no picture. Only your wallet can change the three afterwards.
+- **A coin made elsewhere** (`"source": "existing"`): `xcore loot token <mint>` reads it from the chain and prints its
+  whole entry for `tokens`, with what its mint's own keys can do (mint more, freeze an account, keep a fee on every
+  transfer), so nothing is typed by hand. Going live reads the mint again and refuses a spec that denies a power the
+  mint has.
+- **A coin people trade** is not something loot makes: it runs no market. Launch it on a launchpad or an exchange,
+  then name it as a coin made elsewhere.
+
 `xcore loot add <folder>` says where the economy goes (`xsolana.json` in the `static` folder) and, once it is
 there, copies the page client beside it (`gf/loot/`, a copy: never edit it; publish keeps it current). The page loads
 it at run time with a page-relative URL, so a bundler leaves it alone:
@@ -574,12 +644,38 @@ holds the addresses the economy went live at stays in the project (keep it in gi
 
 `@xgamesfun/solana`'s own examples use a public devnet RPC and `node_modules/` paths; on xgames.fun use `PAGE_RPC` and
 `gf/loot/` as above. Where its help says `xsolana <command>`, run `xcore loot <command>`. `xcore loot check|simulate|cost|explain`
-runs the tools from a terminal. Going live is the person's own step, approved in their own wallet: `xcore loot
-approve` in the folder with `xsolana.json`.
+runs the tools from a terminal.
 
-**When loot is upgraded.** This package pins the tools for one build of loot (0.26.0, on devnet since 2026-11-10). loot is upgraded in place on
-devnet, and no version so far has carried accounts over: an economy that went live on an earlier build goes live
-again (`xcore loot approve`), and the next publish brings `gf/loot/` up to the installed package. **Nothing runs by
+**Going live** is signed by a key file on your own computer. `approve` first shows everything it would send, with a
+code, and sends nothing; run again with that code, it sends exactly what it showed:
+
+```bash
+xcore loot keygen ~/.config/xsolana/my-game.json                 # a key for the game: prints its address, never the key
+xcore loot approve --keypair ~/.config/xsolana/my-game.json      # in the folder with xsolana.json: everything it would send
+xcore loot approve --keypair ~/.config/xsolana/my-game.json --yes <code>   # sends exactly that
+```
+
+Send the address `keygen` prints the devnet SOL `xcore loot cost` names (and any coin or NFT the setup takes from
+you: it must be at that address first). The key file is the project's owner, for good: whoever can read it controls
+the project, every later change is signed by it, and nothing restores a lost one. Keep it outside the game's folder
+and out of git (the tools refuse one inside a repository, and `xcore publish` refuses to upload one), back it up
+yourself, and never paste it anywhere. Unless `xsolana.json` names a `treasury`, what the economy earns for you lands
+at the key's address. Why a key file: it is a new key that has never held anything else, so the wallet that holds
+what you own is never connected, and it signs each transaction exactly as it was shown, with no page. To sign in a
+browser wallet instead, go live in one: run `xcore loot approve --browser` yourself and approve on the page it
+serves. An economy that is live is changed only by the key that owns it.
+
+The economy's reads go through xgames.fun's shared relay; going live does not, because the relay passes only loot's
+own transactions and a setup also makes mints and token accounts. So `approve` sends through `XSOLANA_RPC_URL` when
+it is set, else through Solana's public devnet RPC. Where that one refuses you (it limits each address, and some
+networks block it), set `XSOLANA_RPC_URL` in `.env` to a devnet RPC of your own.
+
+**When loot is upgraded.** This package pins the tools for one build of loot: 0.28.0, at loot's official address on
+devnet, `xgamesVsZBpCVgJuatfYAFJRmQoccfQf5qtUFNp2Eet`, since 2026-11-11. It is a new address, so nothing set up at the
+address before it (`9cwq…7NFQ`, loot 0.27 and earlier) exists there: an economy from before goes live again
+(`xcore loot approve`, which takes its file's old live section for another program's and says so; remove that section
+to set it up anew). A game with its own `server/rpc.js` (`xcore add rpc`) from before names the old address in its
+`scanPrograms`: put the new one first there. The next publish brings `gf/loot/` up to the installed package. **Nothing runs by
 itself** on chain: the page client sends what a player needs (settles, refunds, claims, a draw that is due); a
 schedule's runs are the project's own steps, and a run nobody sends is missed.
 
@@ -654,11 +750,14 @@ check on exactly the files built), and uploads its published folder with its `se
    name) can fail to find it, so have the game reload when that happens. A game installed as an app (a web
    manifest and a service worker) installs from its own link, `https://<slug>-play.xgames.fun/`.
 
-`publish --check` runs steps 1 to 4 above without publishing (`--check --verify` adds the check and remembers a pass), `--status`
+Before any of that goes up, it needs the game's **preview picture** (below): with none, or one xgames.fun cannot use,
+publish stops and says what is wrong, until you make one (`xcore card`) or say it goes without (`--no-card`).
+
+`publish --check` runs steps 1 to 4 above without publishing (and says whether the preview picture is there) (`--check --verify` adds the check and remembers a pass), `--status`
 shows the link and the account, `--draft` saves a private version, `--new` makes a new game with a new link.
 
 **For scripts and agents**: every command takes `--json`. A failure is then also printed on stdout as
-`{ "ok": false, "error", "code", "state", "next" }`: `code` is why (`usage`, `login`, `files`, `secrets`, `build`,
+`{ "ok": false, "error", "code", "state", "next" }`: `code` is why (`usage`, `login`, `files`, `secrets`, `build`, `card`,
 `size`…), `next` the command that moves it on. `login --status --json` and `publish --status --json` name the sign-in's
 `state` (`signed-in`, `signed-out`, `expired`, or `unreadable` when the token is kept where this session cannot read
 it, such as the Secret Service over SSH); `publish --status --json` also names the game's `link` (`never`, `started`,
@@ -686,8 +785,45 @@ jobs:
       - run: npx -y @xgamesfun/xcore@<version> publish ./my-game
 ```
 
+Commit the game's preview picture (`assets/card.jpg`, made once with `xcore card`): a publish without one stops, in a
+job as anywhere.
+
 **Limits**: one game 3,000 files, 100 MiB (one file may be all of it); one account 30 publishes and 1 GB of new files a day, 100
 games. `GAMESFUN_STUDIO=<origin>` publishes to another xgames.fun (a Studio on your own machine while developing it).
+
+### Preview picture: `xcore card`
+
+A link to the game shared on X, in a chat or anywhere that shows link previews gets a 960×960 card from xgames.fun:
+the game's own picture as the background (scaled to cover the square), darkened a little at the top and bottom, with
+"XGames.fun" and the game's title drawn large across the top band and a "Tap to play" button at the bottom left.
+Without a picture the card is a plain dark gradient with the title, which is easy to scroll past.
+
+- **The file**: `assets/card.jpg` (else `assets/card.png`) among the published files (for a brought game with a build,
+  in what the build makes: `page.out`). `card.jpg` wins when both are there.
+- **What xgames.fun can draw** (publish stops for anything else): a JPEG or PNG named for what it is (a PNG in
+  `card.jpg`, or a JPEG in `card.png`, fails to draw: rename it), whole (not cut short; a PNG's image data is checked too), at most 1,500,000 bytes
+  (it ignores a bigger one), and for a JPEG a baseline or progressive one (other kinds, such as lossless or
+  arithmetic-coded, cannot be drawn: `xcore card <folder> --from <it> --force` makes one that can).
+- **What looks right** (publish goes on, with a warning and the fix): square, 960×960, as drawn. A side under 600 px is
+  scaled up and looks blurry; a picture far from square (the longer side over 1.25 times the shorter) is cropped to
+  its middle, and `xcore card <folder> --from assets/card.jpg --force` does that crop here so you can see it. Keep the
+  subject clear of the top third (the title) and the bottom left (the button).
+- **`xcore card <folder>`** makes one: it serves the game as the page check does, opens it in Chrome at 960×960, waits
+  4 seconds (`--wait <seconds>`), and saves a JPEG. `--tap` taps the middle once first (a game that starts on a tap),
+  `--path <page?query>` opens another page of the game, and `--from <picture>` makes it from key art or a screenshot
+  you have instead (scaled to cover and cropped to its middle; at most 40 MB). It never replaces an `assets/card.jpg`,
+  or an `assets/card.png` xgames.fun can draw, without `--force` (and then says which file wins). For a game with a
+  build it writes into the folder the build copies as it is (`page.static`, such as `public/`), so the build carries
+  it into what is published; a build with no such folder is told where the picture has to live, and nothing is
+  written. A page that answers an error makes no picture; one that throws or logs errors makes one, says so, and fails
+  unless `--force`. Open the picture and look at it before you publish.
+- **Publish asks for it**: with no picture, or one xgames.fun cannot draw, `xcore publish` stops before anything is
+  uploaded, says what is wrong, and names the ways on (`--json`: `"code": "card"`, `"card"` what it found, `"next"`
+  the command that fixes it). `--draft`, `--status` and `--check` do not stop for it (`--check --json` carries it in
+  `card` and `cardWarnings`). `xcore publish --no-card` publishes without one (the link shows the
+  plain card), and `"card": false` in `gamesfun.json` says so for good, so the game is not asked again.
+- **After a publish** with a picture, xcore prints the card's address, `https://xgames.fun/play/<slug>/card.png`. A
+  link shared before can keep its old card for a while: X and chat apps cache it.
 
 ### Its plan: `xcore plan`
 
@@ -753,7 +889,7 @@ A game made with xcore 0.1.0 that has `server/database.js` (`xcore add database`
 without one needs none: the D1 database, `xcore db` and `xcore files` are new.
 
 1. **Run `xcore add database` again.** It brings `server/database.js` up to date (your `RULES` and `LIMITS` are
-   kept), with `gamesfun.js` (1.7.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
+   kept), with `gamesfun.js` (1.8.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
    needs an owner (step 3) as `file:line` with its change; `xcore publish` lists them again until each names its
    owner. On its first start the new `database.js` moves the documents to a table keyed by collection, owner and id,
    each under its owner. After that, do not roll the game back to a version with 0.1.0's `database.js`: its writes
@@ -836,7 +972,8 @@ from a qualified professional before you offer anything of real value.
 
 **On-chain features.** The loot program runs on Solana **devnet** and **has not been audited**: do not use it with
 real value. Blockchain transactions are public and irreversible. You alone control your wallet and keys. Never put a
-private key, seed phrase or secret in a game, and approve only transactions you understand.
+private key, seed phrase or secret in a game, and approve only transactions you understand. The key file an economy
+goes live with owns it: keep it outside the game's folder, and never paste it anywhere.
 
 **Third-party services.** xgames.fun, Cloudflare, Supabase, Railway, GitHub, npm, Solana RPC providers and wallets are
 run by others under their own terms and policies, which you must follow. Their availability, fees and rules can change

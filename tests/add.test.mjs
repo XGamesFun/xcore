@@ -22,11 +22,11 @@ import {
   withAutoload,
   withScript,
 } from '../lib/add.mjs';
-import { installServerCopy } from '../lib/economy.mjs';
+import { installServerCopy, lootProgram } from '../lib/economy.mjs';
 import IDL from '@xgamesfun/solana/idl.json' with { type: 'json' };
 import { encodeAccount } from '@xgamesfun/solana/chain/borsh';
 import { decodeBase58 } from '@xgamesfun/solana/chain/base58';
-import { decode, voucherBytes } from '@xgamesfun/solana/client';
+import { decode, pda, voucherBytes } from '@xgamesfun/solana/client';
 import { readProof } from '@xgamesfun/solana/results';
 import { bundleServer } from '../lib/server/bundle.mjs';
 import { OLD_DEFAULT_RULES, OWNER_SPACES } from '../lib/server/contract.mjs';
@@ -876,7 +876,8 @@ register(
     ),
 );
 
-const LOOT = '9cwqM1TXytPnFZsLfmUyv2dg4uW6Ch9C6UJVPns7NFQ';
+// loot's address, as the installed tools have it
+const LOOT = lootProgram();
 const GRANT = JSON.parse(await readFile(path.join(ROOT, 'tests', 'fixtures', 'grant-0.24.0.json'), 'utf8'));
 
 /** A game with a live economy whose grant "clear" is the devnet grant in the fixture, and its voucher server added. */
@@ -1102,8 +1103,10 @@ test('the voucher server: PAY.check decides, only a proven wallet is paid, one r
   const v = first.json.voucher;
   assert.deepEqual([v.wallet, v.grant, v.incarnation, v.amount, v.publicKey], [W1, GRANT.id, '1', '500', r.address]);
   assert.notEqual(v.personHash, '0'.repeat(64), 'a player signed in with X is counted as one person');
+  // (the grant's address is the program's own for its project and id: the fixture's account was read at the address
+  // loot had then, and its bytes are the same at the one it has now)
   const message = voucherBytes({
-    grant: GRANT.address,
+    grant: pda.grant(GRANT.project, GRANT.id),
     incarnation: v.incarnation,
     wallet: v.wallet,
     personHash: v.personHash,
