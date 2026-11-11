@@ -10,6 +10,9 @@ owner's rule, 2026-11-11), and its launchpad now builds that split: on pump.fun 
 graduated pool's locked liquidity (was 50%). `xcore coin` holds a launch to it: one that gives the key less than 90%
 of any of these is refused, whoever built it. The plan's words say so.
 
+Also: a game's server folder reached through a link (as macOS's temporary folders are, through `/var`) has its
+refusals name the file as `server/index.js` again, not by a path that climbs out of the game.
+
 ## 0.9.0 — 2026-11-11
 
 **`xcore coin --cluster mainnet`**: a game's real coin, where xgames.fun has mainnet launching on (it is off until
