@@ -9,8 +9,11 @@ const chunk = (type, data) => {
   return Buffer.concat([len, Buffer.from(type, 'latin1'), data, crc]);
 };
 
-/** A real PNG of one colour, width × height (8-bit RGB). cut: that many bytes taken off its end. */
-export function png(width, height, { color: [r, g, b] = [40, 90, 200], cut = 0 } = {}) {
+/**
+ * A real PNG of one colour, width × height (8-bit RGB). cut: that many bytes taken off its end; damage: 'crc' (a byte
+ * of its image data changed) or 'data' (image data that does not unpack, with right checksums).
+ */
+export function png(width, height, { color: [r, g, b] = [40, 90, 200], cut = 0, damage = null } = {}) {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
@@ -21,9 +24,10 @@ export function png(width, height, { color: [r, g, b] = [40, 90, 200], cut = 0 }
   const whole = Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     chunk('IHDR', ihdr),
-    chunk('IDAT', deflateSync(raw)),
+    chunk('IDAT', damage === 'data' ? Buffer.alloc(64, 0x5a) : deflateSync(raw)),
     chunk('IEND', Buffer.alloc(0)),
   ]);
+  if (damage === 'crc') whole[8 + 25 + 8 + 4] ^= 0xff; // a byte inside IDAT, its checksum left as it was
   return cut ? whole.subarray(0, whole.length - cut) : whole;
 }
 

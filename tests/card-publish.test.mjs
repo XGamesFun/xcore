@@ -60,7 +60,7 @@ test('publish stops before anything goes up for a picture xgames.fun cannot draw
     [
       'card.jpg',
       png(960, 960),
-      /cannot be drawn: it is a PNG named card\.jpg[\s\S]*Fix it: +rename \S+assets\/card\.jpg to \S+assets\/card\.png/,
+      /cannot be drawn: it is a PNG named card\.jpg[\s\S]*Fix it: +rename \S+assets[\\/]card\.jpg to \S+assets[\\/]card\.png/,
     ],
     [
       'card.jpg',
@@ -97,7 +97,7 @@ test('a picture xgames.fun draws but crops or blurs goes up, with a warning that
   for (const [data, words] of [
     [
       jpeg(1920, 1080),
-      /^Worth fixing: its preview picture assets\/card\.jpg goes up, but it is 1920×1080, far from square: xgames\.fun crops it to its middle 1080×1080, so its left and right are cut off\. Fix: .* card \S+ --from \S+assets\/card\.jpg --force/,
+      /^Worth fixing: its preview picture assets\/card\.jpg goes up, but it is 1920×1080, far from square: xgames\.fun crops it to its middle 1080×1080, so its left and right are cut off\. Fix: .* card \S+ --from \S+assets[\\/]card\.jpg --force/,
     ],
     [
       jpeg(300, 300),
@@ -200,7 +200,10 @@ test('xcore publish as a person or an agent runs it: the refusal with its verdic
     width: 960,
     height: 960,
   });
-  assert.equal(mismatch.next, undefined, 'renaming it is not a command');
+  assert.match(
+    mismatch.next,
+    process.platform === 'win32' ? /^move \S+card\.jpg \S+card\.png$/ : /^mv \S+card\.jpg \S+card\.png$/,
+  );
 
   const plain = await runAsync(['publish', dir, '--no-card'], cli);
   assert.equal(plain.status, 0, plain.stderr);
@@ -280,6 +283,37 @@ test('xcore card refuses a build with no folder it copies as it is, a link out o
   assert.match(h.stderr, /huge\.png is 84\.9 MB; .* card reads a picture of at most 40 MB/);
 });
 
+test('a game folder reached through a link (/var on a Mac, a home on another volume) is no link out of the game', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const real = await fixture(tmp, 'static');
+  await adopt(real);
+  const through = path.join(tmp.dir, 'through');
+  // a junction on Windows needs no special right; elsewhere the type is ignored
+  await symlink(real, through, 'junction');
+  await putCard(real, 'card.jpg', jpeg(960, 960));
+  // it gets past the link check to the next one: the picture already there
+  const r = run(['card', through]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /assets\/card\.jpg is already there/);
+  assert.doesNotMatch(r.stderr, /leads outside/);
+  if (!browser) return;
+  const art = path.join(tmp.dir, 'art.png');
+  await writeFile(art, png(900, 900));
+  const made = run(['card', through, '--from', art, '--force']);
+  assert.equal(made.status, 0, made.stderr);
+  assert.equal((await preflight(real)).card.status, 'ok');
+});
+
+test('a damaged PNG, whole but with broken image data, stops publish: it would draw blank', async t => {
+  const { g, env, dir } = await signedIn(t);
+  await putCard(dir, 'card.png', png(960, 960, { damage: 'data' }));
+  await assert.rejects(
+    publishGame(dir, { origin: g.origin, env, check: passing, card: true }),
+    e => e.code === 'card' && /cannot be drawn: it is damaged: its image data does not unpack/.test(e.message),
+  );
+});
+
 // ---- xcore card, in a browser ---------------------------------------------------------------------------------------
 
 test(
@@ -294,7 +328,7 @@ test(
     await writeFile(art, png(1600, 900, { color: [200, 60, 40] }));
     const r = run(['card', dir, '--from', art]);
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /Wrote .*assets\/card\.jpg: 960×960, \d+ KB, from /);
+    assert.match(r.stdout, /^Wrote assets\/card\.jpg in .*: 960×960, \d+ KB, from /m);
     assert.match(r.stdout, /keep the subject clear of the top third \(the title\) and the bottom left \(the button\)/);
     assert.match(r.stdout, /Open .*card\.jpg and look at it/);
     assert.equal((await preflight(dir)).card.status, 'ok');
@@ -343,7 +377,7 @@ test(
     }
     const ok = run(['card', dir, '--wait', '0.5', '--tap']);
     assert.equal(ok.status, 0, ok.stderr);
-    assert.match(ok.stdout, /Wrote .*assets\/card\.jpg: 960×960/);
+    assert.match(ok.stdout, /^Wrote assets\/card\.jpg in .*: 960×960/m);
 
     await writeFile(
       path.join(dir, 'broken.html'),
@@ -353,7 +387,7 @@ test(
     assert.equal(thrown.status, 0, 'kept with --force');
     assert.match(
       thrown.stdout,
-      /The page had errors before the picture was taken.*thrown: .*boom at start[\s\S]*Kept, as --force says/,
+      /^The page had errors before the picture was taken.*thrown: .*boom at start\.\n {2}Replaced assets\/card\.jpg in [\s\S]*Kept, as --force says/,
     );
     const json = JSON.parse(
       run(['card', dir, '--path', 'broken.html?again', '--wait', '0', '--force', '--json']).stdout,
@@ -382,7 +416,7 @@ test(
     await writeFile(path.join(dir, 'index.html'), '<title>x</title><script>throw new Error("boom")</script>');
     const r = run(['card', dir, '--wait', '0']);
     assert.equal(r.status, 1);
-    assert.match(r.stdout, /The page had errors .*boom[\s\S]*keep it with --force/);
+    assert.match(r.stdout, /^The page had errors .*boom.*\n {2}Wrote assets\/card\.jpg in [\s\S]*keep it with --force/);
     assert.ok(existsSync(path.join(dir, 'assets', 'card.jpg')), 'the picture is written, to look at');
   },
 );

@@ -16,7 +16,8 @@ plain gradient. The picture is `assets/card.jpg` (or `assets/card.png`) among th
 A job that publishes from GitHub Actions stops the same way: commit `assets/card.jpg`, or add `--no-card`.
 
 - The preview picture is checked on exactly the files that go up. Publish stops for what xgames.fun cannot draw: over
-  1,500,000 bytes, not a JPEG or PNG, a PNG named `.jpg` or a JPEG named `.png` (rename it), cut short, or a JPEG
+  1,500,000 bytes, not a JPEG or PNG, a PNG named `.jpg` or a JPEG named `.png` (rename it), cut short, a PNG whose
+  image data is damaged, or a JPEG
   other than baseline or progressive. One it draws but small (under 600 px a side: blurry) or far from square (the
   longer side over 1.25 times the shorter: cropped to its middle) goes up with a warning and its fix. Width, height
   and kind are read from the file's own bytes; no image library was added.

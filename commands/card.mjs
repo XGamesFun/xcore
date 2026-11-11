@@ -14,6 +14,7 @@ import {
   cardVerdict,
   drawable,
   makeCard,
+  typedPath,
 } from '../lib/card.mjs';
 import { pageRoots } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -79,7 +80,7 @@ export default {
         noBuild: values['no-build'] === true,
         log,
       }).catch(e => {
-        if (e.code === 'exists') throw Object.assign(e, { next: `${CMD} card ${shown(dir)} --force` });
+        if (e.code === 'exists') throw Object.assign(e, { next: `${CMD} card ${typedPath(shown(dir))} --force` });
         throw e;
       });
       const roots = pageRoots(dir);
@@ -103,16 +104,19 @@ export default {
         });
         return failed ? 1 : 0;
       }
-      const lines = [
-        `${r.replaced ? 'Replaced' : 'Wrote'} ${shown(r.file)}: ${r.width}×${r.height}, ${(r.bytes / 1000).toFixed(0)} KB${r.from ? `, from ${shown(r.from)}` : ''}.`,
-      ];
-      if (r.errors.length)
-        lines.push(
-          `  The page had errors before the picture was taken, so it may show an error or a blank page: ${r.errors.slice(0, 3).join('; ')}${r.errors.length > 3 ? ` (and ${r.errors.length - 3} more)` : ''}.`,
-          values.force
-            ? '  Kept, as --force says.'
-            : `  Look at it: fix the page (${CMD} check ${shown(dir)}) and run again, keep it with --force, or make it --from a picture you have.`,
-        );
+      // paths: the file inside the game as it is published from (with "/"), the game's folder as shown()
+      const wrote = `${r.replaced ? 'Replaced' : 'Wrote'} ${rel(r.file)} in ${shown(dir)}: ${r.width}×${r.height}, ${(r.bytes / 1000).toFixed(0)} KB${r.from ? `, from ${shown(r.from)}` : ''}.`;
+      const errors = `${r.errors.slice(0, 3).join('; ')}${r.errors.length > 3 ? ` (and ${r.errors.length - 3} more)` : ''}`;
+      // a page that had errors: that comes first, and the command fails unless --force keeps the picture
+      const lines = r.errors.length
+        ? [
+            `The page had errors before the picture was taken, so the picture may show an error or a blank page: ${errors}.`,
+            `  ${wrote}`,
+            values.force
+              ? '  Kept, as --force says.'
+              : `  Look at it: fix the page (${CMD} check ${typedPath(shown(dir))}) and run again, keep it with --force, or make it --from a picture you have.`,
+          ]
+        : [wrote];
       if (!drawable(verdict)) lines.push(`  xgames.fun cannot draw it as it is: ${verdict.why}.`);
       if (r.target.how === 'static')
         lines.push(

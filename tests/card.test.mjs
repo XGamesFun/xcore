@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { crc32 } from 'node:zlib';
 import { adopt } from '../lib/publish/adopt.mjs';
 import {
   CARD_MAX_BYTES,
@@ -14,7 +15,9 @@ import {
   cardVerdict,
   drawable,
   imageFacts,
+  pngDamage,
   previewPicture,
+  typedPath,
 } from '../lib/card.mjs';
 import { preflight } from '../lib/publish/index.mjs';
 import { buildTree } from '../lib/publish/tree.mjs';
@@ -71,6 +74,20 @@ test('stop for what xgames.fun cannot draw; warn for what it draws worse than it
       'remake',
     ],
     ['assets/card.png', png(960, 960).subarray(0, 60), 'unusable', /cut short/, 'remake'],
+    [
+      'assets/card.png',
+      png(960, 960, { damage: 'crc' }),
+      'unusable',
+      /damaged: its IDAT chunk's checksum is wrong, so it draws blank/,
+      'remake',
+    ],
+    [
+      'assets/card.png',
+      png(960, 960, { damage: 'data' }),
+      'unusable',
+      /damaged: its image data does not unpack/,
+      'remake',
+    ],
     ['assets/card.jpg', jpeg(960, 960, { cut: 2 }), 'unusable', /cut short: its end marker is missing/, 'remake'],
     ['assets/card.jpg', Buffer.from('<svg/>'), 'unusable', /not really a JPEG: its first bytes are neither/, 'remake'],
     ['assets/card.png', Buffer.from('RIFF....WEBPVP8 '), 'unusable', /not really a PNG/, 'remake'],
@@ -108,6 +125,26 @@ test('stop for what xgames.fun cannot draw; warn for what it draws worse than it
   assert.equal(cardVerdict({ path: 'assets/card.jpg', bytes: CARD_MAX_BYTES, head: jpeg(960, 960) }).status, 'ok');
 });
 
+test('a PNG’s image data is checked: its checksums, that it unpacks, and that there is enough of it', () => {
+  assert.equal(pngDamage(png(960, 960)), null);
+  assert.equal(pngDamage(png(700, 900, { color: [1, 2, 3] })), null);
+  assert.match(pngDamage(png(960, 960, { damage: 'crc' })), /checksum is wrong/);
+  assert.match(pngDamage(png(960, 960, { damage: 'data' })), /does not unpack/);
+  // a whole file whose header says more rows than its data holds
+  const tall = Buffer.from(png(960, 600));
+  tall.writeUInt32BE(960, 20); // its height, in IHDR
+  tall.writeUInt32BE(crc32(tall.subarray(12, 29)), 29); // and IHDR's checksum, so only the data is short
+  assert.match(pngDamage(tall), /short of its width and height/);
+});
+
+test('a path in a command to paste is quoted only when the shell needs it, and as that system’s shell reads it', () => {
+  assert.equal(typedPath('games/dot-catch', { platform: 'linux' }), 'games/dot-catch');
+  assert.equal(typedPath('my game', { platform: 'linux' }), "'my game'");
+  assert.equal(typedPath("it's", { platform: 'darwin' }), `'it'\\''s'`);
+  assert.equal(typedPath('C:\\Users\\me\\dot-catch', { platform: 'win32' }), 'C:\\Users\\me\\dot-catch');
+  assert.equal(typedPath('C:\\Users\\me\\my game', { platform: 'win32' }), '"C:\\Users\\me\\my game"');
+});
+
 test('what fixes it, for the game’s folder', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
@@ -116,10 +153,10 @@ test('what fixes it, for the game’s folder', async t => {
   const v = (file, data) => cardVerdict({ path: file, bytes: data.length, head: data });
   assert.match(cardFix({ status: 'missing' }, dir).command, / card \S+static$/);
   const recrop = cardFix(v('assets/card.jpg', jpeg(1920, 1080)), dir);
-  assert.match(recrop.command, / card \S+static --from \S+static\/assets\/card\.jpg --force$/);
+  assert.match(recrop.command, / card \S+static --from \S+static[\\/]assets[\\/]card\.jpg --force$/);
   const rename = cardFix(v('assets/card.jpg', png(960, 960)), dir);
-  assert.equal(rename.command, null);
-  assert.match(rename.line, /^rename \S+static\/assets\/card\.jpg to \S+static\/assets\/card\.png$/);
+  assert.match(rename.command, /^(mv|move) \S+card\.jpg \S+card\.png$/);
+  assert.match(rename.line, /^rename \S+static[\\/]assets[\\/]card\.jpg to \S+static[\\/]assets[\\/]card\.png$/);
   assert.match(
     cardFix(v('assets/card.jpg', jpeg(960, 960, { frame: 0xc3 })), dir).command,
     / --from .*card\.jpg --force$/,

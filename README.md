@@ -676,7 +676,7 @@ Without a picture the card is a plain dark gradient with the title, which is eas
 - **The file**: `assets/card.jpg` (else `assets/card.png`) among the published files (for a brought game with a build,
   in what the build makes: `page.out`). `card.jpg` wins when both are there.
 - **What xgames.fun can draw** (publish stops for anything else): a JPEG or PNG named for what it is (a PNG in
-  `card.jpg`, or a JPEG in `card.png`, fails to draw: rename it), whole (not cut short), at most 1,500,000 bytes
+  `card.jpg`, or a JPEG in `card.png`, fails to draw: rename it), whole (not cut short; a PNG's image data is checked too), at most 1,500,000 bytes
   (it ignores a bigger one), and for a JPEG a baseline or progressive one (other kinds, such as lossless or
   arithmetic-coded, cannot be drawn: `xcore card <folder> --from <it> --force` makes one that can).
 - **What looks right** (publish goes on, with a warning and the fix): square, 960×960, as drawn. A side under 600 px is
