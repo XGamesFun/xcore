@@ -11,7 +11,10 @@
 /** The page's own Solana RPC: the play host's relay once published, xcore dev's forward on the person's machine. */
 // (no page, as in a test: the path alone; a game is never checked for an address on this machine it does not use)
 export const PAGE_RPC = globalThis.location ? new URL('/loot/v1/rpc', globalThis.location.href).href : '/loot/v1/rpc';
-const CHAIN = 'solana:devnet';
+/** The wallet chain of an economy's cluster: devnet unless its file says "network": "mainnet". */
+export const chainOf = cluster => (cluster === 'mainnet' ? 'solana:mainnet' : 'solana:devnet');
+/** The page's relay for an economy on `cluster`: PAGE_RPC on devnet, with ?cluster=mainnet on mainnet. */
+export const pageRpc = (cluster = 'devnet') => (cluster === 'mainnet' ? `${PAGE_RPC}?cluster=mainnet` : PAGE_RPC);
 
 const found = [];
 let listening = false;
@@ -34,8 +37,9 @@ function listen() {
 }
 listen(); // from the import on, so a wallet that announces itself early is not missed
 
-/** The wallets that can sign Solana devnet transactions, after `waitMs` for slow ones to announce themselves. */
-export async function solanaWallets({ waitMs = 300 } = {}) {
+/** The wallets that can sign on `cluster` (devnet unless named), after `waitMs` for slow ones to announce themselves. */
+export async function solanaWallets({ waitMs = 300, cluster = 'devnet' } = {}) {
+  const CHAIN = chainOf(cluster);
   listen();
   if (waitMs) await new Promise(resolve => setTimeout(resolve, waitMs));
   return found.filter(
@@ -44,7 +48,8 @@ export async function solanaWallets({ waitMs = 300 } = {}) {
 }
 
 /** Ask `wallet` for the player's account (the wallet shows its own prompt). → the account, or throws if they said no. */
-export async function connectWallet(wallet) {
+export async function connectWallet(wallet, { cluster = 'devnet' } = {}) {
+  const CHAIN = chainOf(cluster);
   const have = wallet.accounts?.find(a => a.chains?.includes(CHAIN));
   if (have) return have;
   const { accounts } = await wallet.features['standard:connect'].connect();

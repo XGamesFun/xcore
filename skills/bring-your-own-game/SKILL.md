@@ -137,7 +137,9 @@ supabase|railway` with the kit installed). Without the kit, they set one up them
 Before designing one, tell the person plainly: loot boxes, raffles, lotteries, prize pools, tokens and staking are
 regulated in many places (gambling, securities, money transmission, consumer and tax law); making sure their game is
 legal where they and their players are is their responsibility, and you are not giving legal advice. The program is
-on devnet and unaudited, so nothing of real value goes through it. The README's "Disclaimer and responsible use"
+not independently audited. An economy is on devnet, where nothing has real value, unless its `xsolana.json` says
+`"network": "mainnet"`: write that only when the person asks for mainnet in their own words, and tell them first that
+it is real money and what is sent can be lost. The README's "Disclaimer and responsible use"
 section says it in full.
 
 ```bash

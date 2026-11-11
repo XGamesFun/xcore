@@ -737,8 +737,13 @@ test("rpc: the game's own RPC at api/rpc, only loot's calls, its URL never answe
   assert.deepEqual(await (await call('GET', undefined, {})).json(), { gamesfun: 'rpc', own: false });
   const own = { XSOLANA_RPC_URL: 'https://devnet.rpc.example/?api-key=SECRET' };
   assert.deepEqual(await (await call('GET', undefined, own)).json(), { gamesfun: 'rpc', own: true });
-  for (const url of ['https://mainnet.rpc.example/', 'http://rpc.example/', 'not a url'])
+  for (const url of ['http://rpc.example/', 'not a url'])
     assert.equal((await (await call('GET', undefined, { XSOLANA_RPC_URL: url })).json()).own, false, url);
+  // a game whose economy is on mainnet uses a mainnet RPC of its own (loot has an address there too)
+  assert.equal(
+    (await (await call('GET', undefined, { XSOLANA_RPC_URL: 'https://mainnet.rpc.example/' })).json()).own,
+    true,
+  );
   assert.equal((await call('POST', { jsonrpc: '2.0', id: 1, method: 'getSlot' }, {})).status, 503);
 
   const sent = [];
@@ -776,7 +781,8 @@ test("rpc: the game's own RPC at api/rpc, only loot's calls, its URL never answe
     /refused \(403\): This game's server may not call https:\/\/devnet\.rpc\.example\. Add/,
   );
   // scans only of loot's own programs; transactions only the game's own (a loot instruction, or a plain SOL send)
-  const [LOOT_ID, CORE_ID] = RPC.scanPrograms;
+  const [LOOT_ID] = RPC.loot;
+  const CORE_ID = 'CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d';
   const filters = [{ dataSize: 1 }];
   await refused({ jsonrpc: '2.0', id: 8, method: 'getProgramAccounts', params: ['Prog111', { filters }] }, -32602);
   const scan = await call(

@@ -12,13 +12,14 @@ import { guard, parse, printJson } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { ECONOMY_FILE, solanaCommand, solanaHas } from '../lib/economy.mjs';
 import { addLoot } from '../lib/publish/adopt.mjs';
-import { solanaRpc } from '../lib/solana-rpc.mjs';
+import { economyCluster, solanaRpc } from '../lib/solana-rpc.mjs';
 import { CMD } from '../lib/command.mjs';
 import { NO_REVIEW } from '../lib/review.mjs';
 
 const usage = `Usage: xcore loot <command> [options]
 
-A game's economy on loot, one shared Solana program (devnet only until it is audited), with @xgamesfun/solana's tools.
+A game's economy on loot, one shared Solana program (devnet by default; mainnet, real money and not independently
+audited, when its xsolana.json says "network": "mainnet"), with @xgamesfun/solana's tools.
   xcore loot connect               add its tools (xsolana_*) and its xsolana-economy skill to Claude Code and Codex
   xcore loot add [game]            where the game's economy (${ECONOMY_FILE}) and its page client (gf/loot/) go, and the
                                    copy once the economy is there (a brought game: the folder its build copies as it is)
@@ -28,7 +29,7 @@ A game's economy on loot, one shared Solana program (devnet only until it is aud
   xcore loot token <mint>          a coin made elsewhere, read from the chain: its entry for the economy's "tokens",
                                    with what its mint's own keys can do (mint more, freeze, a fee on transfers)
   xcore loot keygen <file>         a key file for the game's economy, outside any repository (~/.config/xsolana/<game>.json):
-                                   it prints the key's address to send devnet SOL to, never the key. The key is the
+                                   it prints the key's address to send SOL to (devnet's, or real SOL on mainnet), never the key. The key is the
                                    project's owner for good: whoever can read the file controls it, and nothing
                                    restores a lost one
   xcore loot approve [file] --keypair <keyfile>
@@ -90,11 +91,14 @@ export function fromFolder(args, cwd) {
  * The RPC a command talks to: what the environment names; else the workspace's setting; else xgames.fun's shared
  * relay, but for `approve`. Going live sends transactions that are not loot's own (a token's mint and name, the token
  * accounts an economy pays into, a lottery's rent) and the relay passes only loot's: so with no RPC of the person's
- * own, `approve` is left to the tools' default, Solana's public devnet RPC. → the URL, or null for that default.
+ * own, `approve` is left to the tools' default, Solana's public devnet RPC. On mainnet (the economy's file says
+ * "network": "mainnet") the relay answers a published game's signed-in players only, so with no RPC of the person's own
+ * every command is left to the tools, which then ask for one. → the URL, or null for the tools' default.
  */
 export function rpcFor(command, env = process.env, rpc = solanaRpc(env)) {
   const own = env.XSOLANA_RPC_URL?.trim();
   if (own) return own;
+  if (rpc.shared && rpc.cluster === 'mainnet') return null;
   return command === 'approve' && rpc.shared ? null : rpc.url;
 }
 
@@ -151,7 +155,8 @@ export default {
       rest = fromFolder(rest, process.cwd()).map((a, i) => (i === at ? path.basename(file) : a));
     }
     const env = { ...process.env };
-    const rpc = rpcFor(args[0]);
+    // (on the cluster of the economy in the folder it runs in: devnet unless its file says mainnet)
+    const rpc = rpcFor(args[0], process.env, solanaRpc(process.env, { cluster: economyCluster(cwd) }));
     if (rpc) env.XSOLANA_RPC_URL = rpc;
     else delete env.XSOLANA_RPC_URL;
     // its words name its own commands (`npx -y @xgamesfun/solana@… approve xsolana.json --keypair …`, `xsolana check`):

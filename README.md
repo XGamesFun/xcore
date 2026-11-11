@@ -613,7 +613,8 @@ A brought game with a build keeps `backend.json` in its `static` folder, so the 
 > **Read [Disclaimer and responsible use](#disclaimer-and-responsible-use) before you build an economy.** Loot boxes,
 > raffles, lotteries, prize pools and tokens are regulated in many places, and on-chain transactions cannot be undone.
 
-A game's economy runs on loot, one shared Solana program (devnet only until it is audited): shops, loot boxes, raffles
+A game's economy runs on loot, one shared Solana program, on devnet by default and on mainnet when its `xsolana.json`
+says `"network": "mainnet"` (real money; loot is not independently audited): shops, loot boxes, raffles
 and lotteries, prize pools, staking, crafting, perks for holders, rewards a player claims. Its tools come with this
 package (`@xgamesfun/solana`). `xcore loot connect` adds them to Claude Code or Codex: the `xsolana_*` MCP tools
 and the `xsolana-economy` skill, which turn a one-line idea into a checked economy. `xsolana_check` refuses what would

@@ -2,6 +2,24 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+**A game's economy on mainnet.** loot runs on mainnet too, at an address of its own
+(`xgames8C758PyweWB9sDw8evvwsTVwyA2fGRUeAXVPy`; devnet keeps `xgamesVsZBpCVgJuatfYAFJRmQoccfQf5qtUFNp2Eet`). An economy
+is on devnet unless its `xsolana.json` says `"network": "mainnet"`, where it is real money; loot is not independently
+audited. `@xgamesfun/solana` 0.28.3.
+
+- The RPC follows the economy's cluster (`lib/solana-rpc.mjs`: `solanaRpc(env, {cluster})`, `economyCluster(dir)`):
+  xgames.fun's relay with `?cluster=mainnet` for a mainnet economy, and a setting that names the other cluster is not
+  used (`problem`). With nothing set, a devnet economy uses the relay as before; on mainnet the relay answers a
+  published game's signed-in players only, so `xcore loot`, `xcore review` and `xcore dev` there need an RPC of the
+  person's own (XSOLANA_RPC_URL), and the tools say so.
+- A game's page (`GamesFun.loot`) asks the wallet for the economy's chain (`solana:mainnet` on mainnet) and, with no
+  RPC of the game's own, calls the play host's relay with `?cluster=mainnet` and the player's sign-in.
+- A game's own server RPC (`xcore add rpc`) takes a mainnet URL for a mainnet economy and passes either cluster's
+  loot transactions.
+- `xcore coin` is unchanged: coins launch on devnet only.
+
 ## 0.7.0 — 2026-11-11
 
 **`xcore coin`: a coin that trades, for a published game, signed by a key file.** loot runs no market, so a coin

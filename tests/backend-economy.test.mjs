@@ -227,6 +227,10 @@ test("loot's address is the installed tools' own, here and in the game's own rpc
   // held here against the tools', so a move of the program is caught before a game's RPC refuses its transactions.
   const { RPC } = await import('../lib/client/server/rpc.js');
   assert.equal(RPC.scanPrograms[0], idl.address);
+  // mainnet's loot, the kit's own constant for it
+  const { CLUSTERS } = await import('@xgamesfun/solana/client');
+  assert.deepEqual(RPC.loot, [CLUSTERS.devnet.program, CLUSTERS.mainnet.program]);
+  assert.ok(RPC.scanPrograms.includes(CLUSTERS.mainnet.program));
 });
 
 test("xsolana's words as xcore's", () => {
@@ -254,7 +258,7 @@ test("xsolana's words as xcore's", () => {
 });
 
 test("the RPC: xgames.fun's shared relay unless XSOLANA_RPC_URL (or LOOT_RPC_URL) names a devnet one", () => {
-  assert.deepEqual(solanaRpc({}, { file: null }), { url: SHARED_RPC, shared: true, problem: null });
+  assert.deepEqual(solanaRpc({}, { file: null }), { url: SHARED_RPC, shared: true, problem: null, cluster: 'devnet' });
   assert.equal(
     solanaRpc({ XSOLANA_RPC_URL: 'https://own.example/rpc' }, { file: null }).url,
     'https://own.example/rpc',
@@ -268,4 +272,50 @@ test("the RPC: xgames.fun's shared relay unless XSOLANA_RPC_URL (or LOOT_RPC_URL
     rpcWords(solanaRpc({ XSOLANA_RPC_URL: 'https://own.example/rpc?api-key=secret' }, { file: null })),
     /secret/,
   );
+});
+
+test('the RPC follows the economy’s cluster: mainnet’s relay with ?cluster=mainnet, an RPC of the other cluster refused, commands left to the tools on mainnet’s relay', async () => {
+  const { economyCluster, relayFor } = await import('../lib/solana-rpc.mjs');
+  assert.deepEqual(solanaRpc({}, { file: null, cluster: 'mainnet' }), {
+    url: `${SHARED_RPC}?cluster=mainnet`,
+    shared: true,
+    problem: null,
+    cluster: 'mainnet',
+  });
+  assert.equal(relayFor('/loot/v1/rpc', 'mainnet'), '/loot/v1/rpc?cluster=mainnet');
+  assert.equal(relayFor('/loot/v1/rpc', 'devnet'), '/loot/v1/rpc');
+  // a mainnet RPC is the economy's own on mainnet, and still a problem on devnet (xcore coin reads devnet's)
+  assert.equal(
+    solanaRpc({ XSOLANA_RPC_URL: 'https://mainnet.helius-rpc.com/?api-key=k' }, { file: null, cluster: 'mainnet' })
+      .problem,
+    null,
+  );
+  assert.match(
+    solanaRpc({ XSOLANA_RPC_URL: 'https://mainnet.helius-rpc.com/?api-key=k' }, { file: null }).problem,
+    /is a mainnet RPC, and the economy is on devnet/,
+  );
+  assert.match(
+    solanaRpc({ XSOLANA_RPC_URL: 'https://api.devnet.solana.com' }, { file: null, cluster: 'mainnet' }).problem,
+    /is not a mainnet RPC/,
+  );
+  // the relay answers published games' players on mainnet: a command here is left to the tools, which ask for an RPC
+  assert.equal(rpcFor('check', {}, solanaRpc({}, { file: null, cluster: 'mainnet' })), null);
+  assert.equal(
+    rpcFor(
+      'check',
+      {},
+      solanaRpc({ XSOLANA_RPC_URL: 'https://mainnet.example/rpc' }, { file: null, cluster: 'mainnet' }),
+    ),
+    'https://mainnet.example/rpc',
+  );
+  // the cluster of a folder's economy: its file's network, devnet when it names none or there is none
+  const { mkdtempSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const pathMod = (await import('node:path')).default;
+  const dir = mkdtempSync(pathMod.join(tmpdir(), 'xcore-cluster-'));
+  assert.equal(economyCluster(dir), 'devnet');
+  writeFileSync(pathMod.join(dir, 'xsolana.json'), JSON.stringify({ version: 2, network: 'mainnet' }));
+  assert.equal(economyCluster(dir), 'mainnet');
+  writeFileSync(pathMod.join(dir, 'xsolana.json'), JSON.stringify({ version: 2 }));
+  assert.equal(economyCluster(dir), 'devnet');
 });
