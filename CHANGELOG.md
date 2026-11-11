@@ -21,6 +21,27 @@ The README (§3, "A wallet app, for a claim") has a Claim button that chooses be
 on this machine there is no play page around the game, so `openWallet` answers `no-page` there. `xcore add signin`
 again brings a game's copy of `gamesfun.js` up to 1.7.0; the Godot and Unity glue carry the new file but have no
 calls of their own for these yet.
+## 0.5.1 — 2026-11-11
+
+**An economy goes live signed by a key file on your own computer; no page opens unless you ask for one.** The tools
+are now `@xgamesfun/solana` 0.27.2 (on loot 0.27.0, unchanged: an economy that is live stays live).
+
+- `xcore loot keygen <file>` makes a key file for a game's economy, outside any repository, and prints its address,
+  never the key. `xcore loot approve --keypair <keyfile>` shows everything going live would send, with a code, and
+  sends nothing; the same command with `--yes <code>` sends exactly that. The key file is the project's owner, for
+  good: whoever can read it controls the project, every later change is signed by it, and nothing restores a lost one.
+- **Plain `xcore loot approve` opens nothing now**: it says the two ways and stops. The page for a browser wallet is
+  `xcore loot approve --browser`, for when you ask for it.
+- `xcore loot approve` no longer sends through xgames.fun's shared relay, which passes only loot's own transactions:
+  about one in eight of a setup's transactions (a token's mint, the token accounts an economy pays into) are not, and
+  the relay refused them. It sends through `XSOLANA_RPC_URL` when you set one, else through Solana's public devnet
+  RPC. Every other `xcore loot` command still reads through the relay.
+- A key file named beside the flags (`--keypair keys/game.json`) is never taken for the economy file, and is found
+  from where you stand when the economy file is in another folder.
+- Fixed in the tools: a transaction the network took, whose answer was lost, could be sent again at the next
+  `approve` (a setup's seeds paid in twice); a browser wallet that adds its own priority fee was refused after a
+  setup's first transaction.
+- The README, the skill and `xcore loot add`'s next steps say how going live is signed now.
 
 ## 0.5.0 — 2026-11-11
 
