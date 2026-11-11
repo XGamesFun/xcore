@@ -9,6 +9,7 @@ import {
   coinStatus,
   dropLaunch,
   explorerOf,
+  coinCluster,
   launchCoin,
   planText,
   safeJson,
@@ -17,27 +18,30 @@ import {
 } from '../lib/coin.mjs';
 import { CMD } from '../lib/command.mjs';
 
-const usage = `Usage: xcore coin [game] [--json]
+const usage = `Usage: xcore coin [game] [--cluster devnet|mainnet] [--json]
        xcore coin launch [game] --name <name> --ticker <TICKER> --picture <file> --keypair <keyfile>
-                         [--venue meteora|pumpfun] [--pair <SYMBOL>] [--description <text>] [--yes <code>] [--json]
-       xcore coin drop [game] [--json]
+                         [--venue meteora|pumpfun] [--pair <SYMBOL>] [--description <text>] [--cluster devnet|mainnet]
+                         [--yes <code>] [--json]
+       xcore coin drop [game] [--cluster devnet|mainnet] [--json]
 
-A coin that trades, for a game published on xgames.fun (Solana devnet only for now). loot, the program of a game's
+A coin that trades, for a game published on xgames.fun: on Solana devnet (the default, to rehearse), or on mainnet
+with --cluster mainnet (real money, where xgames.fun has mainnet launching on). loot, the program of a game's
 economy, runs no market: a coin people can buy and sell is launched on a venue, and the economy then names it.
   (no command)   where the game's coin stands, and what a launch can choose from: the venues, what each pairs a coin
                  with, and the pictures among the published game's files
   launch         what launching would do, signed by a key file on this machine (${CMD} loot keygen <file> makes one;
-                 send it about ${ABOUT_SOL} devnet SOL). It sends nothing until it is run again with the code it prints
+                 send it about ${ABOUT_SOL} SOL on the cluster). It sends nothing until it is run again with the code it prints
                  (--yes <code>), once the person whose game it is has read that and said yes. xgames.fun's launchpad
                  builds the launch; before the key signs, every transaction is read and held to the launch that
                  was printed (this name, ticker and pair, this key as the coin's creator, no buy, no move of a token
-                 the key holds, nothing of the game's economy), and a devnet RPC is asked that it is devnet's
+                 the key holds, nothing of the game's economy), and an RPC of the cluster is asked that it is that cluster's
       --name         the coin's name (at most 32 bytes)        --ticker   its ticker (2 to 10 letters or digits)
       --picture      a picture among the published game's files (the path ${CMD} coin lists)
       --venue        meteora (the default) or pumpfun          --pair     what it trades against (the default: SOL)
       --keypair      the key file that signs and pays: the coin's creator fees belong to its address for good
+      --cluster      devnet (the default) or mainnet: a game has a coin on each, and mainnet's is real money
   drop           gives up a launch that was begun and never sent
-A game has one coin, and its name and ticker stay as launched. The same from a browser wallet: the game's
+A game has one coin a cluster, and its name and ticker stay as launched. The same from a browser wallet: the game's
 console (xgames.fun/console), Token tab. A coin made elsewhere is named in the economy with ${CMD} loot token <mint>.`;
 
 const venueName = v => (typeof v === 'string' && Object.hasOwn(VENUES, v) ? VENUES[v].name : v);
@@ -47,6 +51,7 @@ const venueName = v => (typeof v === 'string' && Object.hasOwn(VENUES, v) ? VENU
  * or a reason is the server's text: on a terminal it could hide or forge a line), and an address is one or is not shown.
  */
 function statusText(game, s) {
+  const cluster = coinCluster(s.cluster ?? 'devnet');
   const own = s.own ?? null,
     launch = s.launch ?? {};
   const symbol = clean(own?.symbol, 20),
@@ -59,11 +64,11 @@ function statusText(game, s) {
     ].join('\n');
   if (own?.kind === 'launched')
     return [
-      `${game}'s coin is live on Solana devnet: $${symbol} (${clean(own.name, 60)}), on ${clean(venueName(own.venue), 20)}${own.pair ? `, paired with ${clean(own.pair, 20)}` : ''}.`,
+      `${game}'s coin is live on ${cluster.words}: $${symbol} (${clean(own.name, 60)}), on ${clean(venueName(own.venue), 20)}${own.pair ? `, paired with ${clean(own.pair, 20)}` : ''}.`,
       `  mint      ${mint}`,
-      `  explorer  ${explorerOf(mint)}`,
+      `  explorer  ${explorerOf(mint, cluster)}`,
       `To use it in the game's economy, name it in xsolana.json's "tokens": ${CMD} loot token ${mint} prints its entry.`,
-      'A devnet coin trades nothing of value.',
+      cluster.name === 'devnet' ? 'A devnet coin trades nothing of value.' : 'It trades for real money.',
     ].join('\n');
   if (own?.kind === 'linked')
     return `${game} uses $${symbol}, a token made elsewhere (${mint}). A game has one coin: stop using it (the game's console, Token tab) to launch one of its own.`;
@@ -132,6 +137,7 @@ export default {
           pair: { type: 'string' },
           keypair: { type: 'string' },
           yes: { type: 'string' },
+          cluster: { type: 'string' },
         },
         usage,
       );
@@ -153,13 +159,13 @@ export default {
       const out = values.json ? v => process.stdout.write(safeJson(v) + '\n') : null;
 
       if (verb === 'status') {
-        const s = await coinStatus(dir, { refresh: true });
+        const s = await coinStatus(dir, { refresh: true, cluster: values.cluster ?? null });
         if (out) out(s);
         else console.log(statusText(game, s));
         return 0;
       }
       if (verb === 'drop') {
-        const s = await dropLaunch(dir);
+        const s = await dropLaunch(dir, { cluster: values.cluster ?? null });
         if (out) out(s);
         else
           console.log(
@@ -178,7 +184,7 @@ export default {
           venue: values.venue?.trim().toLowerCase() || undefined,
           pair: values.pair?.trim() || undefined,
         },
-        { keyFile: values.keypair, yes: values.yes ?? null },
+        { keyFile: values.keypair, yes: values.yes ?? null, cluster: values.cluster ?? null },
       );
       if (r.planned) {
         const command = sameCommand(args);
@@ -197,7 +203,7 @@ export default {
       else if (r.launched)
         console.log(
           [
-            `$${r.coin.symbol} (${r.coin.name}) is live on Solana devnet, on ${venueName(r.coin.venue)}${r.coin.pair ? `, paired with ${r.coin.pair}` : ''}.`,
+            `$${r.coin.symbol} (${r.coin.name}) is live on ${coinCluster(r.cluster).words}, on ${venueName(r.coin.venue)}${r.coin.pair ? `, paired with ${r.coin.pair}` : ''}.`,
             `  mint      ${r.mint}`,
             `  explorer  ${r.explorer}`,
             `To use it in the game's economy, name it in xsolana.json's "tokens": ${CMD} loot token ${r.mint} prints its entry.`,

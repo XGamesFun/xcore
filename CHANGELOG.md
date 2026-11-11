@@ -19,7 +19,13 @@ were not listed).
   RPC of the game's own, calls the play host's relay with `?cluster=mainnet` and the player's sign-in.
 - A game's own server RPC (`xcore add rpc`) takes a mainnet URL for a mainnet economy and passes either cluster's
   loot transactions.
-- `xcore coin` is unchanged: coins launch on devnet only.
+- **`xcore coin --cluster mainnet`**: a game's real coin, where xgames.fun has mainnet launching on (it is off until
+  its operator switches it on; the tab and this command then say so). A game has a coin a cluster: devnet's, to
+  rehearse (the default, as before), and mainnet's. On mainnet the plan opens with "MAINNET: REAL MONEY" and says
+  what that means; the code covers the cluster (a devnet code never sends a mainnet launch); every call names the
+  cluster and xgames.fun's answer must name the same one; the launch is held to mainnet's first block through the
+  person's own RPC or Solana's public mainnet RPC (never xgames.fun's, and no local validator stands in for mainnet);
+  this folder keeps mainnet's record and plan apart from devnet's (`.gamesfun/coin.json`, `coin-plan.json`).
 
 ## 0.7.0 — 2026-11-11
 

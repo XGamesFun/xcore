@@ -39,6 +39,8 @@ import {
   planText,
   solanaTools,
   localRpc,
+  coinCluster,
+  MAINNET_RPC,
   WRAPPED_SOL,
 } from '../lib/coin.mjs';
 import { saveSecret } from '../lib/credentials.mjs';
@@ -1443,7 +1445,7 @@ async function setup(t, { launch = meteora, balance = 500_000_000, ownRpc = true
     },
     // what each RPC finds: the person's own, Solana's public one, xgames.fun's (null: it does not answer)
     chains: Object.fromEntries(
-      [OWN_RPC, DEVNET_RPC, RELAY].map(o => [
+      [OWN_RPC, DEVNET_RPC, RELAY, MAINNET_RPC].map(o => [
         o,
         { genesis: DEVNET_GENESIS, recent: blockhashesOf(launch), accounts: new Set(), balance },
       ]),
@@ -1466,12 +1468,15 @@ async function setup(t, { launch = meteora, balance = 500_000_000, ownRpc = true
     ]);
     if (u.pathname !== '/api/kit/games/g-9/coin')
       return new Response('<!doctype html><title>404</title>', { status: 404 });
-    if (method === 'GET') return Response.json(state.status);
+    // (the cluster asked, said back as xgames.fun says it; `wrongCluster` says another)
+    const cluster = state.wrongCluster ?? u.searchParams.get('cluster') ?? 'devnet';
+    const said = body => Response.json({ ...body, cluster });
+    if (method === 'GET') return said(state.status);
     if (method === 'POST')
       return state.refusePrepare ? Response.json(state.refusePrepare, { status: 400 }) : Response.json(state.prepared);
     if (method === 'PUT')
-      return state.refuseSubmit ? Response.json(state.refuseSubmit, { status: 502 }) : Response.json(state.after);
-    return Response.json({ ...state.status, launch: { ...state.status.launch, started: false } });
+      return state.refuseSubmit ? Response.json(state.refuseSubmit, { status: 502 }) : said(state.after);
+    return said({ ...state.status, launch: { ...state.status.launch, started: false } });
   };
   const key = { dropped: 0, signed: [] };
   const keyReader = async file => ({
@@ -1520,6 +1525,7 @@ test('a launch sends nothing until it is run with the code it printed; the code 
       quote: WRAPPED_SOL,
       wallet: meteora.wallet,
       resume: false,
+      cluster: 'devnet',
       balance: 500_000_000n,
     },
   );
@@ -1680,6 +1686,7 @@ test('with the code: begun for the key’s address, read, asked of devnet, signe
     // (the coin's words are the plan's own: nothing of xgames.fun's answer is repeated but that it is live)
     coin: { name: 'Moth Coin', symbol: 'MOTH', venue: 'meteora', pair: 'SOL', mint: meteora.mint },
     explorer: `https://explorer.solana.com/address/${meteora.mint}?cluster=devnet`,
+    cluster: 'devnet',
     steps: METEORA_STEPS,
     checkedThrough: 'your own RPC (XSOLANA_RPC_URL)',
     independent: true,
@@ -1764,7 +1771,7 @@ test('devnet is asked before the key signs: its own blockhashes, a coin that is 
   s = await tried(chains => (chains[OWN_RPC].genesis = MAINNET_GENESIS));
   assert.deepEqual(
     [s.error?.code, s.error?.message],
-    ['not-devnet', 'XSOLANA_RPC_URL is not a devnet RPC, and coins are launched on devnet only. Nothing was signed.'],
+    ['not-devnet', 'XSOLANA_RPC_URL is not a devnet RPC, and this launch is on devnet. Nothing was signed.'],
   );
   nothing(s);
   // Their own RPC does not answer: no other is asked in its place, and nothing is signed.
@@ -2424,4 +2431,107 @@ test('the command: a plan, then a launch signed by a real key file, against a st
   const drop = await xc(['drop']);
   assert.equal(drop.status, 0, drop.stderr);
   assert.match(drop.stdout, /xgames\.fun gave up moth-run's launch \(it does so only for one it never sent\)\./);
+});
+
+// ---- mainnet --------------------------------------------------------------------------------------------------------
+test('mainnet is named, never assumed: --cluster is devnet or mainnet, and the code of one is not the other’s', async t => {
+  assert.equal(coinCluster(undefined).name, 'devnet');
+  assert.equal(coinCluster('mainnet').name, 'mainnet');
+  for (const bad of ['Mainnet', 'mainnet-beta', 'testnet', ''])
+    assert.throws(
+      () => coinCluster(bad),
+      e => e instanceof CoinError && e.code === 'usage',
+      bad,
+    );
+  const s = await setup(t);
+  const dev = await launchCoin(s.dir, FORM, s.opts);
+  const main = await launchCoin(s.dir, FORM, { ...s.opts, cluster: 'mainnet' });
+  assert.deepEqual([dev.plan.cluster, main.plan.cluster], ['devnet', 'mainnet']);
+  assert.notEqual(dev.code, main.code);
+  // (devnet's printed code does not send a mainnet launch, nor the other way)
+  for (const [cluster, code] of [
+    ['mainnet', dev.code],
+    ['devnet', main.code],
+  ]) {
+    const e = await launchCoin(s.dir, FORM, { ...s.opts, cluster, yes: code }).catch(x => x);
+    assert.equal(e?.code, 'code', cluster);
+  }
+  assert.deepEqual([s.sent('POST').length, s.key.signed.length], [0, 0]);
+  // its plan says real money first
+  const text = planText(main.plan, { game: 'g', keyFile: 'k', code: main.code, command: 'c' });
+  assert.match(text, /^MAINNET: REAL MONEY\./);
+  assert.match(text, /launched on Solana mainnet:/);
+  assert.match(text, /not\s+independently audited/);
+  assert.doesNotMatch(text, /devnet/);
+});
+
+test('a mainnet launch: asked of xgames.fun as mainnet, held to mainnet’s chain, recorded apart from devnet’s', async t => {
+  const s = await setup(t);
+  s.state.chains[OWN_RPC].genesis = MAINNET_GENESIS;
+  const { code } = await launchCoin(s.dir, FORM, { ...s.opts, cluster: 'mainnet' });
+  const r = await launchCoin(s.dir, FORM, { ...s.opts, cluster: 'mainnet', yes: code });
+  assert.deepEqual(
+    [r.launched, r.cluster, r.explorer],
+    [true, 'mainnet', `https://explorer.solana.com/address/${r.mint}`],
+  );
+  // every call to xgames.fun named mainnet
+  for (const [method] of [['GET'], ['POST'], ['PUT']])
+    assert.ok(
+      s.sent(method).every(c => c[1].endsWith('?cluster=mainnet')),
+      method,
+    );
+  // the folder's record of it is mainnet's own: devnet's slot is untouched
+  const record = JSON.parse(await readFile(path.join(s.dir, '.gamesfun', 'coin.json'), 'utf8'));
+  assert.deepEqual([Object.keys(record), record[`${ORIGIN} mainnet`].mint], [[`${ORIGIN} mainnet`], r.mint]);
+  // and its status reads mainnet's
+  const st = await coinStatus(s.dir, { origin: ORIGIN, env: s.env, fetchImpl: s.opts.fetchImpl, cluster: 'mainnet' });
+  assert.deepEqual([st.cluster, st.recorded.mint], ['mainnet', r.mint]);
+});
+
+test('mainnet is held to mainnet’s first block, never xgames.fun’s RPC, and to xgames.fun saying mainnet', async t => {
+  // the person's RPC serves devnet: refused, nothing signed
+  let s = await setup(t);
+  let { code } = await launchCoin(s.dir, FORM, { ...s.opts, cluster: 'mainnet' });
+  let e = await launchCoin(s.dir, FORM, { ...s.opts, cluster: 'mainnet', yes: code }).catch(x => x);
+  assert.deepEqual([e?.code, s.key.signed.length], ['not-mainnet', 0]);
+  // with no RPC of their own: Solana's public mainnet RPC, and never xgames.fun's relay
+  s = await setup(t, { ownRpc: false });
+  s.state.chains[MAINNET_RPC].genesis = MAINNET_GENESIS;
+  ({ code } = await launchCoin(s.dir, FORM, { ...s.opts, cluster: 'mainnet' }));
+  const r = await launchCoin(s.dir, FORM, { ...s.opts, cluster: 'mainnet', yes: code });
+  assert.deepEqual([r.launched, r.checkedThrough, r.independent], [true, 'Solana’s public mainnet RPC', true]);
+  assert.ok(!s.rpcs().some(c => c[1] === RELAY || c[1] === DEVNET_RPC), 'only mainnet’s public RPC is asked');
+  // that one away: nothing is signed (no fallback for mainnet)
+  s = await setup(t, { ownRpc: false });
+  s.state.chains[MAINNET_RPC] = null;
+  ({ code } = await launchCoin(s.dir, FORM, { ...s.opts, cluster: 'mainnet' }));
+  e = await launchCoin(s.dir, FORM, { ...s.opts, cluster: 'mainnet', yes: code }).catch(x => x);
+  assert.deepEqual([e?.code, s.key.signed.length], ['chain', 0]);
+  // mainnet's RPCs are the person's own, else Solana's public one: xgames.fun's relay is not among them at all
+  assert.deepEqual(
+    devnetRpcs({}, coinCluster('mainnet')).map(r => r.url),
+    [MAINNET_RPC],
+  );
+  assert.deepEqual(
+    devnetRpcs({}, coinCluster('devnet')).map(r => r.url),
+    [DEVNET_RPC, SHARED_RPC],
+  );
+  // a validator on this machine is its own cluster for devnet only: on mainnet it is held to mainnet's first block
+  s = await setup(t);
+  const LOCAL_RPC = 'http://127.0.0.1:8899';
+  s.state.chains[LOCAL_RPC] = { ...s.state.chains[OWN_RPC], genesis: 'a-local-validator-genesis' };
+  const local = { ...s.opts, env: { ...s.opts.env, XSOLANA_RPC_URL: LOCAL_RPC } };
+  ({ code } = await launchCoin(s.dir, FORM, { ...local, cluster: 'mainnet' }));
+  e = await launchCoin(s.dir, FORM, { ...local, cluster: 'mainnet', yes: code }).catch(x => x);
+  assert.deepEqual([e?.code, s.key.signed.length], ['not-mainnet', 0]);
+  // xgames.fun answering for devnet where mainnet was asked (or the other way): nothing is done
+  for (const [asked, says] of [
+    ['mainnet', 'devnet'],
+    ['devnet', 'mainnet'],
+  ]) {
+    s = await setup(t);
+    s.state.wrongCluster = says;
+    e = await launchCoin(s.dir, FORM, { ...s.opts, cluster: asked }).catch(x => x);
+    assert.deepEqual([e?.code, s.key.signed.length], ['wrong-cluster', 0], `${asked} answered as ${says}`);
+  }
 });

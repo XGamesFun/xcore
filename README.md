@@ -894,7 +894,8 @@ with `scope` (`"player"` or `"game"`) and `plan` when it goes past a rate.
 
 ### A coin that trades: `xcore coin`
 
-A coin people can buy and sell, for a published game (Solana devnet only for now). loot runs no market, so the coin is
+A coin people can buy and sell, for a published game: on Solana devnet by default, to rehearse, and on mainnet (real
+money) with `--cluster mainnet` where xgames.fun has mainnet launching on. loot runs no market, so the coin is
 launched on a venue through xgames.fun's launchpad: **Meteora** (a curve of its own, then a pool; you keep about 40%
 of its trading fees) or **pump.fun** (its curve; the creator fee is shared half and half with xgames.fun). A game has
 one coin, and its name and ticker stay as launched.
@@ -908,7 +909,7 @@ xcore coin launch … --yes <code>                   # the same command, with th
 
 - **The picture** is a PNG, JPEG or WebP among the published game's files (`xcore coin` lists them); the coin's link
   is the game's own play link.
-- **The key file** signs and pays (about 0.03 devnet SOL), on your machine: no browser page opens. The coin's creator
+- **The key file** signs and pays (about 0.03 SOL on the cluster), on your machine: no browser page opens. The coin's creator
   fees belong to its address for good, so keep the file, and a copy somewhere safe.
 - **Nothing is sent by the first run.** It prints the launch (every choice, the key's address and what it holds, what
   can't be undone) and a code, and keeps the plan in the folder (`.gamesfun/coin-plan.json`). The same command with
@@ -928,12 +929,17 @@ xcore coin launch … --yes <code>                   # the same command, with th
     program (and on pump.fun Token-2022 for the coin) in every place an instruction reads one, the key's share of a
     pump.fun fee paid to the key's own account, no change to another coin of the key's, nothing that names loot (the
     game's economy, which the same key may own), no lookup table, and at most 0.1 SOL in fees of the key's own.
-- **Devnet is asked, too.** Nothing in a transaction names its cluster, so before the key signs, a devnet RPC is asked
+- **The cluster is asked, too.** Nothing in a transaction names its cluster, so before the key signs, an RPC of the
+  launch's cluster (devnet, or mainnet with `--cluster mainnet`, held to mainnet's first block) is asked. On devnet: a devnet RPC is asked
   that each transaction's blockhash is one of devnet's and that the coin's address holds nothing yet. It is your own
   RPC when `XSOLANA_RPC_URL` is set, else Solana's public one, and never xgames.fun's (the same party as the
   launchpad: it may show the key's balance in the plan, never decide a signature). When none answers, or
   `XSOLANA_RPC_URL` is set to something that can't be used, nothing is signed: Solana's public RPC limits how often
   one address asks, so a devnet RPC of your own makes a launch steadier.
+- **Mainnet** (`--cluster mainnet`): real money. A game has one mainnet coin besides its devnet one; the plan opens
+  with "MAINNET: REAL MONEY", the code covers the cluster, and every call to xgames.fun names it. Mainnet is checked
+  through your own mainnet RPC (`XSOLANA_RPC_URL`) or Solana's public mainnet RPC, never xgames.fun's. Selling a token
+  to the public is regulated in most places: that is yours to check before you launch one.
 - **What is not read**, and is xgames.fun's to get right: the picture and the description (they are what the coin's
   link serves), and on Meteora the curve's shape (its prices, how the supply is spread along it, its fee schedule).
   And the check leans on each venue's program doing what its instruction says: those take rent for the coin's own
