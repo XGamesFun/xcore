@@ -9,7 +9,7 @@ import { gate } from '../lib/publish/gate.mjs';
 import { buildFailure, pageRoots, runBuild } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
 import { reviewNudge } from '../lib/review.mjs';
-import { cardLine } from '../lib/card.mjs';
+import { cardPrinted, drawable } from '../lib/card.mjs';
 
 const usage = `Usage: xcore publish [dir] [--draft] [--new] [--title <name>] [--no-card] [--status] [--check [--verify [--port <n>]]] [--json]
 
@@ -26,10 +26,12 @@ In a GitHub Actions job with permissions id-token: write, the job's own OIDC tok
 A brought game (${CMD} adopt) is built first when it has a build; its published folder (gamesfun.json page.out)
 goes up, with its server/ bundle when it has one.
 Its preview picture: a link to the game, shared on X or in a chat, shows a square card with the game's picture behind
-its title. The picture is assets/card.jpg (or .png) in the published files: a JPEG or PNG, square (960×960 is best,
-each side at least 600 px), at most 1,500,000 bytes. Publish stops before anything goes up when there is none or it
-cannot be used: make one with ${CMD} card [dir], or publish without one with --no-card (or "card": false in
-gamesfun.json). A link shared before can keep its old card for a while (X and chat apps cache it).
+its title. The picture is assets/card.jpg (or assets/card.png) in the published files: a JPEG or PNG named for what it
+is, at most 1,500,000 bytes, best square at 960×960. Publish stops before anything goes up when there is none or
+xgames.fun cannot draw it (too big, not a JPEG or PNG, named for the other one, cut short, a kind of JPEG it does not
+draw): make one with ${CMD} card [dir], or publish without one with --no-card (or "card": false in gamesfun.json). A
+picture it can draw but that is small (under 600 px a side: blurry) or far from square (cropped to its middle) goes up
+with a warning and its fix. A link shared before can keep its old card for a while (X and chat apps cache it).
   --draft        a private version in your xgames.fun Studio, no public link
   --new          publish as a new game (a new link), not an update of this folder's game
   --title <name> the game's name on xgames.fun (default: its title)
@@ -141,7 +143,7 @@ export function publishCommand({
             // reported, never a refusal here: publish is what stops for it
             if (card)
               console.log(
-                `  preview picture: ${cardLine(p.card, { off: !p.cardSetting })}${askCard && p.cardSetting && p.card.status !== 'ok' ? `. Publish stops for it: ${CMD} card ${shown(dir)}, or --no-card` : ''}`,
+                `  ${cardPrinted(askCard ? p.cardWords : { ...p.cardWords, level: p.cardWords.level === 'stop' ? 'off' : p.cardWords.level })}`,
               );
           }
           if (!values.json && out.verify) console.log(verifyLine(out.verify, shown(dir)));
@@ -272,11 +274,11 @@ function publishedLines(where, r) {
 
 /** After a publish that went live: the card its link shows. */
 function cardAfter(r, origin, { asked, shown: where }) {
-  if (r.card?.status === 'ok' && r.slug)
+  if (drawable(r.card) && r.slug)
     return `  its link's card: ${origin}/play/${r.slug}/card.png (a link shared before may keep its old card for a while: X and chat apps cache it)`;
   // without one (--no-card or gamesfun.json "card": false); a caller that makes its own card says its own
-  if (asked && r.card && r.card.status !== 'ok')
-    return `  its link shows a plain card (a gradient with the title): no usable preview picture (${CMD} card ${where} makes one)`;
+  if (asked && r.card && !drawable(r.card))
+    return `  its link shows a plain card (a gradient with the title): no preview picture xgames.fun can draw (${CMD} card ${where} makes one)`;
   return null;
 }
 
