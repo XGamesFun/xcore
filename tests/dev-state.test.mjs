@@ -10,7 +10,7 @@ import { createServer } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { createPlatformStore } from '../lib/dev/platform.mjs';
-import { takeInstallLock } from '../lib/dev/tools.mjs';
+import { LIVE_HOLD_MS, takeInstallLock } from '../lib/dev/tools.mjs';
 import { tempDir } from './helpers.mjs';
 
 test('the platform store: calls at once before the file is read share one load, so no write is lost', async t => {
@@ -60,10 +60,20 @@ test('the install lock: one a live process holds is waited on, then named', asyn
   mkdirSync(path.join(tmp.dir, '.installing'));
   writeFileSync(path.join(tmp.dir, '.installing', 'pid'), `${live.pid} ${os.hostname()}\n`);
   assert.throws(() => takeInstallLock(tmp.dir, { waitMs: 600 }), /another xcore is still installing/);
-  // (however old its lock: a live holder on this machine is never taken over, as a slow install's would be)
-  const longAgo = new Date(Date.now() - 3_600_000);
-  utimesSync(path.join(tmp.dir, '.installing'), longAgo, longAgo);
-  assert.throws(() => takeInstallLock(tmp.dir, { waitMs: 600 }), /another xcore is still installing/);
+  // (a slow install's lock, many times the wait old, is never taken over from its live holder on this machine; and
+  // the refusal says the way out)
+  const slow = new Date(Date.now() - 10 * 60_000);
+  utimesSync(path.join(tmp.dir, '.installing'), slow, slow);
+  assert.throws(
+    () => takeInstallLock(tmp.dir, { waitMs: 600 }),
+    /another xcore is still installing .*; if no other xcore is running, delete .*\.installing and run this again/,
+  );
+  // (past LIVE_HOLD_MS it is stale whoever holds it: a pid reused since, as after a restart, looks alive)
+  const reused = new Date(Date.now() - LIVE_HOLD_MS - 60_000);
+  utimesSync(path.join(tmp.dir, '.installing'), reused, reused);
+  const release = takeInstallLock(tmp.dir, { waitMs: 600 });
+  assert.equal(typeof release, 'function');
+  release();
   // a lock from an xcore before this one (no pid in it), new: waited on too
   const old = await tempDir();
   t.after(old.cleanup);
