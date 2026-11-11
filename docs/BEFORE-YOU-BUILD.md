@@ -119,5 +119,8 @@ Each trap is what was built, why it went wrong, and the question that would have
 ## Where this lives
 
 - This page is the reference. The skill in `skills/bring-your-own-game/` says the two habits in its first lines.
-- `@xgamesfun/solana` (the economy tools) is asked to raise the economy traps as checker warnings and to end
-  `xsolana explain` with the walk-through for the spec in front of it, so an agent sees them at the moment it decides.
+- `@xgamesfun/solana` 0.28.8 and later (the economy tools) raise the economy traps at the moment an agent decides:
+  `xsolana check` warns with W-REFUND-NOT-PAID, W-SWAP-BACK-OPEN, W-FREE-IS-PAID and W-MINSOLD-VS-SCENARIO (medium in
+  `xsolana review`), and W-TWO-PROMPTS and W-AFTER-THE-END (low). `xsolana explain` and the review's trade-offs end
+  with "Each route, state by state": the walk-through above, for the spec in front of it. Its skill's rule "Challenge
+  before you build" and its MCP server's instructions say the first habit.
