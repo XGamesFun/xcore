@@ -71,10 +71,9 @@ public class GamesFun : MonoBehaviour
 #endif
     }
 
-    /// <summary>The player's sign-in, from a button press (a window may open). how: "x" or "google". → the player JSON, or "null".</summary>
-    /// <summary>`how`: "x" or "google". `stay`: true never leaves the page (a window instead), false always signs in in
-    /// this tab; left out, a phone's sign-in takes the tab to X and back (the game starts again, signed in) and a
-    /// computer's opens a window.</summary>
+    /// <summary>The player's sign-in, from a button press. → the player JSON, or "null". `how`: "x" or "google".
+    /// `stay`: true never leaves the page (a window instead); left out (or false), on the game's own link the tap takes
+    /// the tab to X and back, and the game starts again, signed in (framed by another site: a window).</summary>
     public static Task<string> SignIn(string how = "x", bool? stay = null) =>
         Call("signIn", "[{\"how\":" + Str(how) + (stay.HasValue ? ",\"stay\":" + (stay.Value ? "true" : "false") : "") + "}]");
     public static Task<string> SignOut() => Call("signOut", "[]");

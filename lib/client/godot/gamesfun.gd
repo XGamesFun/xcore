@@ -5,8 +5,9 @@
 # the game plays on. Export for the Web with Thread Support off: xgames.fun pages are not cross-origin isolated.
 #
 #   var player = await GamesFun.sign_in()          # from a button press: the player signs in -> Dictionary or null
-#                                                  # (on a phone the tab goes to X and back, and the game starts again
-#                                                  # signed in: GamesFun.sign_in("x", true) stays, with a window)
+#                                                  # (on the game's own link the tab goes to X and back, and the game
+#                                                  # starts again signed in: GamesFun.sign_in("x", true) stays, with a
+#                                                  # window; a returning player is signed in as the page loads)
 #   GamesFun.player_changed.connect(func(p): ...)  # sign-in and sign-out (p: Dictionary or null)
 #   GamesFun.sign_in_code.connect(func(c): ...)    # {code, site, url, window}: show it when window is false
 #                                                  # (no window opened, and the page drew no sign-in panel of its own)
@@ -127,8 +128,8 @@ func _run(path: String, args: Array):
 
 
 ## The player's sign-in, from a button press (a window may open). how: "x" or "google". -> Dictionary or null
-## `how`: "x" or "google". `stay`: true never leaves the page (a window instead), false always signs in in this tab;
-## left out, a phone's sign-in takes the tab to X and back (the game starts again, signed in) and a computer's opens a window.
+## `how`: "x" or "google". `stay`: true never leaves the page (a window instead); left out (or false), on the game's
+## own link the tap takes the tab to X and back, and the game starts again, signed in (framed by another site: a window).
 func sign_in(how := "x", stay = null):
 	var opts = {"how": how}
 	if stay != null:

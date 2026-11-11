@@ -23,7 +23,6 @@ async function game(dir) {
     path.join(dir, 'index.html'),
     `<!doctype html><html><head><script src="./gamesfun.js"></script></head><body>
      <button id="in" onclick="window.signedIn = GamesFun.signIn()">Sign in</button>
-     <button id="leave" onclick="window.signedIn = GamesFun.signIn({ stay: false })">Sign in, this tab</button>
      <script>window.changes = []; GamesFun.onChange(p => changes.push(p));</script></body></html>`,
   );
   await writeFile(path.join(dir, 'gamesfun.js'), await readFile(path.join(ROOT, 'lib', 'client', 'gamesfun.js')));
@@ -38,6 +37,15 @@ const freePort = () =>
       s.close(() => resolve(port));
     });
   });
+/** A click on Sign in: the tab goes to the dev host's stand-in for X and back, and the game starts again signed in. */
+async function tap(page, how = 'click') {
+  await page.evaluate(() => {
+    window.sameDocument = true;
+  });
+  await page[how]('#in');
+  await page.waitForFunction(() => !window.sameDocument && window.GamesFun && GamesFun.player);
+  return page.evaluate(() => GamesFun.player);
+}
 const http = async (url, init) => {
   const r = await fetch(url, { redirect: 'manual', ...init });
   const text = await r.text();
@@ -134,13 +142,11 @@ test(
     for (const p of [a, b]) await p.goto(dev.url);
     assert.equal(await a.evaluate(() => GamesFun.ready), null, 'a first visit: nobody');
     await a.waitForFunction(() => GamesFun.signInClient);
-    assert.deepEqual(await a.evaluate(() => GamesFun.signInClient), { version: '1.0.0', shared: true });
+    assert.deepEqual(await a.evaluate(() => GamesFun.signInClient), { version: '1.1.0', shared: true });
 
-    // two tabs of one browser: two players, as before
-    await a.click('#in');
-    await b.click('#in');
-    const ana = await a.evaluate(() => window.signedIn),
-      bo = await b.evaluate(() => window.signedIn);
+    // two tabs of one browser: two players, as before (each click goes round the dev host's stand-in for X)
+    const ana = await tap(a),
+      bo = await tap(b);
     assert.ok(ana.dev && bo.dev && ana.id !== bo.id);
 
     // a reload: the same player, there when gf.ready answers
@@ -167,13 +173,12 @@ test(
     assert.equal(await b.evaluate(() => GamesFun.player.id), bo.id);
 
     // a click signs in again: the same tab's player
-    await a.click('#in');
-    assert.equal((await a.evaluate(() => window.signedIn)).id, ana.id);
+    assert.equal((await tap(a)).id, ana.id);
   },
 );
 
 test(
-  "gamesfun.js under xcore dev: a sign-in that takes the tab away and back (a phone's) starts the game again, signed in",
+  'gamesfun.js under xcore dev: a sign-in takes the tab away and back, as on the game’s own link, and the game starts again',
   { skip: noChrome, timeout: 120_000 },
   async t => {
     const tmp = await tempDir();
@@ -185,27 +190,18 @@ test(
     const browser = await chromium.launch({ executablePath: (await ensureBrowser({})).path });
     t.after(() => browser.close());
 
-    // on a computer, asked for with {stay: false}
+    // on a computer, what Sign in does: back at the address it left, without its fragment
     const page = await browser.newPage();
-    await page.goto(`${dev.url}?level=2`);
-    await page.evaluate(() => {
-      window.sameDocument = true;
-    });
-    await page.click('#leave');
-    await page.waitForFunction(() => !window.sameDocument && window.GamesFun && GamesFun.player);
-    assert.equal(new URL(page.url()).search, '?level=2', 'back at the address it left');
+    await page.goto(`${dev.url}?level=2#menu`);
+    await tap(page);
+    assert.deepEqual([new URL(page.url()).search, new URL(page.url()).hash], ['?level=2', ''], 'back at the address');
     assert.equal((await page.evaluate(() => GamesFun.ready)).id, await page.evaluate(() => GamesFun.player.id));
     assert.equal(await page.evaluate(() => GamesFun.signInEnded), null);
 
-    // on a phone it is what Sign in does
+    // and on a phone
     const phone = await (await browser.newContext({ ...devices['Pixel 7'] })).newPage();
     await phone.goto(dev.url);
-    await phone.evaluate(() => {
-      window.sameDocument = true;
-    });
-    await phone.tap('#in');
-    await phone.waitForFunction(() => !window.sameDocument && window.GamesFun && GamesFun.player);
-    assert.ok((await phone.evaluate(() => GamesFun.player.id)).startsWith('dev:'));
+    assert.ok((await tap(phone, 'tap')).id.startsWith('dev:'));
     // and a game that must not start again stays, signed in by the dev host with no window
     await phone.evaluate(() => GamesFun.signOut());
     await phone.evaluate(() => {

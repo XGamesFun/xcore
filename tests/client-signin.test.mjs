@@ -226,8 +226,11 @@ function chrome() {
 }
 after(async () => (await launched)?.close());
 
-/** A browser of its own (cookies, storage) and a stand-in. `remembered`: xgames.fun's cookie is in it already. */
-async function world(t, options = {}, { remembered = true, noWindow = false } = {}) {
+/**
+ * A browser of its own (cookies, storage) and a stand-in. `remembered`: xgames.fun's cookie is in it already. `stay`:
+ * the game asks that a sign-in never leave its page (GAMESFUN_SIGNIN_STAY), so it signs in by the window.
+ */
+async function world(t, options = {}, { remembered = true, noWindow = false, stay = false } = {}) {
   const g = await standIn(options);
   t.after(g.close);
   const ctx = await (await chrome()).newContext();
@@ -239,6 +242,10 @@ async function world(t, options = {}, { remembered = true, noWindow = false } = 
   if (noWindow)
     await ctx.addInitScript(() => {
       window.open = () => null;
+    });
+  if (stay)
+    await ctx.addInitScript(() => {
+      window.GAMESFUN_SIGNIN_STAY = true;
     });
   const own = `http://moth-play.xgames.test:${g.port}/`;
   const open = async (url = own) => {
@@ -258,6 +265,18 @@ async function clickSignIn(page, s) {
   s.approved = false;
   return { player, win };
 }
+/**
+ * A click on the game's Sign in on its own link: the tab goes to xgames.fun (X says yes there) and comes back, and the
+ * game starts again signed in. → the player, as the page that came back has them
+ */
+async function tapSignIn(page) {
+  await page.evaluate(() => {
+    window.sameDocument = true;
+  });
+  await page.click('#in');
+  await page.waitForFunction(() => !window.sameDocument && window.GamesFun && GamesFun.player);
+  return page.evaluate(() => GamesFun.player);
+}
 const within = (ms, p) => `Promise.race([${p}, new Promise(r => setTimeout(() => r('still waiting'), ${ms}))])`;
 const state = page => page.evaluate(() => ({ id: GamesFun.player?.id ?? null, token: GamesFun.token }));
 const tabs = ctx => ctx.pages().length;
@@ -266,31 +285,35 @@ test(
   'a player who signed in to the game before is signed in with no click: after a reload, and in a new tab',
   { skip, timeout: 60_000 },
   async t => {
-    const { s, ctx, open, g } = await world(t);
+    const { s, ctx, open, g, own } = await world(t);
     const page = await open();
-    // a first visit: xgames.fun is asked, says nobody (the player never clicked Sign in here), and nothing waits on it
+    // a first visit: xgames.fun is asked, and says nobody (the player never signed in to this game here)
     assert.equal(await page.evaluate(() => GamesFun.ready), null);
     await page.waitForFunction(() => GamesFun.signInClient);
-    while (!s.sessions.length) await page.waitForTimeout(20);
     assert.deepEqual(s.sessions, [{ origin: `http://moth-play.xgames.test:${g.port}`, cookie: 'p1', slug: 'moth' }]);
     assert.deepEqual(await state(page), { id: null, token: '' });
 
-    const { player } = await clickSignIn(page, s);
-    assert.equal(player.id, 'x:42');
-    assert.equal(tabs(ctx), 1, 'the window closed');
+    // on a computer too, the click takes this tab to X and back, and the game starts again signed in
+    assert.equal((await tapSignIn(page)).id, 'x:42');
+    assert.deepEqual(
+      s.begins.map(b => [b.with, b.back]),
+      [['x', own]],
+    );
+    assert.equal(tabs(ctx), 1, 'no window');
+    assert.deepEqual(await state(page), { id: 'x:42', token: 'tok-s1' });
 
     // a reload: the tab kept the token, so the player is there when gf.ready answers, and nobody was asked
     const asked = s.sessions.length;
     await page.reload();
     assert.equal((await page.evaluate(() => GamesFun.ready)).id, 'x:42');
-    assert.deepEqual(await state(page), { id: 'x:42', token: 'tok-own' });
+    assert.deepEqual(await state(page), { id: 'x:42', token: 'tok-s1' });
     assert.equal((await page.evaluate(() => changes))[0].id, 'x:42', 'said to gf.onChange, as a click is');
     assert.equal(s.sessions.length, asked, 'the kept token needed no question');
 
     // a new tab keeps nothing: xgames.fun is asked, with its cookie, and answers with a token for this game
     const tab = await open();
     assert.equal((await tab.evaluate(() => GamesFun.ready)).id, 'x:42', 'gf.ready waited for it');
-    assert.deepEqual(await state(tab), { id: 'x:42', token: 'tok-s1' });
+    assert.deepEqual(await state(tab), { id: 'x:42', token: 'tok-s2' });
     assert.equal((await tab.evaluate(() => changes)).length, 1);
     assert.deepEqual(s.sessions.at(-1), {
       origin: `http://moth-play.xgames.test:${g.port}`,
@@ -298,26 +321,23 @@ test(
       slug: 'moth',
     });
     assert.equal(tabs(ctx), 2, 'no window opened');
-    assert.deepEqual(s.requests, [{ slug: 'moth', with: 'x' }], 'and no sign-in request but the one click');
-    assert.deepEqual(await tab.evaluate(() => GamesFun.signInClient), { version: '1.0.0', shared: true });
+    assert.deepEqual(s.requests, [], 'and no sign-in request: the click went to X and back');
+    assert.deepEqual(await tab.evaluate(() => GamesFun.signInClient), { version: '1.1.0', shared: true });
   },
 );
 
 test(
-  "a first visit waits for nothing: gf.ready answers before xgames.fun's client or its answer comes",
+  "a first visit waits a moment at most: gf.ready answers with xgames.fun's answer, not its slow client",
   { skip, timeout: 60_000 },
   async t => {
     // the client's address answers after 3 s: the page starts with the client it carries, a second in
     const { s, open } = await world(t, { sharedWait: 3000 });
+    s.clicked.add('moth');
     const page = await open();
-    assert.equal(await page.evaluate(() => GamesFun.ready), null);
-    assert.ok((await page.evaluate(() => window.readyAt)) < 800, 'gf.ready did not wait for the address');
-    assert.equal(await page.evaluate(() => window.clientAtReady), null, 'no client was chosen yet');
-    // a click cannot wait either: the carried client answers it
-    const { player } = await clickSignIn(page, s);
-    assert.equal(player.id, 'x:42');
-    assert.deepEqual(await page.evaluate(() => GamesFun.signInClient), { version: '1.0.0', shared: false });
-    await page.waitForTimeout(3200);
+    assert.equal((await page.evaluate(() => GamesFun.ready)).id, 'x:42', 'the player xgames.fun names');
+    assert.ok((await page.evaluate(() => window.readyAt)) < 1800, 'gf.ready did not wait for the address');
+    assert.deepEqual(await page.evaluate(() => window.clientAtReady), { version: '1.1.0', shared: false });
+    await page.waitForTimeout(2500);
     assert.equal((await page.evaluate(() => GamesFun.signInClient)).shared, false, 'chosen once a page');
     assert.equal(s.seen.filter(l => l.endsWith(SIGNIN_PATH)).length, 1, 'asked for once');
   },
@@ -330,16 +350,17 @@ test(
     // a token that ends 5 minutes and 10.5 seconds from now is renewed in 10.5 s (five minutes before its end)
     const { s, ctx, open, g } = await world(t, { ttl: 300e3 + 10_500 });
     const page = await open();
-    await clickSignIn(page, s);
+    await tapSignIn(page);
     const first = await page.evaluate(() => GamesFun.expires);
+    assert.equal(await page.evaluate(() => GamesFun.token), 'tok-s1');
     s.ttl = 3600e3;
-    await page.waitForFunction(() => GamesFun.token === 'tok-s1', null, { timeout: 20_000 });
+    await page.waitForFunction(() => GamesFun.token === 'tok-s2', null, { timeout: 20_000 });
     assert.equal(await page.evaluate(() => GamesFun.player.id), 'x:42');
     assert.ok((await page.evaluate(() => GamesFun.expires)) > first + 3000e3, 'a new hour');
     assert.equal((await page.evaluate(() => changes)).at(-1).id, 'x:42', 'the game hears of the new token');
     assert.equal(
       await page.evaluate(() => JSON.parse(sessionStorage.getItem('gamesfun:moth:signin')).s.token),
-      'tok-s1',
+      'tok-s2',
     );
     assert.equal(tabs(ctx), 1, 'no window');
 
@@ -365,7 +386,7 @@ test(
   async t => {
     const { s, open, g } = await world(t);
     const page = await open();
-    await clickSignIn(page, s);
+    await tapSignIn(page);
     await page.evaluate(() => GamesFun.signOut());
     assert.deepEqual(await state(page), { id: null, token: '' });
     while (!s.forgets.length) await page.waitForTimeout(20);
@@ -377,7 +398,11 @@ test(
         type: 'application/json',
       },
     ]);
-    assert.equal(await page.evaluate(() => sessionStorage.getItem('gamesfun:moth:signin')), null, 'the token is gone');
+    assert.equal(
+      await page.evaluate(() => JSON.parse(sessionStorage.getItem('gamesfun:moth:signin')).s),
+      null,
+      'the token is gone (what is left is when this tab asked xgames.fun)',
+    );
 
     const asked = s.sessions.length;
     await page.reload();
@@ -387,8 +412,9 @@ test(
     await tab.waitForTimeout(300);
     assert.equal(s.sessions.length, asked, 'xgames.fun is not even asked');
 
-    // a click signs in again, and from then on the next load does too
-    assert.equal((await clickSignIn(tab, s)).player.id, 'x:42');
+    // a click signs in again (the player's own, so the page asks though they signed out here), and from then on the
+    // next load does too
+    assert.equal((await tapSignIn(tab)).id, 'x:42');
     await tab.reload();
     assert.equal((await tab.evaluate(() => GamesFun.ready)).id, 'x:42');
     const other = await open();
@@ -403,7 +429,7 @@ test(
     const { s, open } = await world(t);
     s.forgetStatus = 500; // xgames.fun does not take it (down, or older than this client)
     const page = await open();
-    await clickSignIn(page, s);
+    await tapSignIn(page);
     const tab = await open();
     assert.equal((await tab.evaluate(() => GamesFun.ready)).id, 'x:42');
     await page.evaluate(() => GamesFun.signOut());
@@ -426,7 +452,7 @@ test(
   async t => {
     const { s, open, g } = await world(t);
     const page = await open();
-    await clickSignIn(page, s);
+    await tapSignIn(page);
     // another game, on the same site: its own page asks only for itself…
     const evil = await open(`http://evil-play.xgames.test:${g.port}/`);
     assert.equal(await evil.evaluate(() => GamesFun.ready), null);
@@ -459,17 +485,21 @@ test(
       `http://xgames.test:${g.port}`,
     );
     assert.ok(s.clicked.has('moth'));
-    // what this game's tab kept is its own origin's: another game's page reads none of it
-    assert.deepEqual(await evil.evaluate(() => [sessionStorage.length, localStorage.getItem('gamesfun:moth:signed')]), [
-      0,
-      null,
-    ]);
+    // what this game's tab kept is its own origin's: another game's page reads none of it (only its own questions)
+    assert.deepEqual(
+      await evil.evaluate(() => [
+        Object.keys(sessionStorage),
+        localStorage.getItem('gamesfun:moth:signed'),
+        sessionStorage.getItem('gamesfun:moth:signin'),
+      ]),
+      [['gamesfun:evil:signin'], null, null],
+    );
     assert.equal(await page.evaluate(() => localStorage.getItem('gamesfun:moth:signed')), '"in"');
   },
 );
 
 test(
-  'framed by another site: xgames.fun is not asked; in a post on X a reload keeps the sign-in until the token ends',
+  'framed by another site: asked with no tap, as xgames.fun allows; in a post on X a reload keeps the sign-in',
   { skip, timeout: 60_000 },
   async t => {
     const { s, ctx, open, g } = await world(t);
@@ -477,9 +507,14 @@ test(
     const framing = await open(`http://evil.test:${g.port}/`);
     const inside = await (await framing.waitForSelector('#g')).contentFrame();
     await inside.waitForFunction(() => window.GamesFun);
-    assert.equal(await inside.evaluate(() => GamesFun.ready), null, 'the framing page gets a signed-out game');
-    await inside.waitForTimeout(300);
-    assert.equal(s.sessions.length, 0, 'nobody asked');
+    await inside.evaluate(() => GamesFun.ready);
+    await inside.waitForFunction(() => GamesFun.signInClient);
+    // the game's own origin asks, as it would in its own tab; this stand-in's cookie (SameSite=Lax) is not sent from
+    // inside another site, so it names nobody, and the framing page gets a signed-out game
+    while (!s.sessions.length) await inside.waitForTimeout(20);
+    assert.deepEqual(s.sessions, [{ origin: `http://moth-play.xgames.test:${g.port}`, cookie: null, slug: 'moth' }]);
+    assert.equal(await inside.evaluate(() => GamesFun.player), null);
+    assert.equal(await inside.evaluate(() => GamesFun.signInLink()), '', 'a frame cannot take the tab to X');
     await framing.close();
 
     // a post on X: the player signs in by a click, in the window; a reload of the post keeps it
@@ -498,7 +533,7 @@ test(
     await frame.waitForFunction(() => window.GamesFun);
     assert.equal((await frame.evaluate(() => GamesFun.ready)).id, 'x:42');
     assert.equal(await frame.evaluate(() => GamesFun.token), 'tok-own');
-    assert.equal(s.sessions.length, 0, 'still nobody asked');
+    assert.equal(s.sessions.length, 2, 'asked as the post first loaded, not again for the kept token');
     assert.equal(tabs(ctx), 1, 'no window');
     // X's page reads nothing of the frame: it is another origin's
     assert.equal(await post.evaluate(() => sessionStorage.length + localStorage.length), 0);
@@ -515,7 +550,7 @@ test(
     assert.equal(await page.evaluate(() => GamesFun.slug), 'moth');
     assert.equal(await page.evaluate(() => GamesFun.ready), null);
     assert.equal((await clickSignIn(page, s)).player.id, 'x:42');
-    assert.deepEqual(await page.evaluate(() => GamesFun.signInClient), { version: '1.0.0', shared: false });
+    assert.deepEqual(await page.evaluate(() => GamesFun.signInClient), { version: '1.1.0', shared: false });
     assert.deepEqual(
       await page.evaluate(() => [sessionStorage.length, localStorage.length]),
       [0, 0],
@@ -535,10 +570,10 @@ test(
   async t => {
     const { s, open, g } = await world(t);
     const page = await open();
-    await clickSignIn(page, s);
-    s.valid.delete('tok-own'); // its key was replaced
+    await tapSignIn(page);
+    s.valid.delete('tok-s1'); // its key was replaced
     await page.reload();
-    await page.waitForFunction(() => GamesFun.token === 'tok-s1');
+    await page.waitForFunction(() => GamesFun.token === 'tok-s2');
     assert.equal((await state(page)).id, 'x:42');
 
     const domain = await open(`http://play.mygame.test:${g.port}/`);
@@ -557,7 +592,7 @@ test(
   async t => {
     const { s, open } = await world(t, { ttl: 300e3 + 10_500 });
     const a = await open();
-    await clickSignIn(a, s);
+    await tapSignIn(a);
     const b = await open();
     await b.evaluate(() => GamesFun.ready);
     s.ttl = 3600e3;
@@ -592,15 +627,20 @@ for (const [name, options] of Object.entries(VARIANTS))
       const page = await open();
       assert.equal(await page.evaluate(() => GamesFun.ready), null);
       await page.waitForFunction(() => GamesFun.signInClient);
-      assert.deepEqual(await page.evaluate(() => GamesFun.signInClient), { version: '1.0.0', shared: false });
-      assert.equal((await clickSignIn(page, s)).player.id, 'x:42');
+      assert.deepEqual(await page.evaluate(() => GamesFun.signInClient), { version: '1.1.0', shared: false });
+      assert.equal((await tapSignIn(page)).id, 'x:42');
+      assert.deepEqual(await page.evaluate(() => GamesFun.signInClient), { version: '1.1.0', shared: false });
       const tab = await open();
       assert.equal(
         (await tab.evaluate(() => GamesFun.ready)).id,
         'x:42',
         'no click in a new tab, as with the served one',
       );
-      assert.equal(s.seen.filter(l => l.endsWith(SIGNIN_PATH)).length, 2, 'asked once a page');
+      assert.equal(
+        s.seen.filter(l => l.endsWith(SIGNIN_PATH)).length,
+        3,
+        'asked once a page (and the one it came back to)',
+      );
     },
   );
 
@@ -609,17 +649,18 @@ test(
   { skip, timeout: 60_000 },
   async t => {
     // a later version of the client, served at the address: the game was not published again
-    const later = SHARED.replace("var VERSION = '1.0.0';", "var VERSION = '9.9.9';");
+    const later = SHARED.replace("var VERSION = '1.1.0';", "var VERSION = '9.9.9';");
     assert.notEqual(later, SHARED);
     const { s, open, g } = await world(t, { shared: later, csp: true });
     const page = await open();
     assert.equal(await page.evaluate(() => GamesFun.ready), null);
     await page.waitForFunction(() => GamesFun.signInClient);
     assert.deepEqual(await page.evaluate(() => GamesFun.signInClient), { version: '9.9.9', shared: true });
-    assert.equal((await clickSignIn(page, s)).player.id, 'x:42');
+    assert.equal((await tapSignIn(page)).id, 'x:42');
+    assert.deepEqual(await page.evaluate(() => GamesFun.signInClient), { version: '9.9.9', shared: true });
     const tab = await open();
     assert.equal((await tab.evaluate(() => GamesFun.ready)).id, 'x:42');
-    assert.equal((await state(tab)).token, 'tok-s1');
+    assert.equal((await state(tab)).token, 'tok-s2');
     assert.deepEqual(await tab.evaluate(() => window.blocked), [], 'nothing the policy refused');
     assert.deepEqual(await page.evaluate(() => window.blocked), []);
     // asked of the game's own host, and of no other
@@ -627,7 +668,7 @@ test(
       [...new Set(s.seen.filter(l => l.endsWith(SIGNIN_PATH)))],
       [`GET moth-play.xgames.test${SIGNIN_PATH}`],
     );
-    assert.equal(g.s.requests.length, 1);
+    assert.equal(g.s.requests.length, 0);
   },
 );
 
@@ -652,10 +693,10 @@ const press = (page, text) =>
   }, text);
 
 test(
-  'no window opens (an app’s browser, a blocker): one link to tap, the code only when asked for, closed by itself',
+  'a game that stays, where no window opens (a blocker): one link to tap, the code only when asked for, closed by itself',
   { skip, timeout: 60_000 },
   async t => {
-    const { s, ctx, open, g } = await world(t, {}, { noWindow: true });
+    const { s, ctx, open, g } = await world(t, {}, { noWindow: true, stay: true });
     const page = await open();
     await page.evaluate(() => GamesFun.ready);
     assert.equal(await panelOf(page), null, 'nothing before the click');
@@ -726,6 +767,7 @@ test(
     const off = await ctx.newPage();
     await off.addInitScript(() => {
       window.GAMESFUN_SIGNIN_PANEL = false;
+      window.GAMESFUN_SIGNIN_STAY = true;
     });
     await off.goto(`http://moth-play.xgames.test:${g.port}/`);
     await off.evaluate(() => GamesFun.ready);
@@ -740,7 +782,7 @@ test(
   'the player closed the sign-in window: the next click opens it again, on the same request',
   { skip, timeout: 60_000 },
   async t => {
-    const { s, open } = await world(t);
+    const { s, open } = await world(t, {}, { stay: true });
     const page = await open();
     await page.evaluate(() => GamesFun.ready);
     let popup = page.waitForEvent('popup');
@@ -896,19 +938,9 @@ test(
 );
 
 test(
-  'the tab stays where a sign-in could not come back signed in: a computer, a frame, the game’s own domain, {stay: true}',
+  'the tab stays where a sign-in could not come back signed in: a frame, the game’s own domain, {stay: true}',
   { skip, timeout: 60_000 },
   async t => {
-    // a computer: the window, and the game keeps running
-    const desk = await world(t);
-    const page = await desk.open();
-    await page.evaluate(() => {
-      window.sameDocument = true;
-    });
-    assert.equal((await clickSignIn(page, desk.s)).player.id, 'x:42');
-    assert.equal(await page.evaluate(() => window.sameDocument), true);
-    assert.equal(desk.s.begins.length, 0);
-
     const { s, ctx, open, g } = await phone(t);
     // a phone, on the game's own domain (another site: it could not ask xgames.fun on its way back): the window
     const domain = await open(`http://play.mygame.test:${g.port}/`);

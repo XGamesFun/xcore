@@ -48,13 +48,11 @@ function client({
   where = 'edge',
   framed = false,
   stay = false,
-  handheld = true,
   href = 'https://moth-play.xgames.fun/gf/mp/?room=AB12',
 } = {}) {
   const kept = { value: null },
     moved = [];
   globalThis.location = { href, assign: u => moved.push(u) };
-  globalThis.matchMedia = () => ({ matches: handheld });
   const state = { player: null, token: '', expires: 0 };
   const host = {
     v: 1,
@@ -65,6 +63,8 @@ function client({
     panel: false,
     stay,
     returned: null,
+    // gamesfun.js hands over this page's address with no fragment
+    back: () => href.replace(/#.*$/, ''),
     tab: null,
     ask: null,
     state: () => state,
@@ -78,11 +78,11 @@ function client({
 
 test("a page that draws the provider's button itself gets the address of a real link, only where a sign-in takes the tab to X", async t => {
   const { default: signin } = await import('../lib/client/signin-v1.js');
-  const saved = { location: globalThis.location, matchMedia: globalThis.matchMedia };
+  const saved = { location: globalThis.location };
   t.after(() => Object.assign(globalThis, saved));
   const begin =
     'https://xgames.fun/api/player/v1/x/begin?slug=moth&back=https%3A%2F%2Fmoth-play.xgames.fun%2Fgf%2Fmp%2F%3Froom%3DAB12';
-  // a phone, on the game's own link: the link, for X and for Google
+  // the top window of the game's own link (a phone or a computer): the link, for X and for Google
   let c = client();
   let d = signin(c.host);
   assert.equal(d.link({ how: 'x' }), begin);
@@ -94,18 +94,21 @@ test("a page that draws the provider's button itself gets the address of a real 
   assert.ok(c.kept.value.b.at > Date.now() - 1000);
   d.signOut(); // (the sign-in would wait ten minutes for its answer: ended here)
   assert.equal(c.kept.value, null);
-  // a word left in the address by a sign-in that came back with nobody is not sent round again
-  c = client({ href: 'https://moth-play.xgames.fun/#gf-signin=cancelled' });
-  assert.match(signin(c.host).link({}), /&back=https%3A%2F%2Fmoth-play\.xgames\.fun%2F$/);
+  // the address it comes back to has no fragment at all (a word left by a sign-in that came back with nobody, the
+  // game's own)
+  for (const hash of ['#gf-signin=cancelled', '#lobby'])
+    assert.match(
+      signin(client({ href: `https://moth-play.xgames.fun/${hash}` }).host).link({}),
+      /&back=https%3A%2F%2Fmoth-play\.xgames\.fun%2F$/,
+    );
   // without a link, the same sign-in moves the tab itself, from inside the click
   c = client();
   d = signin(c.host);
   d.signIn({ how: 'google' });
   assert.deepEqual(c.moved, [begin.replace('/x/begin', '/google/begin')]);
   d.signOut();
-  // nowhere else: a computer, a frame on another site, the game's own domain, a host games share, a page that stays
+  // nowhere else: a frame, the game's own domain, a host games share, a page that stays
   for (const [name, options, opts] of [
-    ['a computer', { handheld: false }, {}],
     ['a frame', { framed: true }, {}],
     ["the game's own domain", { where: 'domain' }, {}],
     ['a host games share', { where: 'path' }, {}],
@@ -113,5 +116,4 @@ test("a page that draws the provider's button itself gets the address of a real 
     ['a call that stays', {}, { stay: true }],
   ])
     assert.equal(signin(client(options).host).link(opts), '', name);
-  assert.equal(signin(client({ handheld: false }).host).link({ stay: false }), begin, 'asked for, on a computer too');
 });
