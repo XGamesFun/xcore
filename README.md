@@ -559,8 +559,12 @@ whoever can read it controls the project: keep it outside the game's folder and 
 a repository, and `xcore publish` refuses to upload one), back it up like a password, and never paste it anywhere.
 Unless `xsolana.json` names a `treasury`, what the economy earns for you lands at the key's address. A key file signs
 each transaction exactly as it was shown and needs no page; to sign in a browser wallet anyway, ask for the page:
-`xcore loot approve --browser`. With no `XSOLANA_RPC_URL`, `approve` sends through Solana's public devnet RPC, not the
-shared relay: the relay passes only loot's own transactions, and a setup also makes mints and token accounts.
+`xcore loot approve --browser`.
+
+The economy's reads go through xgames.fun's shared relay; going live does not, because the relay passes only loot's
+own transactions and a setup also makes mints and token accounts. So `approve` sends through `XSOLANA_RPC_URL` when
+it is set, else through Solana's public devnet RPC. Where that one refuses you (it limits each address, and some
+networks block it), set `XSOLANA_RPC_URL` in `.env` to a devnet RPC of your own.
 
 **When loot is upgraded.** This package pins the tools for one build of loot (0.27.0, on devnet since 2026-11-11). loot is upgraded in place on
 devnet. 0.26.1 and 0.27.0 left every account of 0.26.0 as it was, so an economy that went live under 0.26 stays live;

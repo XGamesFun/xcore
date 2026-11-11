@@ -42,7 +42,8 @@ The file is ${ECONOMY_FILE} (loot.json in a game made before it was named so). I
 else xgames.fun's shared devnet RPC. Published, the page uses the shared relay, which counts every call toward the game's
 plan, unless the game brings its own RPC: ${CMD} add rpc (docs/SERVER.md, "The economy's own RPC"). Going live
 (approve) sends through XSOLANA_RPC_URL when it is set, else through Solana's public devnet RPC: the shared relay
-passes only loot's own transactions, and a setup also makes mints and token accounts.`;
+passes only loot's own transactions, and a setup also makes mints and token accounts. Where the public RPC refuses
+you, set XSOLANA_RPC_URL to a devnet RPC of your own.`;
 
 const ADD_USAGE = `Usage: xcore loot add [game] [--json]
 
