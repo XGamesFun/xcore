@@ -2,6 +2,11 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.8.1 — 2026-11-11
+
+`@xgamesfun/solana` 0.28.6: `xcore loot approve` on mainnet opens its printout with a line saying it moves real SOL and
+real tokens, and its code starts with `mainnet-`, so sending takes typing it. Devnet is as before.
+
 ## 0.8.0 — 2026-11-11
 
 **A game's economy on mainnet.** loot runs on mainnet too, at an address of its own

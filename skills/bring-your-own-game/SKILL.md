@@ -172,7 +172,8 @@ machine, after their yes, and you open no signing page: `xcore loot keygen ~/.co
 key for a new economy (it prints the address, which they send the devnet SOL `xcore loot cost` names, with any coin
 or NFT the setup takes from them); `xcore loot approve --keypair <that file>`, in the folder with `xsolana.json`,
 prints everything it would send, with a code, and sends nothing; you run it again with `--yes <code>` only after
-they have read that printout and said yes. The key file owns the project, for good: every later change is signed by
+they have read that printout and said yes. On mainnet the printout opens with "MAINNET: … real SOL" and the code
+starts with `mainnet-`: read that first line to them too. The key file owns the project, for good: every later change is signed by
 it, and nothing restores a lost one. Never open, print or copy it, never keep it in the game's folder, and say all
 of this to the person once, with where what the economy earns lands (the key's address, unless `xsolana.json` names
 a `treasury`: ask for a wallet address of theirs first). An economy that is already live is changed only by the key

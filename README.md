@@ -693,6 +693,10 @@ xcore loot approve --keypair ~/.config/xsolana/my-game.json      # in the folder
 xcore loot approve --keypair ~/.config/xsolana/my-game.json --yes <code>   # sends exactly that
 ```
 
+On mainnet (the economy's `xsolana.json` says `"network": "mainnet"`) the printout opens with a line saying it is real
+SOL and real tokens, and its code starts with `mainnet-` (`--yes mainnet-1a2b3c4d`): typing it back is a step beyond
+the file's own word.
+
 Send the address `keygen` prints the devnet SOL `xcore loot cost` names (and any coin or NFT the setup takes from
 you: it must be at that address first). The key file is the project's owner, for good: whoever can read it controls
 the project, every later change is signed by it, and nothing restores a lost one. Keep it outside the game's folder
