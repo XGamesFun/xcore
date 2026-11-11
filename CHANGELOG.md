@@ -2,12 +2,13 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.8.0 — 2026-11-11
 
 **A game's economy on mainnet.** loot runs on mainnet too, at an address of its own
 (`xgames8C758PyweWB9sDw8evvwsTVwyA2fGRUeAXVPy`; devnet keeps `xgamesVsZBpCVgJuatfYAFJRmQoccfQf5qtUFNp2Eet`). An economy
 is on devnet unless its `xsolana.json` says `"network": "mainnet"`, where it is real money; loot is not independently
-audited. `@xgamesfun/solana` 0.28.3.
+audited. `@xgamesfun/solana` 0.28.4, which also fixes `claims()` behind the play host's relay (a player's refunds
+were not listed).
 
 - The RPC follows the economy's cluster (`lib/solana-rpc.mjs`: `solanaRpc(env, {cluster})`, `economyCluster(dir)`):
   xgames.fun's relay with `?cluster=mainnet` for a mainnet economy, and a setting that names the other cluster is not
