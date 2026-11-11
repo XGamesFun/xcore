@@ -320,68 +320,59 @@ xcore secret set XSOLANA_RPC_URL         # the RPC's URL with its key: the serve
 - The server's entry, where `api/rpc` runs, may call only `backend.json`'s origins: `xcore add rpc` adds the RPC's
   (`https://host` alone, never the key) when `XSOLANA_RPC_URL` is in `.dev.vars` or `.env`, and publish says when it
   is missing.
-- Solana's public `https://api.devnet.solana.com` refuses calls from Cloudflare ("Your IP or provider is blocked",
-  measured 2026-11-03): use a provider's URL.
+- Solana's public `https://api.devnet.solana.com` refuses calls from Cloudflare ("Your IP or provider is blocked"):
+  use a provider's URL.
 - Under `xcore dev`, put `XSOLANA_RPC_URL` in `.dev.vars` to run this path; in `.env` it is the dev server's own
   `/loot/v1/rpc` forward, the path a published page without `api/rpc` takes.
 
-### How much your server can check
+### What a payout rests on
 
-A result is worth paying only as far as the server can tell it happened. Strongest first:
+A payout is worth what a cheater can't fake about it. This is lenses 5 and 3 of
+[BEFORE-YOU-BUILD.md](BEFORE-YOU-BUILD.md) applied to every route that pays, in three steps.
+
+**1. Where each input is held.** For each paid route, list every input that decides who is paid, how much and for
+which round, and where it comes from: the chain, state your server keeps, or the request. Whatever the request decides,
+a cheater decides. A page alone can't prove a score or a win (anyone can change it in the console), so the result
+itself rests on how much the server checks, strongest first:
 
 - **The server decides it.** A turn game played in the server, or a room whose Durable Object runs the match (the
-  page sends inputs, never results). The result is what the server saw.
+  page sends inputs, never results). It pays what a bot that plays well wins.
 - **The server replays it.** A deterministic game (fixed time step, seeded randomness, a deterministic physics build
-  such as Rapier's): the page sends its inputs, the server runs them and reads the result itself. Mind the 50 ms of
-  CPU a request: replay short runs, or a long one in pieces as it is played. **Never hand the page the whole run's
-  randomness up front:** with the seed and the rules (which the page has), a script searches for the best run offline
-  and sends only that, and the replay proves it was possible, not that a person played it. Reveal randomness as the
-  run goes (the server sends what spawns next after each step the page sends), or keep the seed on the server and
-  replay in pieces; allow one open run per player, and count a run that is abandoned toward the day's runs.
-- **The server bounds it.** Any game the browser simulates (most action games): the server starts each run (an id
-  and its own clock), takes each checkpoint in order, refuses what is faster than the game allows, caps what one
-  player earns a day, and can ban. Give slack per second of play, never per request (a checkpoint every few
-  milliseconds must not add up). A script that plays at human speed still gets through: this limits what a cheater
-  earns, it does not stop one.
+  such as Rapier's): the page sends its inputs and the server runs them. Randomness the page holds up front is a
+  request input: with the seed and the rules, a script searches for the best run offline. Reveal it as the run goes
+  (or keep the seed on the server). It pays the best run a script can find among those it is shown. Replay costs CPU:
+  a physics game used about 3 ms for each second played, against 50 ms a request on Free; replay every run that pays
+  and a random sample of the rest.
+- **The server bounds it.** Any game the browser simulates: the server starts each run (an id, its own clock), takes
+  checkpoints in order and refuses what is faster than the game allows. Every bound is per unit of play time, never
+  per request (checkpoints sent fast must not add up). It pays a script that waits and reports, at human speed.
 
-Say which one in the grant: `"trust": "decides"`, `"replays"` or `"bounds"` on every grant a voucher pays (what the
-server holding its key checks before it signs, as `PAY.check` really does it; it needs the `@xgamesfun/solana` that has
-`xcore loot review`, since 0.25.0 refuses the field). `xcore review` then reads the economy and the server as a cheater
-would: what a script gets from each paid route without playing, a `PAY.check` that pays from the request alone, a
-`payOnly` that lets one person claim from every wallet they make, and, with `--live`, each `api/` route asked with no
-sign-in and with a forged one. Its `review.md` ends with the trade-offs to tell the person. The full guide, with
-Solana's own exploit checklist, is `@xgamesfun/solana`'s skill reference
-`skills/xsolana-economy/references/trust-and-cheating.md`; in short: a bounded result pays a script that waits and
-reports, a replayed one pays the best run a script can find (unless randomness is revealed as the run goes), a decided
-one pays what a bot that plays well wins.
+Say which on every grant a voucher pays: `"trust": "decides"`, `"replays"` or `"bounds"`, as `PAY.check` really does it.
 
-Even a result the server decided is worth what a good bot can earn: a bot that plays well wins what a player who
-plays well wins. Pay a bounded or replayed result only what you would accept losing to a patient script (small
-amounts, capped a day), and keep entry fees and prize pools for results the server decided and chance (the oracle).
-Tell players which one your game is.
+**2. The ceiling.** What one person can take: the identities they can make × what each may take × time. On Solana a
+wallet is free, so a cap per wallet multiplies with every wallet. The levers that bound it, each a platform fact:
 
-**Who gets paid: a wallet is not a person.** On Solana a wallet is free, and a wallet sign-in costs nothing, so every
-cap that counts players or wallets multiplies with each one a person makes. What helps:
+| Lever                                                                                  | What it bounds                                            |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| `VOUCHERS.payOnly = 'x'` (or `'account'`: X or Google, easier to make) and `perPerson` | identities: one per X (or Google) account, not per wallet |
+| A grant's `perDay` (and `total`) in `xsolana.json`                                     | time: the most the grant pays a day, whoever claims       |
+| A gate on something the game sells (a pass, a creature)                                | identities: each one costs money                          |
+| Pay only a proven wallet (signed in with, or linked by `gf.loot.link()`)               | who is paid: never a wallet the page names                |
+| A board the server writes (`env.GF.scores.setup(board, {writer: 'server'})`)           | a ranking: the page's submits to it are refused           |
 
-- **A person, not a wallet.** For rewards worth farming, pay only players signed in with X (`VOUCHERS.payOnly = 'x'`
-  in `server/vouchers.js`), or with X or Google (`'account'`: a Google account is easier to make than an X one, so it
-  stops less farming), count your caps per account, and give the grant `perPerson` (the voucher carries a hash of the
-  player's X account, or `g:<Google id>` for a Google account with no X).
-- **Totals.** Give every grant a `perDay` total in `xsolana.json`, so the most it pays a day is known whoever claims.
-- **Holding something.** Gate a reward on an NFT the game sells (a pass, a creature): each identity then costs money.
-- **Proven wallets.** Pay, and grant perks to, only a wallet the player proved is theirs: the one they signed in
-  with, or one linked by signing (`gf.loot.link()`); never a wallet the page names. Read holdings from the chain on the
-  server, for that wallet.
+**3. Tell the person.** The level, the ceiling and what a cheater gets from it. Pay a bounded or replayed result only
+what you would accept losing to a patient script (small amounts, capped a day), and keep entry fees and prize pools
+for results the server decided and for chance (the oracle).
+
+`xcore review` reads this as a cheater would: the economy's routes, a `PAY.check` that pays from the request alone,
+the `payOnly` against the grants, and with `--live` each `api/` route asked with no sign-in and with a forged one. Its
+`review.md` ends with the trade-offs to tell the person. `@xgamesfun/solana`'s skill reference
+`skills/xsolana-economy/references/trust-and-cheating.md` has Solana's own exploit checklist.
 
 `server/gf-loot/` carries @xgamesfun/solana's server helpers for this (`import { … } from './gf-loot/results/index.js'`):
 `holds({ rpc, spec, wallet, item })` and `collectiblesOf(…)` (the game's collectibles a wallet holds, from the chain),
 `proofRequest` / `verifyProof` (a wallet's signed proof: the link uses them), and `makeCodes` / `codeVoucher` (promo
 codes with keys nobody can guess, 80 bits by default).
-
-**Replaying costs CPU, so replay what pays.** A replay runs the whole game again on the server: a physics game used
-about 3 ms of CPU for each second played, the largest line of its bill. Replay every run that pays (a prize, a
-voucher, a ranked board) and a random sample of the rest (one in ten, say), and bound the others as above. A cheater
-cannot tell which runs are replayed, and a run that pays is always one of them.
 
 ### Paying a result: xgames.fun's keeper, or a voucher key of your own
 
@@ -451,7 +442,7 @@ voucher code into `server/gf-loot/` (bundled with the server, never a public fil
    named so a forgotten amount never pays the most) or `{why}` to refuse. Until you write it, nothing is paid. Count a
    player's daily total in `PAY.paid` (it runs once a round, after its voucher is signed; again only if it threw), not in `check`.
    Then give the grant its `trust` (what that check does: `decides`, `replays` or `bounds`) and run `xcore review`.
-4. Who is paid: set `VOUCHERS.payOnly` to `'x'` or `'account'` for rewards worth farming (above, "Who gets paid"); the grant's
+4. Who is paid: set `VOUCHERS.payOnly` to `'x'` or `'account'` for rewards worth farming (above, "What a payout rests on"); the grant's
    `perDay` total caps the rest.
 5. `xcore loot approve` (the grant's change goes live), then `xcore publish`. `api/vouchers/key` answers the live
    key's address once the secret is set; until then the server pays nothing.

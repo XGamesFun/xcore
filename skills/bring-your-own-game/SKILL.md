@@ -24,6 +24,21 @@ money, a token, a flow a player taps through, or can't be undone:
   as a player, the owner and a cheater: follow the value; one intent, one step; check every assumption (and its
   deadline); who makes it happen; where each rule is enforced. Run them again before you say it is done.
 
+And three invariants that hold everywhere, so no step needs its own rule:
+
+- **Consent to a printout.** Anything irreversible, anything that costs money, and anything that changes their
+  architecture, ownership or what is public (going live, a coin, a domain or an embed, where the game's logic runs)
+  happens only after their yes to a printout of exactly that change, and you do exactly what was printed. Every
+  command that acts that way prints first and sends only with `--yes <code>`.
+- **Custody.** Every key has one intended holder: the owner's key file on their machine, the live voucher key on
+  xgames.fun, the test seed in `.dev.vars`. Its bytes anywhere else (the page, the game's folder or git, this chat, a
+  log, a server that shouldn't hold it) are a leak. You never open, print, copy or ask for one.
+- **Their game stays theirs.** The smallest change to their source; never their build's output, the kit's copies
+  (`gf/loot/`, `gf/platform/`) or a rebuild through the creation loop. Say only what you know: never call an economy
+  legal, safe, an investment or ready for real money.
+- **A refusal is the rule.** When a tool, the host or the chain refuses (a sign-in not given, a launch not this key's,
+  a check that fails), stop and tell them what it said, with the fix it names; never work around it.
+
 ## 1. Adopt
 
 ```bash
@@ -184,10 +199,9 @@ or NFT the setup takes from them); `xcore loot approve --keypair <that file>`, i
 prints everything it would send, with a code, and sends nothing; you run it again with `--yes <code>` only after
 they have read that printout and said yes. On mainnet the printout opens with "MAINNET: … real SOL" and the code
 starts with `mainnet-`: read that first line to them too. The key file owns the project, for good: every later change is signed by
-it, and nothing restores a lost one. Never open, print or copy it, never keep it in the game's folder, and say all
-of this to the person once, with where what the economy earns lands (the key's address, unless `xsolana.json` names
-a `treasury`: ask for a wallet address of theirs first). An economy that is already live is changed only by the key
-that owns it: never make a new key for one. Never ask for a seed phrase or the key of a wallet they already have. A
+it, and nothing restores a lost one (custody, above). Say this to the person once, with where what the economy earns
+lands (the key's address, unless `xsolana.json` names a `treasury`: ask for a wallet address of theirs first). An
+economy that is already live is changed only by the key that owns it. A
 browser wallet's page (`xcore loot approve --browser`) only when they ask for one, or when a browser wallet owns
 the project: they run it themselves. The xsolana-economy skill has the whole of it.
 
@@ -200,24 +214,16 @@ seed in `.dev.vars`, kept out of git). Then, in order: write `PAY.check` with th
 before it pays; nothing is paid until it is written) and count payouts in `PAY.paid`; they publish; they run `xcore
 secret set VOUCHER_SEED --new-key` (the live key: made here, sent to xgames.fun only and never kept on their machine; it prints the address);
 that address goes in the grant's `vouchers` (`xcore loot check`); the change goes live (`xcore loot approve`, the
-same key file, after their yes) and they publish again. Never read the seed
-out of `.dev.vars` or repeat it.
+same key file, after their yes) and they publish again.
 
-Design it so a cheater gains little (docs/SERVER.md, "How much your server can check" and "Who gets paid"): never send
-the page a run's whole seed up front (reveal randomness as the run goes); give slack per second, not per request; one
-open run per player; pay only proven wallets (the page calls `gf.loot.link()` once; a player whose xgames.fun account
-has a wallet linked needs none); a wallet is free, so for rewards worth farming set `VOUCHERS.payOnly` to `'x'` (X only)
-or `'account'` (X or Google; a Google account is easier to make) and give every grant a `perDay` total.
-
-A page alone can't prove a score or a win: anyone can change it in the console. A leaderboard that must be fair is
-one the server owns: `env.GF.scores.setup(board, {writer: 'server'})` refuses the page's submits to it (a pattern,
-`'daily-*'`, for a day's or a week's boards; `scores.drop` frees a past one). Pay for those only through a grant
-whose voucher a server signs after checking the result (the keeper or the server's own key, above); never put a
-voucher key in the page. How much the
-server can check (it decides the result, replays it, or only bounds it) sets what to pay: docs/SERVER.md, "How much
-your server can check". A bounded result earns small capped amounts; entry fees and prize pools need a decided or
-replayed one. Without a server,
-offer what the player pays for or the chain decides (a shop, boxes, raffles, staking, perks), and say why.
+What a payout rests on is lenses 5 and 3 applied to every route that pays (docs/SERVER.md, "What a payout rests
+on"): list each input that decides who is paid, how much and for which round, and where it is held (the chain, state
+the server keeps, or the request: whatever the request decides, a cheater decides). Then the ceiling: the identities
+one person can make × what each may take × time. Bound it with what the platform gives (`VOUCHERS.payOnly`, a grant's
+`perDay` and `perPerson`, a board the server writes: `env.GF.scores.setup(board, {writer: 'server'})`), or tell the
+person what a cheater gets. A bounded result earns small capped amounts; entry fees and prize pools need a decided or
+replayed one. Without a server, offer what the player pays for or the chain decides (a shop, boxes, raffles, staking,
+perks), and say why.
 
 ## 6. Review (a game whose server pays results)
 
@@ -233,9 +239,7 @@ xcore loot review               # the economy's part alone (@xgamesfun/solana's 
 - **Declare `trust` honestly** on every grant a voucher pays: `"decides"` (the server runs the game; the page sends
   only inputs), `"replays"` (the server runs the page's inputs again) or `"bounds"` (the page plays and reports; the
   server checks its clock, order and caps). It is what `PAY.check` really does, not what you hope it does: a server
-  that times a run the page simulated is `bounds`, whatever it is called. (The field needs the `@xgamesfun/solana`
-  that has `review`: 0.25.0's `xcore loot check` refuses it, so with that one leave it out and still tell the person
-  the level in words.)
+  that times a run the page simulated is `bounds`, whatever it is called.
 - **Tell the person**, in plain words, from the end of `review.md`: for each paid route, the level it uses, what a
   cheater gets (a bounded result pays a script that waits and reports, without playing; a decided one pays what a bot
   that plays well wins), and what the stronger level would cost to build (replaying: a deterministic step and about
@@ -286,7 +290,7 @@ check makes a private draft only. With no preview picture xgames.fun can draw it
 `card`; `next` is the command that fixes it, when there is one): fix it or make one (§7) rather than reaching for
 `--no-card`. `xcore login` asks the person to tick, on xgames.fun's approval page, the games this
 computer may work on (or their whole account), and says which it got; a command refused with code `not-granted` means
-the sign-in was not given that game: they run `xcore login` again and tick it (never work around it). Tell them the link, what you changed in their files, what the checks proved and what
+the sign-in was not given that game: they run `xcore login` again and tick it. Tell them the link, what you changed in their files, what the checks proved and what
 nothing checked (their gameplay, their backend's own behaviour).
 
 A game with a `server/`, saves or scores runs under its **plan** (`xcore plan <folder>`): Free by default (50 ms of CPU
@@ -295,12 +299,12 @@ off and saves and scores slow down). When the game needs more
 (a server that replays play, many players at once), tell them: a paid slot makes it Creator
 (`xcore plan activate <folder>` once they have one), and the paid slot moves between their games at any time. Everyone
 has 2 free slots: a third game is refused on publish (`no-free-slot`) until they archive one on their console
-(xgames.fun/console) or move one to a paid slot. Never activate, deactivate or archive a game without asking.
+(xgames.fun/console) or move one to a paid slot. Activating, deactivating or archiving a game is theirs (consent, above).
 
 Their own website can show the game (`xcore embed add https://theirsite.com <folder>` prints the `<iframe>`), and on
 Creator or Scale it can play at their own domain (`xcore domain add play.theirsite.com <folder>` prints two DNS records
-they add where their domain's DNS is; `xcore domain check …` once they have). Both are theirs to ask for: never add a
-site or a domain they did not name. A domain needs `gamesfun.js` 1.2.0+ in the page (`xcore add signin`, then publish).
+they add where their domain's DNS is; `xcore domain check …` once they have). Both are theirs to ask for (consent,
+above). A domain needs `gamesfun.js` 1.2.0+ in the page (`xcore add signin`, then publish).
 
 **A coin that trades (only when they ask for one).** For a published game, `xcore coin` says where its coin stands
 and what a launch can choose from (Meteora or pump.fun, what each pairs a coin with, the pictures among the published
@@ -310,19 +314,12 @@ again with `--yes <code>` only after they have read it and said yes: a game has 
 trade it from the moment it lands. The key file is one made on their machine (`xcore loot keygen`, or the one their
 economy went live with), holding about 0.03 devnet SOL; the coin's creator fees belong to its address. Open no signing
 page; the game's console (Token tab) is the browser wallet's way, theirs to use. If xcore refuses the launch
-xgames.fun built ("is not one this key signs"), stop and tell them what it said: never work around it. Then
+xgames.fun built ("is not one this key signs"), stop and tell them what it said. Then
 `xcore loot token <mint>` gives the coin's entry for `xsolana.json`. A devnet coin trades nothing of value; never
 call a coin an investment or say what it will be worth.
 
 ## Never
 
-- Build an economy, a draw or a paid flow exactly as named without first saying the simpler version and its trade
-  (above), or call one finished without running the five lenses on it.
-- Change where the game's logic runs (a server moved into the page or into `server/`, a port to another language or
-  framework) without the person's yes. Stop, lay out the options with their costs, and let them choose.
-- Rebuild their game through the creation loop (`gamesfun_step_*`), or move it onto the kit's runtime.
-- Edit `gf/loot/` or `gf/platform/` (kit copies), or their build's output by hand.
-- Put a secret key, a `.env` file or a wallet keypair in the game.
-- Widen what the page may reach beyond what the game really calls.
-- Launch a coin (`xcore coin launch --yes …`) without the person's yes to the printout of that very launch.
-- Present an economy as legal, safe or ready for real money: that is the person's call, with their own advice.
+What the method and the three invariants at the top forbid, in one place: building a paid flow as named without the
+trade, or calling it done without the lenses; acting before a yes to the printout; a key anywhere but with its holder;
+changing more of their game than the change needs; and saying more than you know about money or the law.

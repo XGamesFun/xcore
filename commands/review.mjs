@@ -24,7 +24,7 @@ The security review of a game, read as a cheater would: what a script gets witho
   --json       the record as JSON
 review.md ends with the trade-offs for the person: for each route that pays, how the server checks it (decides,
 replays or bounds), what a cheater gets, and what the stronger level would cost. Any high finding exits 1.
-docs/SERVER.md, "How much your server can check", is the guide.`;
+docs/SERVER.md, "What a payout rests on", is the guide.`;
 
 /** --live takes an origin or nothing: `--live`, `--live <http…>`, `--live=<http…>`. → {args without it, live} */
 export function liveFlag(args) {

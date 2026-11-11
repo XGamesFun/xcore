@@ -528,7 +528,7 @@ test('payOnly, the voucher key and the grants, trust: each finding fires, and no
   assert.deepEqual(ids(r), ['high payonly-any-farmable']);
   assert.equal(r.findings[0].route, 'grant:found-whale');
   assert.match(r.tradeoffs[0].cheater, /capped at 1 a wallet \(a wallet is free\)$/);
-  // trust: not declared (0.25.0 refuses the field: info), not one of the three
+  // trust: not declared (info when the installed package has no review), not one of the three
   await edit(vouchers, t => t.replace("payOnly: 'any'", "payOnly: 'x'"));
   await editJson(economy, s => {
     s.grants[0].limits = { perWallet: 1, perPerson: 1, perDay: 100 };

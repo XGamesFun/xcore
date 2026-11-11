@@ -58,6 +58,7 @@ brought game, with the studio around it; its MCP tools for a brought game are `g
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **The page**               | Static files, served as they are (GET and HEAD). `index.html` at the root of what is published is the game's entry. A folder URL ending in `/` serves that folder's `index.html`; any other missing path is a "not found" page, with no fallback to `index.html` (a client-side router works from the entry page; a deep link to `/level/3` reloads to "not found").                                                                                                                                                                                                                                                                   |
 | **Where it is served**     | At its own origin's root once published (the link `xcore publish` prints). Under a folder in xgames.fun Studio's preview, in `xcore dev` and in the kit's dev server (`/game/`). A game uses relative URLs (`./assets/x.js`, not `/assets/x.js`), so it works in all of them.                                                                                                                                                                                                                                                                                                                                                          |
+| **Inside the play page**   | xgames.fun shows the game in a frame (`sandbox="allow-scripts allow-same-origin allow-pointer-lock"`, `allow="autoplay; fullscreen; gamepad; clipboard-write"`): no form submits, no pop-ups and no top-level navigation, so a `<form>`, `window.open` or a link that leaves does nothing there. Sign-in, the wallet and full screen go through `gamesfun.js`, which the play page answers. Test a flow inside the play page, not only the bare game.                                                                                                                                                                                  |
 | **Its server, if any**     | `server/` and `gamesfun.json` → `server`: a Cloudflare Worker that answers the game's `/api/*`, with up to 8 Durable Objects and the platform binding `env.GF` (sign-in, saves, scores, loot reports). [docs/SERVER.md](docs/SERVER.md). Bundled into one file on publish; never a public file.                                                                                                                                                                                                                                                                                                                                        |
 | **A backend of its own**   | Any public `https://` or `wss://` origin, listed in `backend.json` → `origins` (at most 8, public names only, no IP address, no localhost). The play host lets the page reach exactly those.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Solana**                 | Through the game's own devnet RPC (`xcore add rpc`: its server's `api/rpc`), else the play host's `/loot/v1/rpc` (xgames.fun's shared devnet relay, counted toward the game's plan), with the page client in the game (`gf/loot/`, from `@xgamesfun/solana`).                                                                                                                                                                                                                                                                                                                                                                          |
@@ -516,8 +517,8 @@ The order is by when a document was last written, so one written between two pag
 
 A game made with xcore 0.1.0: see [Upgrading from 0.1.0](#upgrading-from-010). On a plain local server the
 page keeps documents in the browser; under `xcore dev` the database is a local D1 in `.gamesfun/dev/d1/` with the
-same migrations. Its calls count toward the game server's requests (600 a minute from one player, 6,000 a minute
-shared by all its players): read and write when something happens, not every frame.
+same migrations. Its calls count toward the game server's requests (a minute's limit per player and per game, set
+by its plan: [Its plan](#its-plan-xcore-plan)): read and write when something happens, not every frame.
 
 `xcore db info|query|export|import` reads and writes the local database, and with `--live` the one on xgames.fun
 (each call kept in the game's audit log); a query only reads unless `--write`. `xcore db restore <time> --live` puts
@@ -569,7 +570,7 @@ players (16), whether only signed-in players may join (their xgames.fun id and X
 message limits (120 messages a second a player; past it messages are dropped and the game told, through the room's
 `error` event, Godot's `room_error` signal and Unity's `OnError`). The page client sends each frame's messages as one,
 so a game at any frame rate sends at most about 60 a second, however many objects it syncs. A player's connection
-counts once toward the game server's requests (600 a minute from one player, 6,000 a game), however many messages it carries.
+counts once toward the game server's requests (its plan's limits: [Its plan](#its-plan-xcore-plan)), however many messages it carries.
 
 Porting a Godot game from ENet: `create_server` / `create_client` become `join_room` (with `host: true` / `false` for
 Host and Join buttons), a variable typed `ENetMultiplayerPeer` becomes `MultiplayerPeer`, `create_server`'s
@@ -760,8 +761,7 @@ A game that pays is read the way a cheater reads it before players are paid. `xc
   the published economy's `live` against the folder's.
 
 Each grant a voucher pays says how much its server checks before signing: `"trust": "decides"`, `"replays"` or
-`"bounds"` (docs/SERVER.md, "How much your server can check"; the field needs the `@xgamesfun/solana` that has
-`review`: 0.25.0 refuses it). `review.md` ends with the trade-offs for the person: for each paid route, its level,
+`"bounds"` (docs/SERVER.md, "What a payout rests on"). `review.md` ends with the trade-offs for the person: for each paid route, its level,
 what a cheater gets, and what the stronger level would cost. `xcore publish` says when a game that pays through
 vouchers changed since its last review (it never refuses for it).
 
