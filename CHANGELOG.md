@@ -2,6 +2,27 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.7.0 — 2026-11-11
+
+**`xcore coin`: a coin that trades, for a published game, signed by a key file.** loot runs no market, so a coin
+people can buy and sell is launched on a venue: Meteora or pump.fun, through xgames.fun's launchpad, on Solana devnet.
+Until now that was only in a browser (the game's console, Token tab, with a browser wallet).
+
+- `xcore coin [game]` says where the game's coin stands and what a launch can choose from: the venues, what each pairs
+  a coin with, and the pictures among the published game's files.
+- `xcore coin launch --name … --ticker … --picture <file> --keypair <keyfile>` prints the whole launch and a code,
+  and sends nothing; the same command with `--yes <code>` launches it. Like `xcore loot approve --keypair`, it never
+  prompts and opens no page. `--venue` and `--pair` choose the venue and what the coin trades against (the default:
+  Meteora, SOL). `xcore coin drop` gives up a launch that was never sent.
+- xgames.fun's launchpad builds the launch's transactions, so the key file would sign something this machine did not
+  make. Before it signs, each transaction is held to being a launch for this one new coin: only the instructions a
+  launch on that venue is made of, no buy, no move of a token the key holds, nothing that names loot (the game's
+  economy, which the same key may own), on pump.fun at least half the creator fee to this key, no lookup table, and at
+  most 0.1 SOL named, priority fee included. Anything else is refused in words that say what it held, nothing is
+  signed, and the launch is given up. The rest of a pump.fun launch (its second transaction, when only the first
+  landed) is signed only for the coin this folder began.
+- It needs an xgames.fun with launching on; one without it says so.
+
 ## 0.6.1 — 2026-11-11
 
 **`xcore loot approve --browser` takes what Phantom signs.** The tools are `@xgamesfun/solana` 0.28.1 (on loot 0.28.0,

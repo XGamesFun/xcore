@@ -533,8 +533,9 @@ they ask for a token"):
   whole entry for `tokens`, with what its mint's own keys can do (mint more, freeze an account, keep a fee on every
   transfer), so nothing is typed by hand. Going live reads the mint again and refuses a spec that denies a power the
   mint has.
-- **A coin people trade** is not something loot makes: it runs no market. Launch it on a launchpad or an exchange,
-  then name it as a coin made elsewhere.
+- **A coin people trade** is not something loot makes: it runs no market. Once the game is published,
+  `xcore coin launch` launches one for it on Meteora or pump.fun (§5, "A coin that trades"), or launch it anywhere
+  else; either way the economy then names it as a coin made elsewhere.
 
 `xcore loot add <folder>` says where the economy goes (`xsolana.json` in the `static` folder) and, once it is
 there, copies the page client beside it (`gf/loot/`, a copy: never edit it; publish keeps it current). The page loads
@@ -790,6 +791,41 @@ instead of slowing down. A paid slot moves between your games at any time
 (`xcore plan deactivate <one>`, `xcore plan activate <another>`) without changing the bill. `xcore plan [folder]`
 shows a game's plan, its limits and this month's use; `--all` your free and paid slots and every game. A game's server sees a 429
 with `scope` (`"player"` or `"game"`) and `plan` when it goes past a rate.
+
+### A coin that trades: `xcore coin`
+
+A coin people can buy and sell, for a published game (Solana devnet only for now). loot runs no market, so the coin is
+launched on a venue through xgames.fun's launchpad: **Meteora** (a curve of its own, then a pool; you keep about 40%
+of its trading fees) or **pump.fun** (its curve; the creator fee is shared half and half with xgames.fun). A game has
+one coin, and its name, ticker and picture stay as launched.
+
+```bash
+xcore coin                      # where the game's coin stands; the venues, their pairs, the pictures to choose from
+xcore loot keygen ~/.config/xsolana/<game>.json    # a key file (or the one the game's economy went live with)
+xcore coin launch --name "Moth Coin" --ticker MOTH --picture art/coin.png --keypair ~/.config/xsolana/<game>.json
+xcore coin launch … --yes <code>                   # the same command, with the code the first run printed
+```
+
+- **The picture** is a PNG, JPEG or WebP among the published game's files (`xcore coin` lists them); the coin's link
+  is the game's own play link.
+- **The key file** signs and pays (about 0.03 devnet SOL), on your machine: no browser page opens. The coin's creator
+  fees belong to its address for good, so keep the file, and a copy somewhere safe.
+- **Nothing is sent by the first run.** It prints the launch (every choice, the key's address and what it holds, what
+  can't be undone) and a code. The same command with `--yes <code>` launches it; a code printed for other choices
+  sends nothing.
+- **xgames.fun's launchpad builds the launch's transactions**, so before the key signs, xcore holds each one to being a
+  launch on the venue chosen, for this one new coin: only the instructions a launch is made of, no buy, no move of a
+  token the key holds, nothing of loot (the game's economy, which the same key may own), on pump.fun at least half the
+  creator fee to this key, and at most 0.1 SOL named. Anything else is refused, nothing is signed, and the launch is
+  given up.
+- `xcore coin drop` gives up a launch that was begun and never sent. `--venue pumpfun` and `--pair <SYMBOL>` choose
+  the other venue and what the coin trades against (the default: Meteora, SOL). An account launches at most three
+  coins a day.
+- Then name the coin in the economy: `xcore loot token <mint>` prints its entry for `xsolana.json`'s `tokens`.
+
+The same from a browser wallet: the game's console (xgames.fun/console), Token tab. A devnet coin trades nothing of
+value. Selling a token for real money is regulated in most places: that is yours to check before any mainnet, and
+nothing here is legal advice.
 
 ### Your own site and your own domain: `xcore embed`, `xcore domain`
 
