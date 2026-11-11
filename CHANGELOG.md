@@ -2,6 +2,26 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.6.0 — 2026-11-11
+
+**A game with a claim can open itself in the player's wallet app.** A player who opens a game from a post in X's app
+is in X's own browser, which has no wallet. Inside xgames.fun's play page, the page can now open the game in Phantom's
+or Solflare's browser (or the person's own), signed in, when the game asks. `gamesfun.js` is 1.7.0, with three calls:
+
+- `GamesFun.canOpenWallet()` → `true` (no wallet here, and the play page opens a wallet app when asked), `false`, or
+  `null` (no play page around the game, or one that does not say); `GamesFun.onCanOpenWallet(fn)` follows each change.
+- `GamesFun.walletNeeded()`: the game shows a Claim button, and the play page gets ready; it is told once a page load.
+  → `{data: {told: true}}`, or `code: 'no-page'`.
+- `GamesFun.openWallet(app = 'phantom', {view, href})`: from inside the player's tap, with no `await` before it (the
+  message goes in the call). `app`: `'phantom'`, `'solflare'` or `'browser'`; `view`: `'claim'` with `href` (an
+  address of the game's own play page) or `'wallet'`. → `{data: {asked: true}}`, or `code: 'invalid'`, `'no-page'` or
+  `'not-offered'`, with nothing opened: the game shows its own fallback.
+
+The README (§3, "A wallet app, for a claim") has a Claim button that chooses between the three. Under `xcore dev` and
+on this machine there is no play page around the game, so `openWallet` answers `no-page` there. `xcore add signin`
+again brings a game's copy of `gamesfun.js` up to 1.7.0; the Godot and Unity glue carry the new file but have no
+calls of their own for these yet.
+
 ## 0.5.0 — 2026-11-11
 
 **`xcore publish` now stops when the game has no preview picture xgames.fun can draw.** A link to a game shared on X
