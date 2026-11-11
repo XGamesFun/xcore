@@ -4,6 +4,7 @@ import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { madeByKit } from '../lib/publish/index.mjs';
 import { CMD } from '../lib/command.mjs';
+import { cardLine } from '../lib/card.mjs';
 
 const usage = `Usage: xcore check [dir] [--no-build] [--out <dir>] [--port <n>] [--json]
 
@@ -11,7 +12,8 @@ The page check, as xgames.fun hosts the game: 1 it builds (gamesfun.json page.bu
 publish would refuse, and what breaks once hosted: paths from the root, scripts, styles, fonts or frames from other
 sites), 3 it starts clean in Chrome at a phone's size and a desktop's under the play host's page policy, 4 it stays
 inside its origins (its own files, the host's own paths, backend.json's origins). It does not check that the game plays
-as it should: that is your own game's tests. Run ${CMD} adopt <dir> first.
+as it should: that is your own game's tests. Run ${CMD} adopt <dir> first. It also says whether the game has a preview
+picture (assets/card.jpg, what a shared link shows; ${CMD} card makes one): a warning when not, never a failed check.
   --no-build   check what is built already; do not run the build
   --out <dir>  where the record and the screenshots go (default: <dir>/evidence/verify-N/)
   --port <n>   the port the check serves the page on (default: any free one)
@@ -48,6 +50,11 @@ export default {
       if (values.json) printJson(r);
       else {
         for (const n of r.notes) console.log(`note: ${n}`);
+        // a warning when it is missing or cannot be used, never a failed check (publish is what asks for it)
+        if (r.card)
+          console.log(
+            `${r.card.status === 'ok' || !r.card.wanted ? 'preview picture' : 'warning: preview picture'}: ${cardLine(r.card, { off: !r.card.wanted })}${r.card.status !== 'ok' && r.card.wanted ? `. Publish asks for one: ${CMD} card ${shown(dir)} makes it` : ''}`,
+          );
         const ran = r.checks.filter(c => c.ok !== null),
           skipped = r.checks.length - ran.length;
         console.log(
