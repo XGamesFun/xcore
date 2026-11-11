@@ -147,12 +147,16 @@ Unity). A browser with no wallet is told so, with the game still playable. `xcor
 `server/` against devnet; the economy's calls answer only once it is live there (devnet's test SOL: an economy put
 live to try it is one the person can put live again later). Going live is signed by a key file on the person's own
 machine, after their yes, and you open no signing page: `xcore loot keygen ~/.config/xsolana/<game>.json` makes the
-key (it prints the address, which they send the devnet SOL `xcore loot cost` names); `xcore loot approve --keypair
-<that file>`, in the folder with `xsolana.json`, prints everything it would send and sends nothing; you run it again
-with `--yes <code>` only after they have read that printout and said yes. The key file owns the project: never open,
-print or copy it, never keep it in the game's folder, and say so to the person once. Never ask for a seed phrase or
-the key of a wallet they already have. A browser wallet's page (`xcore loot approve --browser`) only when they ask
-for one.
+key for a new economy (it prints the address, which they send the devnet SOL `xcore loot cost` names, with any coin
+or NFT the setup takes from them); `xcore loot approve --keypair <that file>`, in the folder with `xsolana.json`,
+prints everything it would send, with a code, and sends nothing; you run it again with `--yes <code>` only after
+they have read that printout and said yes. The key file owns the project, for good: every later change is signed by
+it, and nothing restores a lost one. Never open, print or copy it, never keep it in the game's folder, and say all
+of this to the person once, with where what the economy earns lands (the key's address, unless `xsolana.json` names
+a `treasury`: ask for a wallet address of theirs first). An economy that is already live is changed only by the key
+that owns it: never make a new key for one. Never ask for a seed phrase or the key of a wallet they already have. A
+browser wallet's page (`xcore loot approve --browser`) only when they ask for one, or when a browser wallet owns
+the project: they run it themselves. The xsolana-economy skill has the whole of it.
 
 Paying a result has two signers (docs/SERVER.md, "Paying a result", has the rule): xgames.fun's keeper, when the
 server already decides who won and the prize is fixed by place (the server calls `env.GF.loot.report`; the owner

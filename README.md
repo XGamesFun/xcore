@@ -546,20 +546,24 @@ holds the addresses the economy went live at stays in the project (keep it in gi
 `gf/loot/` as above. Where its help says `xsolana <command>`, run `xcore loot <command>`. `xcore loot check|simulate|cost|explain`
 runs the tools from a terminal.
 
-**Going live** is signed by a key file on your own computer, once you have read what it sends and said yes:
+**Going live** is signed by a key file on your own computer. `approve` first shows everything it would send, with a
+code, and sends nothing; run again with that code, it sends exactly what it showed:
 
 ```bash
 xcore loot keygen ~/.config/xsolana/my-game.json                 # a key for the game: prints its address, never the key
 xcore loot approve --keypair ~/.config/xsolana/my-game.json      # in the folder with xsolana.json: everything it would send
-xcore loot approve --keypair ~/.config/xsolana/my-game.json --yes <code>   # sends exactly that: the code is the printout's
+xcore loot approve --keypair ~/.config/xsolana/my-game.json --yes <code>   # sends exactly that
 ```
 
-Send the address `keygen` prints the devnet SOL `xcore loot cost` names. The key file is the project's owner, so
-whoever can read it controls the project: keep it outside the game's folder and out of git (the tools refuse one inside
-a repository, and `xcore publish` refuses to upload one), back it up like a password, and never paste it anywhere.
-Unless `xsolana.json` names a `treasury`, what the economy earns for you lands at the key's address. A key file signs
-each transaction exactly as it was shown and needs no page; to sign in a browser wallet anyway, ask for the page:
-`xcore loot approve --browser`.
+Send the address `keygen` prints the devnet SOL `xcore loot cost` names (and any coin or NFT the setup takes from
+you: it must be at that address first). The key file is the project's owner, for good: whoever can read it controls
+the project, every later change is signed by it, and nothing restores a lost one. Keep it outside the game's folder
+and out of git (the tools refuse one inside a repository, and `xcore publish` refuses to upload one), back it up
+yourself, and never paste it anywhere. Unless `xsolana.json` names a `treasury`, what the economy earns for you lands
+at the key's address. Why a key file: it is a new key that has never held anything else, so the wallet that holds
+what you own is never connected, and it signs each transaction exactly as it was shown, with no page. To sign in a
+browser wallet instead, go live in one: run `xcore loot approve --browser` yourself and approve on the page it
+serves. An economy that is live is changed only by the key that owns it.
 
 The economy's reads go through xgames.fun's shared relay; going live does not, because the relay passes only loot's
 own transactions and a setup also makes mints and token accounts. So `approve` sends through `XSOLANA_RPC_URL` when

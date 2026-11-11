@@ -29,13 +29,15 @@ A game's economy on loot, one shared Solana program (devnet only until it is aud
                                    with what its mint's own keys can do (mint more, freeze, a fee on transfers)
   xcore loot keygen <file>         a key file for the game's economy, outside any repository (~/.config/xsolana/<game>.json):
                                    it prints the key's address to send devnet SOL to, never the key. The key is the
-                                   project's owner: whoever can read the file controls it
+                                   project's owner for good: whoever can read the file controls it, and nothing
+                                   restores a lost one
   xcore loot approve [file] --keypair <keyfile>
                                    in a game's folder: everything putting its economy live would send, signed by that
                                    key file. It sends nothing until it is run again with the code it prints
                                    (--yes <code>), once the person whose game it is has read that and said yes
   xcore loot approve [file] --browser
-                                   the same on a page on this computer, signed in a browser wallet: only when asked for
+                                   the same on a page on this computer, signed in a browser wallet: only when asked
+                                   for, and run by the person themselves (it serves until the page says it is live)
   xcore loot help                  everything else xsolana does (its help says \`xsolana <command>\`: run each as
                                    \`xcore loot <command>\`)
 The file is ${ECONOMY_FILE} (loot.json in a game made before it was named so). Its RPC is XSOLANA_RPC_URL (in .env),
