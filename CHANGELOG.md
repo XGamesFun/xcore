@@ -21,6 +21,7 @@ The README (§3, "A wallet app, for a claim") has a Claim button that chooses be
 on this machine there is no play page around the game, so `openWallet` answers `no-page` there. `xcore add signin`
 again brings a game's copy of `gamesfun.js` up to 1.7.0; the Godot and Unity glue carry the new file but have no
 calls of their own for these yet.
+
 ## 0.5.1 — 2026-11-11
 
 **An economy goes live signed by a key file on your own computer; no page opens unless you ask for one.** The tools
