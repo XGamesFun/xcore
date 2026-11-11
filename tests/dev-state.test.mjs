@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, utimesSync, writeFileSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import os from 'node:os';
@@ -59,6 +59,10 @@ test('the install lock: one a live process holds is waited on, then named', asyn
   t.after(() => live.kill());
   mkdirSync(path.join(tmp.dir, '.installing'));
   writeFileSync(path.join(tmp.dir, '.installing', 'pid'), `${live.pid} ${os.hostname()}\n`);
+  assert.throws(() => takeInstallLock(tmp.dir, { waitMs: 600 }), /another xcore is still installing/);
+  // (however old its lock: a live holder on this machine is never taken over, as a slow install's would be)
+  const longAgo = new Date(Date.now() - 3_600_000);
+  utimesSync(path.join(tmp.dir, '.installing'), longAgo, longAgo);
   assert.throws(() => takeInstallLock(tmp.dir, { waitMs: 600 }), /another xcore is still installing/);
   // a lock from an xcore before this one (no pid in it), new: waited on too
   const old = await tempDir();

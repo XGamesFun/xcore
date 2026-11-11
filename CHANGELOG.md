@@ -12,6 +12,8 @@ of any of these is refused, whoever built it. The plan's words say so.
 
 Also: a game's server folder reached through a link (as macOS's temporary folders are, through `/var`) has its
 refusals name the file as `server/index.js` again, not by a path that climbs out of the game.
+`xcore dev`'s install lock is never taken over from a live install on the same machine, however long it runs (it was,
+once the lock was twice as old as the wait).
 
 ## 0.9.0 — 2026-11-11
 
