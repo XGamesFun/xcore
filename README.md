@@ -632,8 +632,9 @@ they ask for a token"):
   whole entry for `tokens`, with what its mint's own keys can do (mint more, freeze an account, keep a fee on every
   transfer), so nothing is typed by hand. Going live reads the mint again and refuses a spec that denies a power the
   mint has.
-- **A coin people trade** is not something loot makes: it runs no market. Launch it on a launchpad or an exchange,
-  then name it as a coin made elsewhere.
+- **A coin people trade** is not something loot makes: it runs no market. Once the game is published,
+  `xcore coin launch` launches one for it on Meteora or pump.fun (§5, "A coin that trades"), or launch it anywhere
+  else; either way the economy then names it as a coin made elsewhere.
 
 `xcore loot add <folder>` says where the economy goes (`xsolana.json` in the `static` folder) and, once it is
 there, copies the page client beside it (`gf/loot/`, a copy: never edit it; publish keeps it current). The page loads
@@ -889,6 +890,65 @@ instead of slowing down. A paid slot moves between your games at any time
 (`xcore plan deactivate <one>`, `xcore plan activate <another>`) without changing the bill. `xcore plan [folder]`
 shows a game's plan, its limits and this month's use; `--all` your free and paid slots and every game. A game's server sees a 429
 with `scope` (`"player"` or `"game"`) and `plan` when it goes past a rate.
+
+### A coin that trades: `xcore coin`
+
+A coin people can buy and sell, for a published game (Solana devnet only for now). loot runs no market, so the coin is
+launched on a venue through xgames.fun's launchpad: **Meteora** (a curve of its own, then a pool; you keep about 40%
+of its trading fees) or **pump.fun** (its curve; the creator fee is shared half and half with xgames.fun). A game has
+one coin, and its name and ticker stay as launched.
+
+```bash
+xcore coin                      # where the game's coin stands; the venues, their pairs, the pictures to choose from
+xcore loot keygen ~/.config/xsolana/<game>.json    # a key file (or the one the game's economy went live with)
+xcore coin launch --name "Moth Coin" --ticker MOTH --picture art/coin.png --keypair ~/.config/xsolana/<game>.json
+xcore coin launch … --yes <code>                   # the same command, with the code the first run printed
+```
+
+- **The picture** is a PNG, JPEG or WebP among the published game's files (`xcore coin` lists them); the coin's link
+  is the game's own play link.
+- **The key file** signs and pays (about 0.03 devnet SOL), on your machine: no browser page opens. The coin's creator
+  fees belong to its address for good, so keep the file, and a copy somewhere safe.
+- **Nothing is sent by the first run.** It prints the launch (every choice, the key's address and what it holds, what
+  can't be undone) and a code, and keeps the plan in the folder (`.gamesfun/coin-plan.json`). The same command with
+  `--yes <code>` launches it, held to that kept plan choice by choice (also the venue and pair xgames.fun chose by
+  default, and whether it is a new launch or the rest of one); a code printed for other choices sends nothing.
+- **xgames.fun's launchpad builds the launch's transactions**, and the code you approve covers only your own
+  choices. So before the key signs, xcore reads every transaction and holds it to the launch the first run printed
+  (`lib/coin-check.mjs` has the whole rule, and says what it does not read):
+  - only the instructions a launch on that venue is made of, each once and in order, with exactly the accounts its
+    program takes, and the key, the coin and the pair in the places the program reads them;
+  - one coin whose own new key signs (the signature is checked), with the plan's name, ticker and link, byte for
+    byte, paired with what the plan said, and this key as its creator;
+  - on Meteora: no fee for making the pool or for moving to it, the key's half of the creator's side of trading fees
+    and of liquidity, the launchpad's half of the liquidity locked, a fixed supply, and nobody able to mint more of
+    the coin or rename it; on pump.fun: none of its optional modes, and at least half the creator fee to this key;
+  - no buy, nothing of the System or Token programs (so no move of the key's SOL or of a token it holds), a token
+    program (and on pump.fun Token-2022 for the coin) in every place an instruction reads one, the key's share of a
+    pump.fun fee paid to the key's own account, no change to another coin of the key's, nothing that names loot (the
+    game's economy, which the same key may own), no lookup table, and at most 0.1 SOL in fees of the key's own.
+- **Devnet is asked, too.** Nothing in a transaction names its cluster, so before the key signs, a devnet RPC is asked
+  that each transaction's blockhash is one of devnet's and that the coin's address holds nothing yet. It is your own
+  RPC when `XSOLANA_RPC_URL` is set, else Solana's public one, and never xgames.fun's (the same party as the
+  launchpad: it may show the key's balance in the plan, never decide a signature). When none answers, or
+  `XSOLANA_RPC_URL` is set to something that can't be used, nothing is signed: Solana's public RPC limits how often
+  one address asks, so a devnet RPC of your own makes a launch steadier.
+- **What is not read**, and is xgames.fun's to get right: the picture and the description (they are what the coin's
+  link serves), and on Meteora the curve's shape (its prices, how the supply is spread along it, its fee schedule).
+  And the check leans on each venue's program doing what its instruction says: those take rent for the coin's own
+  accounts (about 0.02 SOL).
+- Anything else is refused in words that say what it held, nothing is signed, and the launch is given up. After a
+  launch is handed in, what was sent is xgames.fun's to say: `xcore coin` asks it where the launch stands, and says so
+  plainly when the coin it names is not the one this folder's key launched (`.gamesfun/coin.json`). Its `--json`
+  escapes every character that would hide or move text in a terminal.
+- `xcore coin drop` gives up a launch that was begun and never sent. `--venue pumpfun` and `--pair <SYMBOL>` choose
+  the other venue and what the coin trades against (the default: Meteora, SOL). The ticker is 2 to 10 letters or
+  digits, launched in capitals. xgames.fun lets an account launch three coins a day.
+- Then name the coin in the economy: `xcore loot token <mint>` prints its entry for `xsolana.json`'s `tokens`.
+
+The same from a browser wallet: the game's console (xgames.fun/console), Token tab. A devnet coin trades nothing of
+value. Selling a token for real money is regulated in most places: that is yours to check before any mainnet, and
+nothing here is legal advice.
 
 ### Your own site and your own domain: `xcore embed`, `xcore domain`
 

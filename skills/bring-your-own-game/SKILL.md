@@ -150,8 +150,8 @@ It says where `xsolana.json` goes (the `static` folder of a build project). Desi
 `xsolana_check` gives and tell the person its warnings in plain words. When they want a token, that skill's "When they
 ask for a token" says which of the kinds it is: a token the economy makes (named on chain as it goes live: ask for its
 name, its ticker and a picture's link first), a coin made elsewhere (`xcore loot token <mint>` reads its whole entry
-from the chain: never type its decimals or powers), or a coin people trade, which loot does not make (they launch it
-elsewhere, then it is a coin made elsewhere). Then run `loot add` again: it copies the page
+from the chain: never type its decimals or powers), or a coin people trade, which loot does not make (once the game is
+published, `xcore coin launch` launches one for it, §8; then it is a coin made elsewhere). Then run `loot add` again: it copies the page
 client into `gf/loot/` beside it. Wire it into their page the way that README's §4 shows (a run-time import with a
 page-relative URL, `solanaApp` with `rpcUrl: PAGE_RPC`); a Godot or Unity game (or any page with `gamesfun.js`) uses
 `GamesFun.loot` instead (`loot_ready`/`loot_connect`/`loot_call` in Godot, `LootReady`/`LootConnect`/`LootCall` in
@@ -289,6 +289,18 @@ Creator or Scale it can play at their own domain (`xcore domain add play.theirsi
 they add where their domain's DNS is; `xcore domain check …` once they have). Both are theirs to ask for: never add a
 site or a domain they did not name. A domain needs `gamesfun.js` 1.2.0+ in the page (`xcore add signin`, then publish).
 
+**A coin that trades (only when they ask for one).** For a published game, `xcore coin` says where its coin stands
+and what a launch can choose from (Meteora or pump.fun, what each pairs a coin with, the pictures among the published
+files). Ask for the coin's name, its ticker (2 to 10 letters or digits) and which picture; then `xcore coin launch --name … --ticker … --picture
+<file> --keypair <key file>` prints the whole launch with a code and sends nothing. Show them that printout. Run it
+again with `--yes <code>` only after they have read it and said yes: a game has one coin, for good, and anyone can
+trade it from the moment it lands. The key file is one made on their machine (`xcore loot keygen`, or the one their
+economy went live with), holding about 0.03 devnet SOL; the coin's creator fees belong to its address. Open no signing
+page; the game's console (Token tab) is the browser wallet's way, theirs to use. If xcore refuses the launch
+xgames.fun built ("is not one this key signs"), stop and tell them what it said: never work around it. Then
+`xcore loot token <mint>` gives the coin's entry for `xsolana.json`. A devnet coin trades nothing of value; never
+call a coin an investment or say what it will be worth.
+
 ## Never
 
 - Change where the game's logic runs (a server moved into the page or into `server/`, a port to another language or
@@ -297,4 +309,5 @@ site or a domain they did not name. A domain needs `gamesfun.js` 1.2.0+ in the p
 - Edit `gf/loot/` or `gf/platform/` (kit copies), or their build's output by hand.
 - Put a secret key, a `.env` file or a wallet keypair in the game.
 - Widen what the page may reach beyond what the game really calls.
+- Launch a coin (`xcore coin launch --yes …`) without the person's yes to the printout of that very launch.
 - Present an economy as legal, safe or ready for real money: that is the person's call, with their own advice.

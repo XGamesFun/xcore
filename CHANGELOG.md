@@ -2,6 +2,48 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.7.0 — 2026-11-11
+
+**`xcore coin`: a coin that trades, for a published game, signed by a key file.** loot runs no market, so a coin
+people can buy and sell is launched on a venue: Meteora or pump.fun, through xgames.fun's launchpad, on Solana devnet.
+Until now that was only in a browser (the game's console, Token tab, with a browser wallet).
+
+- `xcore coin [game]` says where the game's coin stands and what a launch can choose from: the venues, what each pairs
+  a coin with, and the pictures among the published game's files.
+- `xcore coin launch --name … --ticker … --picture <file> --keypair <keyfile>` prints the whole launch and a code,
+  and sends nothing; the same command with `--yes <code>` launches it. Like `xcore loot approve --keypair`, it never
+  prompts and opens no page. `--venue` and `--pair` choose the venue and what the coin trades against (the default:
+  Meteora, SOL). `xcore coin drop` gives up a launch that was never sent.
+- xgames.fun's launchpad builds the launch's transactions, so the key file would sign something this machine did not
+  make, and the code covers only the person's own choices. Before it signs, every transaction is read and held to the
+  launch the plan printed (`lib/coin-check.mjs`, which also says what it does not read): the venue's launch
+  instructions only, each once and in order, with exactly the accounts its program takes and the key, the coin and the
+  pair in the places the program reads them; one coin whose own new key signs (the signature is checked), with the
+  plan's name, ticker and link byte for byte, and this key as its creator; on Meteora no fee for making the pool or
+  for moving to it, the key's half of the creator's side of trading fees and of liquidity, a fixed supply, and a coin
+  nobody can mint more of or rename; on pump.fun none of its optional modes and at least half the creator fee to this
+  key; no buy, nothing of the System or Token programs, nothing that names loot (on either cluster), no lookup table,
+  and at most 0.1 SOL in fees of the key's own. Anything else is refused in words that say what it held, nothing is
+  signed, and the launch is given up. The rest of a pump.fun launch (its second transaction, when only the first
+  landed) is signed only for the coin, the venue, the name and the ticker this folder recorded when it began.
+- Nothing in a transaction names its cluster, so a devnet RPC is asked, before the key signs, that each transaction's
+  blockhash is one of devnet's and that the coin's address holds nothing yet: your own RPC (`XSOLANA_RPC_URL`), else
+  Solana's public one, never xgames.fun's (it built the launch). With none to ask, or an `XSOLANA_RPC_URL` that can't
+  be used, nothing is signed.
+- The first run keeps its plan in the folder (`.gamesfun/coin-plan.json`), and `--yes` is held to it choice by
+  choice, including the defaults xgames.fun chose and whether it is the rest of an earlier launch: a server that
+  steers a default between the two runs gets nothing signed, whatever the code. `xcore coin` says when the coin
+  xgames.fun names is not the one this folder's key launched; `--json` escapes what would hide text in a terminal.
+- Not read, and said so in the plan: the picture and the description (what the coin's link serves), and on Meteora
+  the curve's shape. What xgames.fun sends back is cleaned before a terminal shows it, and after a launch is handed
+  in, what was sent is given as xgames.fun's word.
+- Three independent readings shaped this check. The first found that matching instructions by name let a launch hide
+  a fee or name another creator; the second, that a slot filled with bytes passed for the new coin's signature, and
+  that the pair and the cluster were not held; the third, that the code alone could be steered, that falling back to
+  xgames.fun's RPC let it vouch for its own launch, and that the token programs and the key's own fee account were
+  not pinned. Each rule now has a test that fails without it.
+- It needs an xgames.fun with launching on; one without it says so.
+
 ## 0.6.3 — 2026-11-11
 
 **Change of behaviour: on a game's own host, Sign in now sends the tab to X and back, so the game starts again.** On
