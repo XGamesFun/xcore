@@ -2,6 +2,33 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.5.0 — 2026-11-11
+
+**`xcore publish` now stops when the game has no preview picture.** A link to a game shared on X or in a chat shows a
+960×960 card from xgames.fun with the game's own picture behind its title; without one it is a plain gradient. The
+picture is `assets/card.jpg` (or `assets/card.png`) among the published files. To go on, either:
+
+- make one: `xcore card <folder>` (a picture of the game as it plays, or `--from <picture>` from one you have), look
+  at it, and publish again; or
+- publish without one: `xcore publish <folder> --no-card`, or put `"card": false` in the game's `gamesfun.json` so it
+  is not asked again.
+
+A job that publishes from GitHub Actions stops the same way: commit `assets/card.jpg`, or add `--no-card`.
+
+- The preview picture is checked on exactly the files that go up: a JPEG or PNG by its own bytes, at most 1,500,000
+  bytes (xgames.fun ignores a bigger one), each side at least 600 px, and near square (the longer side at most 1.25
+  times the shorter). Width and height are read from the file's header; no image library was added.
+- `xcore card [dir]` writes `assets/card.jpg` at 960×960: the game served as the page check serves it, opened in Chrome,
+  after `--wait <seconds>` (4 by default), `--tap` to start a game that waits for one, `--path` for another of its
+  pages; or `--from <picture>`, scaled to cover and cropped to its middle. It never replaces one that is there without
+  `--force`. A game with a build gets it in the folder its build copies as it is (`page.static`).
+- With no usable picture, publish stops before anything is uploaded (`--json`: `"code": "card"`, `"next"` the
+  `xcore card` command). `--draft`, `--status` and `--check` do not stop for it; `--check` and `xcore check` report it
+  (a warning, never a failed check). After a publish with a picture, xcore prints the card's address
+  (`<site>/play/<slug>/card.png`); a link shared before can keep its old card for a while.
+- `publishCommand` and `publishGame` take `card`: by default the picture is asked for only with this package's own
+  check (a kit that passes its own check makes its own card), and `card: false` turns it off.
+
 ## 0.4.4 — 2026-11-11
 
 `@xgamesfun/solana` is 0.27.1 (loot 0.27.0, as devnet runs it; the page client alone changed).
