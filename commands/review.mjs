@@ -12,9 +12,11 @@ const usage = `Usage: xcore review [game] [--live [origin]] [--out <dir>] [--jso
 The security review of a game, read as a cheater would: what a script gets without playing, and what to fix first.
   the economy  @xgamesfun/solana's own review of the economy file (each route that pays: what it trusts, its ceiling,
                its findings, the trade-offs in words), when the installed one has it
-  the server   PAY.check written or still the template, or paying from the request alone; VOUCHERS.payOnly against
-               the grants; the voucher key and the grants that name it; "trust" on every grant a voucher pays;
-               .dev.vars in git or in the published folder; a seed or key in the page's files; every api/ route
+  the server   two analyses. The payout ledger: each route that pays, who signs it, what decides it (the request
+               or state the server keeps), who is paid, the identity its limits count, its trust declared and
+               observed, and its ceiling (identities one person makes × the limit for each × time). Key custody:
+               each key (the test key in .dev.vars, the live key, any in the page's files), every place its bytes
+               are and who can read it. Also a server that works before checking a token, and every api/ route
   --live       the published game asked as a stranger: each api/ route with no sign-in and with a forged one (GET
                and POST; a route that pays gets an empty body, so nothing it sends can spend or sign);
                api/vouchers/key against the grants' keys; the published economy's "live" against this folder's.
@@ -91,12 +93,12 @@ function summary(r, where) {
         ? `economy: ${r.economy.file}, ${r.economy.routes.length} routes reviewed by @xgamesfun/solana ${r.economy.version}`
         : `economy: ${r.economy.file} not reviewed: ${r.economy.why}`
       : `economy: ${where} has none`,
-    `server: ${r.server.routes.length} api/ routes named${r.server.facts.vouchers ? `; PAY.check ${r.server.facts.pay === 'template' ? 'is still the template' : r.server.facts.pay}, payOnly ${r.server.facts.payOnly ?? '?'}` : ''}`,
+    `server: ${r.ledger.length} paid routes in the ledger, ${r.custody.length} keys in custody; ${r.server.routes.length} api/ routes named${r.server.facts.vouchers ? `; PAY.check ${r.server.facts.pay === 'template' ? 'is still the template' : r.server.facts.pay}, payOnly ${r.server.facts.payOnly ?? '?'}` : ''}`,
     r.live ? `live: ${r.live.base}, ${r.live.probes.length} requests` : `live: ${r.liveWhy}`,
   );
   for (const t of r.tradeoffs)
     lines.push(
-      `paid route ${t.route}: ${t.trust ? `${t.trust}${t.declared ? '' : ' (read so by the economy review; not declared)'}` : 'trust not declared'}`,
+      `paid route ${t.route}: ${t.trust ? `${t.trust}${t.declared ? '' : ' (read so by the economy review; not declared)'}` : 'trust not declared'}${t.observed === 'request' ? ', observed: the request alone' : ''}; ${t.bounded ? 'bounded' : 'unbounded'}`,
     );
   if (r.tradeoffs.length)
     lines.push(

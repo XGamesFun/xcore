@@ -364,9 +364,10 @@ wallet is free, so a cap per wallet multiplies with every wallet. The levers tha
 what you would accept losing to a patient script (small amounts, capped a day), and keep entry fees and prize pools
 for results the server decided and for chance (the oracle).
 
-`xcore review` reads this as a cheater would: the economy's routes, a `PAY.check` that pays from the request alone,
-the `payOnly` against the grants, and with `--live` each `api/` route asked with no sign-in and with a forged one. Its
-`review.md` ends with the trade-offs to tell the person. `@xgamesfun/solana`'s skill reference
+`xcore review` computes these three steps for every route that pays, as one record each (its payout ledger: who signs,
+what decides it, who is paid, the identity its limits count, the trust declared and observed, and the ceiling), with
+the economy's own review beside it and, with `--live`, each `api/` route asked with no sign-in and with a forged one.
+Its `review.md` ends with the trade-offs to tell the person. `@xgamesfun/solana`'s skill reference
 `skills/xsolana-economy/references/trust-and-cheating.md` has Solana's own exploit checklist.
 
 `server/gf-loot/` carries @xgamesfun/solana's server helpers for this (`import { … } from './gf-loot/results/index.js'`):

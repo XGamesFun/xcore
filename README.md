@@ -750,11 +750,18 @@ A game that pays is read the way a cheater reads it before players are paid. `xc
 
 - **The economy**: `@xgamesfun/solana`'s own review (`xcore loot review`): each route that pays, what it trusts, its
   ceiling, and the trade-offs in words. An installed version without it says so in one line, and the rest goes on.
-- **The server**: `PAY.check` still the template (it pays nothing) or one that pays from the request alone (it never
-  reads `env`, so nothing the server keeps); `VOUCHERS.payOnly` against the grants (`'any'` with `perPerson`, whose
-  claims fail; `'any'` on a grant worth farming); a voucher key and the grants that name it; `trust` on every grant a
-  voucher pays; `.dev.vars` in git or in the published folder; a seed or key in the page's files; the test key in a
-  grant; every `api/` route the code names.
+- **The server**, as two analyses. The **payout ledger**: for each route that pays, who signs it (the server's own key,
+  the keeper, a key the game's code holds, or nothing), what decides it (no check yet, the request alone, or state the
+  server keeps), who is paid (a proven wallet, or one the code or the request names), the identity its limits count
+  (`VOUCHERS.payOnly`: a wallet, which is free; an X or Google account; an X account), its limits, its `trust` declared
+  and observed, and its **ceiling**: what one person can take, identities × limit for each × time. Its findings are
+  `payout-input` (the request decides something a cheater shouldn't), `payout-ceiling` (unbounded, high; or bounded only
+  by a total every player shares, medium), `payout-signer` (nothing signs it, or what it signs can't be claimed) and
+  `payout-trust` (the trust declared is missing, unknown, or not what the code does). **Key custody**: for each key (the
+  test key in `.dev.vars`, the live key on xgames.fun, any key or seed in the page's files), every place its bytes are
+  (tracked by git, not ignored, in a served folder, in the page's files, named by a grant) and who can read it; each
+  place outside its one holder is a `key-custody` finding, a level higher when the key signs on mainnet. Besides
+  them: a server that works before checking a player's token, and every `api/` route the code names.
 - **Live** (`--live`, after publishing; `--live <origin>` for another, such as `xcore dev`'s
   `http://127.0.0.1:<port>/game/`): each of those routes asked with no sign-in and with a forged one, GET and POST (a
   route that pays gets an empty body: nothing it sends can spend or sign); `api/vouchers/key` against the grants' keys;
