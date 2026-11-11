@@ -276,7 +276,9 @@ test(
     });
     await page.waitForFunction(() => codes.length > 0);
     const code = await page.evaluate(() => codes[0]);
-    assert.equal(code.window, false);
+    // on a page of its own gamesfun.js draws the way to sign in itself (the link, and the code behind a line of its
+    // own: tests/client-signin.test.mjs), so the game is told as it is for a window: nothing for it to show plainly
+    assert.deepEqual([code.window, code.panel], [true, true]);
     assert.equal(code.site, `xgames.test:${g.port}`);
     g.s.approved = true;
     assert.equal((await page.evaluate(() => window.signedIn)).id, 'x:42');

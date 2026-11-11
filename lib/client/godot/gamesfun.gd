@@ -5,8 +5,11 @@
 # the game plays on. Export for the Web with Thread Support off: xgames.fun pages are not cross-origin isolated.
 #
 #   var player = await GamesFun.sign_in()          # from a button press: the player signs in -> Dictionary or null
+#                                                  # (on a phone the tab goes to X and back, and the game starts again
+#                                                  # signed in: GamesFun.sign_in("x", true) stays, with a window)
 #   GamesFun.player_changed.connect(func(p): ...)  # sign-in and sign-out (p: Dictionary or null)
 #   GamesFun.sign_in_code.connect(func(c): ...)    # {code, site, url, window}: show it when window is false
+#                                                  # (no window opened, and the page drew no sign-in panel of its own)
 #   await GamesFun.saves_put("main", {"level": 3}) # this player's saves (JSON, 64 KB each, 16 a player)
 #   var r = await GamesFun.saves_get("main")       # r.data is the value, or null
 #   await GamesFun.scores_submit("best", 1200)     # leaderboards: r.data {improved, best, rank}
@@ -124,8 +127,13 @@ func _run(path: String, args: Array):
 
 
 ## The player's sign-in, from a button press (a window may open). how: "x" or "google". -> Dictionary or null
-func sign_in(how := "x"):
-	var p = await _run("signIn", [{"how": how}])
+## `how`: "x" or "google". `stay`: true never leaves the page (a window instead), false always signs in in this tab;
+## left out, a phone's sign-in takes the tab to X and back (the game starts again, signed in) and a computer's opens a window.
+func sign_in(how := "x", stay = null):
+	var opts = {"how": how}
+	if stay != null:
+		opts["stay"] = stay
+	var p = await _run("signIn", [opts])
 	_set_player(p)
 	return player
 
