@@ -2,6 +2,14 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.4.4 — 2026-11-11
+
+`@xgamesfun/solana` is 0.27.1 (loot 0.27.0, as devnet runs it; the page client alone changed).
+
+- The rest of what hands out an NFT finishes when the NFT is gone: a lottery's pull, a contest's claim, an auction's
+  end and a raffle taken back. `claims()` says which of them would hand out a gone NFT, and `closeGone` also takes a
+  gone NFT's row off the project's stash.
+
 ## 0.4.3 — 2026-11-11
 
 `@xgamesfun/solana` is 0.27.0, for loot 0.27.0 (on devnet since 2026-11-11). No stored record changed shape and no
