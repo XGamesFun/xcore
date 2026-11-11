@@ -12,13 +12,15 @@ import { createPlatformStore } from '../lib/dev/platform.mjs';
 import { findChrome, playwrightChromium, ensureBrowser } from '../lib/browser.mjs';
 import { ROOT, tempDir } from './helpers.mjs';
 import { addRpc } from '../lib/add.mjs';
+import { lootProgram } from '../lib/economy.mjs';
 
 const browserHere = findChrome() ?? ((await playwrightChromium()).installed ? true : null);
 const noChrome = browserHere ? false : 'no Chrome, Edge or Chromium here';
 const noMiniflare = process.env.GAMESFUN_SERVER_DEPS
   ? false
   : 'GAMESFUN_SERVER_DEPS (a folder with miniflare) is not set';
-const LOOT = '9cwqM1TXytPnFZsLfmUyv2dg4uW6Ch9C6UJVPns7NFQ';
+// loot's address, as the installed tools have it
+const LOOT = lootProgram();
 
 test('the marker goes first in <head>, once, and into a page without one', () => {
   assert.equal(
