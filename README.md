@@ -192,6 +192,7 @@ has behind it, so the whole game runs before it is published:
 | `http://127.0.0.1:8787/game/` | the published files (it runs `page.build` first, unless `--no-build`), with the play host's headers                                                                                                                                                                                                                                                                                                                |
 | `/game/api/*`                 | the game's `server/` under workerd, the runtime xgames.fun runs it on: Durable Objects with their storage kept, WebSockets, `env.GF`, the game's database (a local D1 in `.gamesfun/dev/d1/`, its migrations applied), and its secrets from `.dev.vars`. A change under `server/` or to `.dev.vars` reloads it. Miniflare (with workerd, about 140 MB) is installed once, the first time a game with a server runs |
 | `/platform/v1/*`              | sign-in, saves and leaderboards: `gamesfun.js` signs in a local player (each tab its own, so two tabs play a room together), and `env.GF.verifyPlayer` accepts its token. Saves and scores are kept in `.gamesfun/dev-platform.json`, never published, and held to the limits of the plan it imitates (below)                                                                                                      |
+| `/api/player/v1/*`            | xgames.fun's side of the page's own sign-in, as the published game gets it: the sign-in client served to every game (`/platform/v1/signin/v1.js`), the question a page asks with no click (a tab that signed in is signed in again after a reload, and after `xcore dev` starts again), Sign out that sticks, and a phone's trip to X and back (try it with `GamesFun.signIn({stay: false})`)                      |
 | `/platform/v1/live`           | the game's live settings (`gf.live`, below): its announcement, config and maintenance, from `.gamesfun/live.json` (read again on each request, never published). With maintenance on there, the game's pages show the holding page and its `api/` and `/platform/v1/*` answer `503` with code `maintenance`, as hosted                                                                                             |
 | `http://127.0.0.1:8788/`      | the game's public project files (`env.GF.files`, `xcore files`), kept in `.gamesfun/dev/files/`: another origin, as `<slug>.xgamesusercontent.com` is to the published game                                                                                                                                                                                                                                        |
 | `/loot/v1/rpc`                | the economy's Solana devnet RPC: xgames.fun's shared relay (what a published page talks to unless the game brings its own: `xcore add rpc`), or your own with `XSOLANA_RPC_URL` in `.env` (its URL is never shown; a call the shared relay would refuse is said in the terminal). The economy's calls answer once it is live on devnet (`xcore loot approve`)                                                      |
@@ -261,16 +262,63 @@ entry's `player` as an id of this game's own and marks the signed-in player's ow
 Where the sign-in comes from:
 
 - **In xgames.fun's play page**, the page signs the player in and hands the game a token.
-- **On the game's own link, and inside a post on X**, a small window on xgames.fun signs in; when the browser keeps it
-  shut (a phone, X's app), the game is given a code to show ("go to xgames.fun/go and enter ABCD-EFGH") that the player
-  types on any device. The code comes with `window`: show it plainly only when `window` is false. When a window did
-  open, the player is signing in there (X's login takes a while, and its page hides from the game whether that window
-  is still open), so show the code at most as a quiet line for someone who lost the window, never over the game.
+- **On the game's own link, on a computer**, the player's click on the game's Sign in button opens a small window on
+  xgames.fun, which goes on to X (or Google) by itself and closes when it is done: one click, and the provider's own
+  screen. The game keeps running.
+- **On the game's own link, on a phone or a tablet**, the tap takes the game's own tab to X (or Google) and back: one
+  tap, the provider's own screen, and the game again, signed in. No second tab, no code. The page loads afresh on the
+  way back, so **the game starts again and what it held in memory is gone**; the player is there when `GamesFun.ready`
+  answers. A game that must not start again asks to stay, `GamesFun.signIn({stay: true})` (or for the whole page,
+  `globalThis.GAMESFUN_SIGNIN_STAY = true` before `gamesfun.js`, or `data-signin-stay` on its `<script>`), and gets the
+  window instead. When the player says no at X, or the sign-in fails, the game is back with
+  `GamesFun.signInEnded` set to `'cancelled'` or `'failed'` and nobody signed in. Where a phone hands the login to
+  X's app and the app answers in another browser, the player comes back to the game's tab and is signed in there.
+  (A phone or tablet, here: a device whose main pointer is a finger, with no hover. `stay: false` signs in this way on
+  a computer too.)
+- **Where no window opens** (an app's own browser, a blocker), `gamesfun.js` draws a small panel of its own over the
+  game: one link, "Sign in with X", which the player's tap opens (a browser never blocks a tap on a link), and behind
+  "Sign in on another device" the code to type at xgames.fun/go. It closes by itself once the player is signed in,
+  wherever they did it. A second click on Sign in shows the same sign-in again (its window, or the panel), never a new
+  one. The game is told with `GamesFun.onCode(({code, site, url, window}) => …)`: show the code plainly only when
+  `window` is false, which now means that no window opened _and_ no panel was drawn (see the next line, or a game that
+  turned the panel off with `globalThis.GAMESFUN_SIGNIN_PANEL = false` or `data-signin-panel="off"`). When `window` is
+  true the player has a way to sign in on screen (X's login takes a while, and its page hides from the game whether
+  that window is still open), so show the code at most as a quiet line, never over the game.
+- **Inside a post on X, or framed on another site**, the game signs in by itself as on a computer: a window at the
+  click, and where the frame lets none open, the code, which the game shows (`window` is false).
 - **On this machine** (localhost, `xcore check`), a local player and the browser's own storage stand in, so the game
   can be made and tested before it is published. Under `xcore dev`, a local sign-in (one player a tab) and the
   platform answer as xgames.fun does, and the game's `server/` accepts its token.
 
-The token lasts an hour and stays in the page's memory. The game's `server/` checks it with `env.GF.verifyPlayer`,
+**A player who comes back is signed in with no click.** On the game's own link, a player who signed in to the game
+before, by their own click, is signed in again as the page loads: `GamesFun.ready` answers with them, and
+`GamesFun.onChange` says so, exactly as after a click, so a game needs no change. It holds across a reload, a new tab
+and a new day, for as long as xgames.fun remembers the browser; a first visit to a game is still one click. Before
+the token's hour ends it is renewed, with no click and nothing shown (`onChange` is told the same player again, with
+the new token in `GamesFun.token`). Inside a post on X and on a domain of the game's own, xgames.fun cannot be asked
+(a browser sends its cookie only from the top page of a host under xgames.fun), so there a returning player clicks
+Sign in once, a reload inside the hour keeps the sign-in (the tab keeps the token until it ends), and when the hour is
+up the game is told the player is signed out.
+
+**Sign out sticks.** After `GamesFun.signOut()` nothing signs the player in to that game by itself until they click
+Sign in again: in that browser at once (other tabs of the game sign out when they are next looked at), and in their
+other browsers once xgames.fun has heard of it, which it does from the game's own link. Their xgames.fun account
+stays signed in, and so do their other games; signing out on xgames.fun's account page ends all of it.
+
+**What is kept, and where.** The token lasts an hour. The tab keeps it until then (`sessionStorage`), and only on a
+host that serves this one game (its xgames.fun link, its own domain, `xcore dev`): never where games share a host. A
+game's own code could always read the token it was handed; nothing is kept where another game's page could.
+
+**Changes to sign-in reach a game without publishing it again.** `gamesfun.js` carries its sign-in, and as the page
+loads it also asks its own host for xgames.fun's current sign-in client, at one address,
+`/platform/v1/signin/v1.js`, which xgames.fun answers on every game's host before any of the game's files (and
+`xcore dev` answers here). When it comes, that client is the one that runs; where the address answers nothing (a host
+that is not xgames.fun's), or not in time, the carried one runs and the game behaves the same.
+`GamesFun.signInClient` says which: `{version, shared}`. It is one request, kept by the browser for five minutes, to
+the page's own origin only; it never holds up the page, the game's start or `GamesFun.ready` on a first visit; and a
+file of the game's own at that path is never served in its place.
+
+The game's `server/` checks the token with `env.GF.verifyPlayer`,
 first thing, before any work: a request without one answers 401 at once, since strangers' requests that do work count
 toward what caps a game ([docs/SERVER.md](docs/SERVER.md), "Check the token first"). A backend of your own checks it
 with any JWT library against `https://<slug>-play.xgames.fun/player/v1/key` (issuer `xgames.fun`, audience
@@ -684,11 +732,14 @@ xcore domain                           # where the game plays, the sites that em
 - **Embedding** (every plan: 3 sites, 10, 25): a site is its origin (`https://mygame.com`; `http://localhost:<port>`
   while you build it). It applies within about a minute, with no publish. Framed on your site, the game signs players
   in by itself (a small xgames.fun window, or a code), as in a post on X: only xgames.fun's own page can hand it a
-  sign-in, so a page that embeds it can't sign players in for it or take their sign-in.
+  sign-in, so a page that embeds it can't sign players in for it or take their sign-in. A framed game never asks
+  xgames.fun who the visitor is: a returning player clicks Sign in there, and a reload keeps it for the hour.
 - **A domain of your own** (Creator 1, Scale 5): `domain add` prints two records, a CNAME pointing the domain at
   xgames.fun and a TXT proving you own it. Once they are right the game is served there with its certificate, and
   sign-in, saves, scores, rooms, the server and the economy work there as on its own link. Sign-in still opens a
-  small xgames.fun window, Studio stays on xgames.fun, and a post on X still uses the xgames.fun link. A bare domain
+  small xgames.fun window, on a phone too (your domain is another site than xgames.fun, so a returning player clicks
+  Sign in once a visit there, and a reload keeps it for the hour), Studio stays on xgames.fun, and a post on X still
+  uses the xgames.fun link. A bare domain
   (`mygame.com`) needs your DNS provider's CNAME flattening or ALIAS record; else use `www.` or `play.` and redirect.
   The page must load `gamesfun.js` 1.2.0 or later (it asks the play edge which game it is on a host of its own): an
   older copy can't sign players in there, so `domain add` says when to run `xcore add signin` and publish again. A
@@ -701,7 +752,7 @@ A game made with xcore 0.1.0 that has `server/database.js` (`xcore add database`
 without one needs none: the D1 database, `xcore db` and `xcore files` are new.
 
 1. **Run `xcore add database` again.** It brings `server/database.js` up to date (your `RULES` and `LIMITS` are
-   kept), with `gamesfun.js` (1.6.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
+   kept), with `gamesfun.js` (1.7.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
    needs an owner (step 3) as `file:line` with its change; `xcore publish` lists them again until each names its
    owner. On its first start the new `database.js` moves the documents to a table keyed by collection, owner and id,
    each under its owner. After that, do not roll the game back to a version with 0.1.0's `database.js`: its writes

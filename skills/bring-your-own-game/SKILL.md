@@ -90,8 +90,14 @@ published game would get: fix the game, not the stand-in.
   `GamesFun` autoload, a Unity project `Assets/Plugins/GamesFun/`. Replace the game's own login, its local save file
   or its localhost leaderboard with these calls (listed at the top of the file it writes); sign-in starts from a click,
   and when `onCode` / `sign_in_code` / `SignInCode` fires with `window: false`, the game shows the code and the site;
-  with `window: true` a sign-in window is open, so at most a quiet line, never an overlay over the game.
-  Never ask for a password or keep accounts of your own.
+  with `window: true` the player has a way to sign in on screen (a window, or the small panel `gamesfun.js` draws
+  where none opens), so at most a quiet line, never an overlay over the game.
+  Read the player after `GamesFun.ready` and follow `onChange` / `player_changed` / `PlayerChanged`, never only the
+  answer of the sign-in call: a player who signed in before is signed in again as the page loads, with no click, and
+  **on a phone the tap on Sign in takes the tab to X and back, so the game starts again**, signed in. Tell the person
+  that; if their game cannot start again at that moment (a run in progress with nothing saved), either sign in before
+  play starts or pass `stay: true` (`GamesFun.signIn({stay: true})`, `sign_in("x", true)`, `SignIn("x", true)`), which
+  opens a window instead. Never ask for a password or keep accounts of your own.
 - **Data the game keeps for everyone** (levels players make, profiles, a world's state) where it used a localhost
   database or a JSON file: `xcore add database <folder>`, then `GamesFun.db` calls. Read RULES at the top of
   `server/database.js` with the person: anything a player must not set for themselves (a prize, a verified score)

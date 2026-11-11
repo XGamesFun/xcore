@@ -651,7 +651,8 @@ publish list each such call (the README's "Upgrading from 0.1.0").
 
 `xcore dev <folder>` runs `server/` under workerd, the runtime xgames.fun runs it on, at the page's `/game/api/*`
 (WebSockets too), with the game's page beside it and a local `env.GF`: `verifyPlayer` accepts the local sign-in that
-`gamesfun.js` gets from it, and saves and scores are the ones the page reads through `/platform/v1/*` (kept in
+`gamesfun.js` gets from it (a tab that signed in is signed in again, with a new token, after a reload and after
+`xcore dev` starts again: a token from before it started is refused, as one signed with a replaced key is hosted), and saves and scores are the ones the page reads through `/platform/v1/*` (kept in
 `.gamesfun/dev-platform.json`). `env.GF.loot.report` is printed, not signed or paid; a voucher key of your own
 (`xcore add vouchers`) signs for real, with the test key in `.dev.vars`. The dev host answers only `localhost`,
 `127.0.0.1` and `[::1]`, so a page on another site can't reach it. Durable Object storage is kept in
