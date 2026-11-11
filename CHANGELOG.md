@@ -2,6 +2,15 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+Needs `@xgamesfun/solana` 0.26.3 (the pin moves when it is on npm).
+
+- `xcore loot token <mint>` reads a coin made elsewhere from the chain and prints its entry for an economy's `tokens`,
+  with what its mint's own keys can do. A token the economy makes itself is named on chain as it goes live (its
+  `name`, `symbol` and `uri`), so wallets show it by name.
+- The README's economy section and the bring-your-own-game skill say which kind of token is which.
+
 ## 0.4.0 — 2026-11-10
 
 The kit now refuses at build time what xgames.fun refuses at publish, `xcore dev` behaves like the platform on a plan,

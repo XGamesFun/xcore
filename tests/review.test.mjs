@@ -821,6 +821,12 @@ test('xcore loot review: passed to xsolana review, said as this package; without
     ownWords()('`xsolana review xsolana.json`, xsolana_review'),
     '`xcore loot review xsolana.json`, xcore loot review',
   );
+  // the tools' own words for reading a coin made elsewhere, as this package's
+  assert.equal(
+    ownWords()('Run `xsolana token So11111111111111111111111111111111111111112` (xsolana_token): it reads the mint.'),
+    'Run `xcore loot token So11111111111111111111111111111111111111112` (xcore loot token): it reads the mint.',
+  );
+  assert.match(run(['loot', '--help']).stdout, /xcore loot token <mint>/);
 });
 
 test('publish says to run the review when a game that pays through vouchers changed since its last one', async t => {
