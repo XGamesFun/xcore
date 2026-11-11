@@ -2,6 +2,17 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.6.1 — 2026-11-11
+
+**`xcore loot approve --browser` takes what Phantom signs.** The tools are `@xgamesfun/solana` 0.28.1 (on loot 0.28.0,
+unchanged). The page for a browser wallet sent a transaction only as it had prepared it, byte for byte; Phantom adds
+its own checks to what it signs (instructions of the Lighthouse program), so it could not approve wherever it adds
+them. The page now sends the wallet's own transaction when the wallet only added those to a transaction it alone
+signs: everything that was prepared and shown is in it untouched and in order, no account of it gained or lost a
+privilege, and nothing else rides with it, no other program's instruction and no fee of the wallet's own. Anything
+else is still refused, saying what the wallet did. Going live with a key file (`--keypair`), the usual way, is as it
+was.
+
 ## 0.6.0 — 2026-11-11
 
 **A game with a claim can open itself in the player's wallet app.** A player who opens a game from a post in X's app
