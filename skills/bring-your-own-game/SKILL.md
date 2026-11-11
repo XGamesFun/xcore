@@ -206,9 +206,12 @@ changed since the last review.
 ## 7. Its preview picture (before the first publish)
 
 A link to the game, shared on X or in a chat, shows a square card: the game's own picture behind "XGames.fun" and its
-title (top left) and a "Tap to play" button (bottom left). The picture is `assets/card.jpg` (or `.png`) in the
-published files: a JPEG or PNG, square (960×960 is best, each side at least 600 px), at most 1,500,000 bytes. Without a
-usable one the card is a plain gradient, and `xcore publish` stops before anything goes up (code `card`).
+title (drawn large across the top band) and a "Tap to play" button (bottom left). The picture is `assets/card.jpg` (or
+`assets/card.png`) in the published files, best a 960×960 JPEG. With none, or one xgames.fun cannot draw (over
+1,500,000 bytes, not a JPEG or PNG, a PNG named `.jpg` or a JPEG named `.png`, cut short, a kind of JPEG it does not
+draw), the card is a plain gradient and `xcore publish` stops before anything goes up (code `card`; `card` in the JSON
+says what it found). One it draws but small (under 600 px a side: blurry) or far from square (cropped to its middle)
+goes up with a warning and its fix.
 
 ```bash
 xcore card <folder>                      # a picture of the game as it plays, at 960×960
@@ -217,10 +220,12 @@ xcore card <folder> --from key-art.png   # from a picture they have: scaled to c
 ```
 
 Then **open the picture and look at it** (read the image file): a loading screen, a blank page or a menu makes a poor
-card. Try `--wait`, `--tap` or `--path <page?query>`, or ask the person for key art or a screenshot (`--from`, then
-`--force` to replace the one there). What matters belongs in the middle: the title covers the top left and the button
-the bottom left. For a game with a build it writes into the folder the build copies as it is (`page.static`, such as
-`public/`), so the build carries it into what is published; it says where. Only when the person says they want no
+card, and so does a page that had errors (xcore card says so and fails unless `--force`). Try `--wait`, `--tap` or
+`--path <page?query>`, or ask the person for key art or a screenshot (`--from`, then `--force` to replace the one
+there; `--from assets/card.jpg --force` re-crops theirs in place). Keep the subject clear of the top third (the title)
+and the bottom left (the button). For a game with a build it writes into the folder the build copies as it is
+(`page.static`, such as `public/`), so the build carries it into what is published; it says where, and for a build
+with no such folder it writes nothing and says where the picture has to live. Only when the person says they want no
 picture: `xcore publish <folder> --no-card`, or `"card": false` in `gamesfun.json` so they are not asked again. A link
 shared before can keep its old card for a while (X and chat apps cache it).
 
@@ -233,8 +238,9 @@ xcore publish <folder>          # or gamesfun_login, then gamesfun_publish {"gam
 ```
 
 It builds, runs the page check on exactly those files, uploads the published folder and the `server/` bundle. A failed
-check makes a private draft only. With no usable preview picture it stops before anything goes up (code `card`,
-`next` is `xcore card <folder>`): make one (§7) rather than reaching for `--no-card`. `xcore login` asks the person to tick, on xgames.fun's approval page, the games this
+check makes a private draft only. With no preview picture xgames.fun can draw it stops before anything goes up (code
+`card`; `next` is the command that fixes it, when there is one): fix it or make one (§7) rather than reaching for
+`--no-card`. `xcore login` asks the person to tick, on xgames.fun's approval page, the games this
 computer may work on (or their whole account), and says which it got; a command refused with code `not-granted` means
 the sign-in was not given that game: they run `xcore login` again and tick it (never work around it). Tell them the link, what you changed in their files, what the checks proved and what
 nothing checked (their gameplay, their backend's own behaviour).
