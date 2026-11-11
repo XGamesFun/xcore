@@ -143,7 +143,13 @@ elsewhere, then it is a coin made elsewhere). Then run `loot add` again: it copi
 client into `gf/loot/` beside it. Wire it into their page the way that README's §4 shows (a run-time import with a
 page-relative URL, `solanaApp` with `rpcUrl: PAGE_RPC`); a Godot or Unity game (or any page with `gamesfun.js`) uses
 `GamesFun.loot` instead (`loot_ready`/`loot_connect`/`loot_call` in Godot, `LootReady`/`LootConnect`/`LootCall` in
-Unity). A browser with no wallet is told so, with the game still playable. `xcore dev <folder>` runs the page and
+Unity). A browser with no wallet is told so, with the game still playable. A game with a claim (anything the player
+claims to their wallet) calls `GamesFun.walletNeeded()` when it shows the Claim button, and when no wallet is in the
+browser (X's own browser, from a post in X's app) and `GamesFun.canOpenWallet()` is `true`, its button calls
+`GamesFun.openWallet('phantom', {view: 'claim', href})` (or `'solflare'`) inside the tap itself, with no `await` or
+timer before it: xgames.fun's play page then opens the game in that wallet app, signed in. When it is not `true`, the
+game shows its own fallback (its link to copy); never build wallet links in the game. README §3, "A wallet app, for a
+claim", has the button. `xcore dev <folder>` runs the page and
 `server/` against devnet; the economy's calls answer only once it is live there (devnet's test SOL: an economy put
 live to try it is one the person can put live again later). Going live is signed by a key file on the person's own
 machine, after their yes, and you open no signing page: `xcore loot keygen ~/.config/xsolana/<game>.json` makes the
