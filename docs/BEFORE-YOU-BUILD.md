@@ -1,126 +1,70 @@
-# Before you build: challenge first, then walk it through
+# Before you build
 
-This page is for the agent building with xcore, and for the person it builds for. It comes from one day of running a
-real promo on xgames.fun (a bubble popper whose players earn a token, buy raffle tickets with it, and win a physical
-card). Every trap below was built exactly as asked, worked as built, and was still wrong. The person found each one
-after it shipped. None of them needed the person to find it.
+For the agent building with xcore, and the person it builds for. One method, applied to every design that touches
+money, a token, a flow a player taps through, or anything that can't be undone. It is short on purpose: the method
+finds the problems, so there is no list of rules to keep up with.
 
-Two habits catch them: **challenge before you build**, and **walk it through before you say it is done**.
+## Challenge before you build
 
-## 1. Challenge before you build
+The person names a mechanism; what they want is an outcome. Before building what they asked:
 
-The person tells you what they want. Your job is the outcome they want, not the mechanism they named. Before building
-a request that touches money, a token, a flow a player taps through, or anything that can't be undone:
+1. **Name the simplest version that gets most of the outcome.** Often it is 90% of the request and far smoother.
+2. **Run the five lenses (below) on both versions.**
+3. **Recommend one, in a sentence, with its trade.** Not a survey of options.
+4. **Build what they asked only once they have seen the trade and still want it**, and then build it well.
 
-1. **Name the simplest version that gets most of it.** Often it is 90% of what they asked and far smoother: one
-   currency instead of two, one wallet prompt instead of three, a rule the chain already keeps instead of one a server
-   has to remember.
-2. **Say what each version costs.** Wallet prompts a player sees, moving parts, states it can end up in (cancelled,
-   refunded, half-done), and who must act after it happens (and what happens if nobody does).
-3. **Recommend one, and say why in a sentence.** Not a survey of options.
-4. **Build what they asked only after they have seen that trade and still want it.** If they still want it, build it
-   well; you have done your part.
+Challenge the economy, the flow and anything irreversible. Don't challenge taste, and don't challenge a decision twice:
+once they have heard the trade, it is theirs.
 
-Challenge the economy, the flow and anything irreversible. Don't challenge taste (colours, names, copy they wrote),
-and don't challenge the same decision twice: once they have heard the trade, it is theirs.
+## The five lenses
 
-What it sounds like:
+Run them before you build, and again before you say it is done. Each one is a question you answer for the design in
+front of you, in every state it can reach: before it opens, while it runs, completed, won, lost, cancelled or failed,
+abandoned half-way, undone ("I changed my mind"), and after it ends. Answer each as a player, as the owner and as a
+cheater.
 
-> Burning the BUBL when a player buys an entry means a cancelled draw refunds entries, not BUBL: players get back the
-> token they bought, never the one they earned. Pricing tickets in BUBL directly refunds BUBL and drops a token, but
-> then the free ticket needs another shape. I'd keep entries and not burn at purchase: the BUBL goes back to the pool,
-> and a cancelled draw can be swapped back. Want that instead?
+1. **Follow the value.** For everything a player puts in (a token, SOL, an NFT, their time), what do they hold in each
+   state, and what can they turn it into? A problem is something that comes back as something other than what went
+   in, something that can be turned back once the outcome is known, something of value made from nothing, something
+   paid out twice along two paths, or something still produced after its use has ended.
+2. **One intent, one step.** For everything a player means to do, count the prompts, signatures and taps, and say what
+   each one shows. A problem is more than one step for one intent, a step that doesn't look like what they asked for,
+   or one the place it runs in won't allow (xgames.fun's play frame takes no forms, pop-ups or top navigation).
+3. **Check every assumption.** Every number that depends on people (minimums, caps, rates, pool sizes, durations)
+   against the participation you actually have or expect, and against the worst single participant (a script, one
+   account at its cap all day). Say which numbers can change only before a first sale, claim or launch: those are
+   deadlines.
+4. **Who makes it happen.** Every step after a player acts (a reveal, a refund, a payout, a close, a switch, a prize
+   shipped): who sends it, who pays, from which key, and what happens if nobody does or their machine is off.
+5. **Where each rule is enforced.** For every rule the design relies on: is it held by the chain, by the server, or
+   only by the page? A rule only the page holds is a suggestion to a script. Anything shown as true (a winner, a
+   balance, a limit) is read from where it is enforced.
 
-## 2. Walk it through before you say it is done
+Bring what you find with a recommendation for each. A deadline goes first.
 
-Before you report a feature finished, play it in your head through every state it can reach, as three people:
+## Worked examples
 
-| State                    | As a player                                                                 | As the owner                                              | As a cheater                                                |
-| ------------------------ | --------------------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------- |
-| Before it opens          | What do I see? What can I do yet?                                           | What must be set up, funded, switched on?                 | Can I act early?                                            |
-| While it runs            | What does each tap do? What does each wallet prompt show?                   | What do I watch? What can I still change, and until when? | What does a script get without playing?                     |
-| It fails or is cancelled | What do I get back, in which token, and do I have to do anything?           | Who sends the refund or the cancel? From which key?       | Can I make it fail on purpose, or profit from it failing?   |
-| It succeeds              | What did I win, and how do I get it (a physical prize: who ships it where)? | How do I reach the winner?                                | Can I make myself look like the winner?                     |
-| After it ends            | Does the game still tell me to earn something I can no longer use?          | What runs next, or what says it is over?                  | Can I undo what I paid (a swap back, a refund) once I lost? |
-| I changed my mind        | Can I undo it? Should I be able to?                                         | Do I want undos at all?                                   | Is the undo a free option on the outcome?                   |
+From one day running a promo on xgames.fun: a bubble popper whose players earn BUBL, swap it for raffle entries, and
+win a physical card. Each was built exactly as asked and found by the person after it shipped; one lens would have
+found it first. They illustrate the lenses; they are not rules to check one by one.
 
-Write down each problem you find with a recommendation, and bring them with the result. A deadline (something that
-can only change before the first sale, the first claim, going live) goes first.
-
-## 3. The traps, and what catches each
-
-Each trap is what was built, why it went wrong, and the question that would have caught it.
-
-### Money and tokens
-
-- **Burn at purchase, refund at cancel.** Entries were made by burning BUBL; a raffle short of its minimum cancelled
-  and refunded entries. Players never got their BUBL back. _A refund returns what the ticket cost, not what the
-  player paid to get it._ Ask: if this is cancelled, what does the player hold afterwards, and is that what they put
-  in?
-- **A two-way swap is a free option.** Making entries swappable back to BUBL at any time let anyone who lost (or
-  changed their mind) undo the purchase. _An undo that is open after the outcome is known undoes the outcome._ Open
-  it only for the case it is for (a cancelled draw), and let the chain enforce that (a recipe switched off is refused
-  on chain).
-- **A free token that is the same token as a paid one.** The free login entry was the same token as a bought one, so
-  once entries could be swapped back, the free one was worth 100 BUBL. _Fungible means the chain can't tell which is
-  which._ Ask: should the free thing ever become the paid thing?
-- **Two currencies where one does.** BUBL, then an entry made from BUBL, then a ticket bought with the entry: three
-  things for the player to understand, and a refund in the middle one. Ask whether the intermediate token earns its
-  place; often a ticket priced in the earned token is simpler, and the reason to keep two should be said aloud.
-- **A cap per hour is not a cap per day.** An hourly cap of 1,750 still lets one account take 42,000 a day. Say the
-  daily figure, and the pool's life at the worst case, when you set a rate.
-- **Limits that count claims, not amounts.** A grant's `perDay` counted claims; the amount was bounded elsewhere. Say
-  which number bounds the value.
-
-### Draws and events
-
-- **A minimum nobody can reach.** A raffle needed 100 tickets; the game had two players. It was cancelled, then the
-  next one was headed the same way. The minimum can only change before the first ticket. _Compare every threshold
-  with the players you actually have, and say so before it opens._
-- **Steps that wait for someone.** A cancelled raffle's refunds are pulled one by one; a draw is revealed by someone
-  sending it; a swap back was opened by a timer on one computer. For each: who sends it, from which key, who pays, and
-  what happens if their machine is off.
-- **Nothing after the end.** Once the draw is done, the game still asks players to earn a token with no use left. Plan
-  the next event, or the "it's over" state, before the first one ends.
-- **A physical prize with no hand-off.** The winner's handle shows; nothing collects where to ship. Decide how you
-  reach the winner before anyone wins.
-
-### What the player taps
-
-- **Every wallet prompt must look like what the player asked for.** "Buy 10 tickets" opened a prompt for 4 (making
-  the 4 entries they lacked, before a second prompt for the 10). It looked like a bug. One transaction for one intent
-  (loot's `buyTickets` takes `make` for this), or say "2 approvals" before the first one opens.
-- **The play frame has rules.** xgames.fun frames a game with no forms, no pop-ups and no top-level navigation: a
-  `<form>` submit or `window.open` silently does nothing there. Test inside the frame, not the bare game.
-- **Permanent UI must belong.** A floating chip added for one number didn't match anything else on screen; a pop-up
-  card for a milestone looked unlike the game. Place a new element where the existing layout already has a slot (a
-  line under a pill, mirroring the line under the score) before inventing a new one.
-- **A rule the page shows is not a rule.** Anything only the page enforces (a button hidden, a count checked in the
-  browser) is a suggestion to a script. Put the rule on chain or on the server, and let the page mirror it.
-
-### Bots and trust
-
-- **A check a script can guess.** Human checks with a handful of possible answers, no penalty for a wrong one and a
-  free "another one" let a blind script pass in about 15 tries. Count wrong answers across checks, lock out after a
-  few, and make every check look alike to the page.
-- **The claim that pays twice.** A voucher for a wallet, abandoned and asked again for another wallet, paid twice
-  when the first was claimed on chain. Before giving value back from an unclaimed voucher, ask the chain whether it
-  was claimed, and close it first (on the chain's clock, not the server's).
-- **Who is the winner.** Anything a page says about who holds a prize must be checked on chain before it is shown.
-
-### Setting up
-
-- **Sign setup with a key file, not a wallet page.** A browser wallet may change a transaction before signing it (an
-  extra instruction), and a long setup in a web page fails half-way. Setup and owner changes sign with a local key
-  file; a page opens only if the person asks for one.
-- **Check the clock before you write a time.** Times estimated from memory ran hours off; run `date -u` before
-  writing a time or acting on a deadline.
+| What was built                                                                | Lens | What the lens says                                                                     |
+| ----------------------------------------------------------------------------- | ---- | -------------------------------------------------------------------------------------- |
+| Entries made by burning BUBL; a draw short of its minimum refunds entries     | 1    | Cancelled: the player holds entries, not the BUBL they put in.                         |
+| A swap from entries back to BUBL, open at any time                            | 1    | Lost: the player turns their entries back once the outcome is known.                   |
+| A free entry that is the same token as a bought one                           | 1    | Made from nothing, and worth what a paid one is once it converts.                      |
+| A voucher abandoned for one wallet, asked again for another                   | 1    | Abandoned half-way, then completed on chain: paid twice along two paths.               |
+| "Buy 10 tickets" that first opens a prompt for 4 (making the missing entries) | 2    | Two steps for one intent, and the first doesn't look like it.                          |
+| A raffle needing 100 tickets, with two players                                | 3    | Against real participation: cancelled. And it can change only before the first ticket. |
+| A cap of 1,750 an hour                                                        | 3    | Worst participant: 42,000 a day from one account.                                      |
+| Refunds each player must pull; a swap back opened by a timer on one computer  | 4    | Nobody pulls, nothing comes back; the machine is off, the swap stays shut.             |
+| A token still earned after the last draw; a prize with no shipping step       | 4    | After it ends: who tells players it's over, and who reaches the winner?                |
+| Human checks with a few answers and no cost for a wrong one                   | 5    | Held only by guessing being slow: a blind script passes in about 15 tries.             |
+| A button hidden on the page as the only bar to an action                      | 5    | A script calls the program directly.                                                   |
 
 ## Where this lives
 
-- This page is the reference. The skill in `skills/bring-your-own-game/` says the two habits in its first lines.
-- `@xgamesfun/solana` 0.28.8 and later (the economy tools) raise the economy traps at the moment an agent decides:
-  `xsolana check` warns with W-REFUND-NOT-PAID, W-SWAP-BACK-OPEN, W-FREE-IS-PAID and W-MINSOLD-VS-SCENARIO (medium in
-  `xsolana review`), and W-TWO-PROMPTS and W-AFTER-THE-END (low). `xsolana explain` and the review's trade-offs end
-  with "Each route, state by state": the walk-through above, for the spec in front of it. Its skill's rule "Challenge
-  before you build" and its MCP server's instructions say the first habit.
+- This page is the method. The skill in `skills/bring-your-own-game/` says it in its first lines.
+- `@xgamesfun/solana` (the economy tools) runs the lenses on an economy spec: `xsolana explain` and `xsolana review`
+  end with "Each route, state by state", the walk-through for the spec in front of them, and its skill says "Challenge
+  before you build".

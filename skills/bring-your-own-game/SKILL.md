@@ -14,15 +14,15 @@ here is `@xgamesfun/xcore` (the `xcore` command: `npx -y @xgamesfun/xcore …`, 
 
 The order: **adopt → fix the list → check → (backend) → (economy) → (review, when it pays) → its preview picture → publish when they ask → (review --live).**
 
-**Two habits, every step** ([docs/BEFORE-YOU-BUILD.md](../../docs/BEFORE-YOU-BUILD.md) has the traps behind them):
+**One method, every step** ([docs/BEFORE-YOU-BUILD.md](../../docs/BEFORE-YOU-BUILD.md)). For anything that touches
+money, a token, a flow a player taps through, or can't be undone:
 
-- **Challenge before you build.** For a request that touches money, a token, a flow a player taps through, or anything
-  that can't be undone, name the simplest version that gets most of it, say what each version costs (wallet prompts,
-  moving parts, the states it can end in, who must act later), and recommend one. Build what they asked once they
-  have seen that trade and still want it. Don't challenge taste, and don't challenge the same decision twice.
-- **Walk it through before you say it is done.** Play it through before it opens, while it runs, cancelled or failed,
-  won, after it ends, and "I changed my mind", as a player, as the owner and as a cheater. Bring each problem with a
-  recommendation; one with a deadline (it can only change before the first sale or claim) goes first.
+- **Challenge before you build.** Name the simplest version that gets most of the outcome, run the five lenses on both,
+  and recommend one with its trade. Build what they asked once they have seen it and still want it. Not taste, and
+  never the same decision twice.
+- **The five lenses**, in every state (before, running, done, won, lost, cancelled, abandoned, undone, after the end),
+  as a player, the owner and a cheater: follow the value; one intent, one step; check every assumption (and its
+  deadline); who makes it happen; where each rule is enforced. Run them again before you say it is done.
 
 ## 1. Adopt
 
@@ -317,7 +317,7 @@ call a coin an investment or say what it will be worth.
 ## Never
 
 - Build an economy, a draw or a paid flow exactly as named without first saying the simpler version and its trade
-  (above), or call one finished without walking it through.
+  (above), or call one finished without running the five lenses on it.
 - Change where the game's logic runs (a server moved into the page or into `server/`, a port to another language or
   framework) without the person's yes. Stop, lay out the options with their costs, and let them choose.
 - Rebuild their game through the creation loop (`gamesfun_step_*`), or move it onto the kit's runtime.

@@ -1056,8 +1056,8 @@ without one needs none: the D1 database, `xcore db` and `xcore files` are new.
 ## Documentation
 
 - [docs/SERVER.md](docs/SERVER.md): a game's own server code (`server/`, the `gf-server-v1` contract)
-- [docs/BEFORE-YOU-BUILD.md](docs/BEFORE-YOU-BUILD.md): challenge before you build, walk it through before it ships, and
-  the traps behind both
+- [docs/BEFORE-YOU-BUILD.md](docs/BEFORE-YOU-BUILD.md): challenge before you build, and the five lenses that
+  find what a design gets wrong
 - [skills/bring-your-own-game/SKILL.md](skills/bring-your-own-game/SKILL.md): the same steps, for a coding agent
 - [CHANGELOG.md](https://github.com/XGamesFun/xcore/blob/main/CHANGELOG.md), [CONTRIBUTING.md](https://github.com/XGamesFun/xcore/blob/main/CONTRIBUTING.md), [SECURITY.md](https://github.com/XGamesFun/xcore/blob/main/SECURITY.md)
 
