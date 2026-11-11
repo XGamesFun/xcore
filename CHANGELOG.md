@@ -2,6 +2,15 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.4.2 — 2026-11-11
+
+`@xgamesfun/solana` is 0.26.4 (loot 0.26.1, as devnet runs it).
+
+- A live token's name, ticker or picture link can be changed: edit it in `xsolana.json` and run `xcore loot approve`
+  again. It is written to the token's record on chain when the token has one its owner can still change.
+- Going live that is cut short (a transaction refused, or one whose confirmation was not seen) finishes when it is
+  gone on with: the accounts the economy pays into and the project's lookup table are still made.
+
 ## 0.4.1 — 2026-11-10
 
 `@xgamesfun/solana` is 0.26.3 (loot 0.26.1, as devnet runs it).
