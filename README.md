@@ -352,9 +352,11 @@ Where the sign-in comes from:
     and never more than twelve times an hour; after an answer of `429` it asks nothing until xgames.fun allows again
     (`Retry-After`, or ten minutes).
 - **Framed by anything that is not the play page** (X's timeline shows the game in a frame inside X's own site; another
-  site embeds it), the game asks who is here as it loads, as on its own host, but a frame cannot move the tab: the tap
-  opens a small window on xgames.fun, which goes on to X (or Google) by itself and closes when it is done, and where
-  the frame lets no window open, the code to type at xgames.fun/go, which the game shows (`window` is false).
+  site, or another page of xgames.fun's, embeds it), the game asks xgames.fun nothing as it loads and keeps no
+  sign-in: a frame is never signed in with no tap. A frame cannot move the tab either, so the tap opens a small window
+  on xgames.fun, which goes on to X (or Google) by itself and closes when it is done, and where the frame lets no
+  window open, the code to type at xgames.fun/go, which the game shows (`window` is false). That sign-in lasts as long
+  as the page: a reload of the frame is signed out.
 - **On a domain of the game's own**, and on a host games share, the window too, and xgames.fun is not asked who is
   here (a domain of the game's own is another site than xgames.fun).
 - **Where no window opens** on a page of its own (a blocker), `gamesfun.js` draws a small panel of its own over the
@@ -385,26 +387,28 @@ signOutButton.onclick = () => gf.signOut(); // and xgames.fun is told to forget 
 // gf.token goes to the game's own server: gf.api() sends it, env.GF.verifyPlayer checks it
 ```
 
-**A reload keeps the sign-in.** Inside the token's hour the tab keeps it, on its own host, its own domain and in a
-frame alike, and asks nothing; when the hour is up where xgames.fun is not asked (a domain of the game's own), the game
-is told the player is signed out.
+**A reload keeps the sign-in.** Inside the token's hour the tab keeps it, as the top window of the game's own host or
+its own domain (never in a frame), and asks nothing; when the hour is up where xgames.fun is not asked (a domain of
+the game's own), the game is told the player is signed out.
 
 **Sign out sticks.** `GamesFun.signOut()` signs the player out of the game and tells xgames.fun to forget it here
-(`POST https://xgames.fun/api/player/v1/session/forget`): after it xgames.fun names nobody to the game in that browser,
-and the browser itself asks no more, until they tap Sign in again (other tabs of the game sign out when they are next
+(`POST https://xgames.fun/api/player/v1/session/forget`; a forget that gets no answer is posted again as the next page
+loads, until xgames.fun answers it): after it xgames.fun names nobody to the game in that browser, and the browser
+itself asks no more, until they tap Sign in again (other tabs of the game sign out when they are next
 looked at). Their xgames.fun account stays signed in, and so do their other games; signing out on xgames.fun's account
 page ends all of it.
 
-**What is kept, and where.** The token lasts an hour. The tab keeps it until then (`sessionStorage`), and only on a
-host that serves this one game (its xgames.fun link, its own domain, `xcore dev`): never where games share a host. A
-game's own code could always read the token it was handed; nothing is kept where another game's page could.
+**What is kept, and where.** The token lasts an hour. The tab keeps it until then (`sessionStorage`), and only as the
+top window of a host that serves this one game (its xgames.fun link, its own domain, `xcore dev`): never where games
+share a host, and never in a frame. A game's own code could always read the token it was handed; nothing is kept where
+another game's page could.
 
-**A newer sign-in client, where the host serves one.** `gamesfun.js` carries its sign-in, and as the page loads it also
-asks its own host for a sign-in client at one address, `/platform/v1/signin/v1.js` (`xcore dev` answers it with the
-client of the `xcore` that runs it). When a client comes there in time, it runs; where the address answers nothing,
-or not in time, the carried one runs and the game behaves the same. `GamesFun.signInClient` says which:
-`{version, shared}`. It is one request, to the page's own origin only, and it holds up neither the page nor the game's
-start: `GamesFun.ready` waits a second for it at most.
+**A newer sign-in client, where the host serves one.** `gamesfun.js` carries its sign-in, and as the page loads in the
+top window it also asks its own host for a sign-in client at one address, `/platform/v1/signin/v1.js` (`xcore dev`
+answers it with the client of the `xcore` that runs it); a frame does not ask for it, and runs the carried one. When a
+client comes there in time, it runs; where the address answers nothing, or not in time, the carried one runs and the
+game behaves the same. `GamesFun.signInClient` says which: `{version, shared}`. It is one request, to the page's own
+origin only, and it holds up neither the page nor the game's start: `GamesFun.ready` waits a second for it at most.
 
 The game's `server/` checks the token with `env.GF.verifyPlayer`,
 first thing, before any work: a request without one answers 401 at once, since strangers' requests that do work count
@@ -901,9 +905,9 @@ xcore domain                           # where the game plays, the sites that em
 - **Embedding** (every plan: 3 sites, 10, 25): a site is its origin (`https://mygame.com`; `http://localhost:<port>`
   while you build it). It applies within about a minute, with no publish. Framed on your site, the game signs players
   in by itself (a small xgames.fun window, or a code), as in a post on X: only xgames.fun's own page can hand it a
-  sign-in, so a page that embeds it can't sign players in for it or take their sign-in. The game asks xgames.fun who
-  the player is as it loads, from its own origin, as on its own link (where the browser sends xgames.fun's cookie
-  into a frame); a reload keeps a sign-in for the hour.
+  sign-in, so a page that embeds it can't sign players in for it or take their sign-in. A framed game never asks
+  xgames.fun who the visitor is and keeps no sign-in: a player taps Sign in there, and a reload of the page is
+  signed out.
 - **A domain of your own** (Creator 1, Scale 5): `domain add` prints two records, a CNAME pointing the domain at
   xgames.fun and a TXT proving you own it. Once they are right the game is served there with its certificate, and
   sign-in, saves, scores, rooms, the server and the economy work there as on its own link. Sign-in still opens a
