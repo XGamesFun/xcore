@@ -6,7 +6,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { adopt, addLoot } from '../lib/publish/adopt.mjs';
-import { ECONOMY_FILE, economyFile, solanaRoot } from '../lib/economy.mjs';
+import { ECONOMY_FILE, economyFile, lootProgram, solanaRoot } from '../lib/economy.mjs';
 import { solanaRpc, rpcWords, SHARED_RPC } from '../lib/solana-rpc.mjs';
 import { fixture, run, tempDir } from './helpers.mjs';
 import { fromFolder, ownWords, rpcFor } from '../commands/loot.mjs';
@@ -216,6 +216,17 @@ test('a key file named beside flags is given whole; approve never goes to the sh
   const own = solanaRpc({ XSOLANA_RPC_URL: 'https://own.example/rpc' }, { file: null });
   assert.equal(rpcFor('approve', {}, own), 'https://own.example/rpc');
   assert.equal(rpcFor('approve', { XSOLANA_RPC_URL: ' https://env.example/rpc ' }, shared), 'https://env.example/rpc');
+});
+
+test("loot's address is the installed tools' own, here and in the game's own rpc.js", async () => {
+  const idl = JSON.parse(await readFile(path.join(solanaRoot(), 'js', 'client', 'idl', 'loot.json'), 'utf8'));
+  assert.match(idl.address, /^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
+  assert.equal(lootProgram(), idl.address);
+  assert.equal(lootProgram({ GAMESFUN_SOLANA: path.join(solanaRoot(), 'nowhere') }), null);
+  // The file `xcore add rpc` writes into a game is the game's own from then on, so it carries the address as a word:
+  // held here against the tools', so a move of the program is caught before a game's RPC refuses its transactions.
+  const { RPC } = await import('../lib/client/server/rpc.js');
+  assert.equal(RPC.scanPrograms[0], idl.address);
 });
 
 test("xsolana's words as xcore's", () => {
