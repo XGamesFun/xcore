@@ -1,6 +1,6 @@
 {
   "name": "@xgamesfun/xcore",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "xgames.fun from the command line: bring a web game you already made, check it as xgames.fun hosts it, give it a backend and a Solana economy, and publish it at a link anyone can play.",
   "keywords": [
     "game",
@@ -56,7 +56,7 @@
     "test": "node --test \"tests/**/*.test.mjs\""
   },
   "dependencies": {
-    "@xgamesfun/solana": "0.28.0",
+    "@xgamesfun/solana": "0.28.1",
     "esbuild": "0.28.2",
     "playwright-core": "1.63.0"
   },
