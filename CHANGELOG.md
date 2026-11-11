@@ -22,6 +22,18 @@ on this machine there is no play page around the game, so `openWallet` answers `
 again brings a game's copy of `gamesfun.js` up to 1.7.0; the Godot and Unity glue carry the new file but have no
 calls of their own for these yet.
 
+## 0.5.2 — 2026-11-11
+
+**loot is at its official address on devnet**, `xgamesVsZBpCVgJuatfYAFJRmQoccfQf5qtUFNp2Eet`, and the tools are
+`@xgamesfun/solana` 0.28.0, built for it. It is the same program as 0.27.0 at a new address, so every address the
+program derives is new too: nothing set up under the address before (`9cwq…7NFQ`) exists under this one, and an
+economy from before goes live again.
+
+- `xcore dev`'s relay and every `xcore loot` command take loot's address from the installed tools now, so the next
+  move needs no change here.
+- A new game's `server/rpc.js` (`xcore add rpc`) names the official address. One written before names the old one in
+  `scanPrograms`: put the new address first there, or the game's own RPC refuses the economy's transactions.
+
 ## 0.5.1 — 2026-11-11
 
 **An economy goes live signed by a key file on your own computer; no page opens unless you ask for one.** The tools

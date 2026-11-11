@@ -11,6 +11,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { addVouchers } from '../lib/add.mjs';
 import { fixture, ROOT, tempDir } from './helpers.mjs';
+import { lootProgram } from '../lib/economy.mjs';
 
 register(
   'data:text/javascript,' +
@@ -30,7 +31,8 @@ register(
     ),
 );
 
-const LOOT = '9cwqM1TXytPnFZsLfmUyv2dg4uW6Ch9C6UJVPns7NFQ';
+// loot's address, as the installed tools have it
+const LOOT = lootProgram();
 const GRANT = JSON.parse(await readFile(path.join(ROOT, 'tests', 'fixtures', 'grant-0.24.0.json'), 'utf8'));
 
 /** The voucher server of a game whose grant "clear" is the fixture's, PAY.check paying body.amount for body.runId. */

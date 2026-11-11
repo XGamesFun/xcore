@@ -23,6 +23,7 @@ import {
 } from '../lib/review.mjs';
 import { seedAddress } from '../lib/add.mjs';
 import { ROOT, run, tempDir } from './helpers.mjs';
+import { lootProgram } from '../lib/economy.mjs';
 
 const SAMPLES = path.join(ROOT, 'tests', 'fixtures', 'review');
 // the installed @xgamesfun/solana (0.25.0, no review), whatever the shell running the tests names
@@ -55,7 +56,7 @@ test('the two sample servers: no server finding in either; the economy review of
   const d = await review(decided);
   assert.deepEqual(ids(b), []);
   assert.deepEqual(ids(d), []);
-  // @xgamesfun/solana (0.27.2 here) has `xsolana review`: the economy is read too. A "bounds" grant with no total is the
+  // @xgamesfun/solana (0.28.0 here) has `xsolana review`: the economy is read too. A "bounds" grant with no total is the
   // trade-off the review names (medium); a "decides" one isn't.
   assert.equal(b.economy.available, true);
   assert.deepEqual(all(b), ['medium R-CLAIM-UNCAPPED', 'info R-VOUCHER-KEY', 'info R-AUTHORITY']);
@@ -99,7 +100,7 @@ test('the two sample servers: no server finding in either; the economy review of
   assert.match(c.stdout, /^review: PASS 0 high/);
   assert.match(c.stdout, /evidence .*review-2/);
   assert.match(c.stdout, /^paid route grant:found-whale: bounds$/m);
-  assert.match(c.stdout, /economy: xsolana\.json, \d+ routes? reviewed by @xgamesfun\/solana 0\.27\.2/);
+  assert.match(c.stdout, /economy: xsolana\.json, \d+ routes? reviewed by @xgamesfun\/solana 0\.28\.0/);
 });
 
 test('PAY.check: the template pays nothing; one that pays from the request alone is high, and the command exits 1', async t => {
@@ -534,7 +535,7 @@ test('payOnly, the voucher key and the grants, trust: each finding fires, and no
     delete s.grants[0].trust;
   });
   const u = await review(dir);
-  // the installed @xgamesfun/solana (0.27.2) says it itself (R-TRUST-UNSAID), so this package's own line stays out
+  // the installed @xgamesfun/solana (0.28.0) says it itself (R-TRUST-UNSAID), so this package's own line stays out
   assert.deepEqual(ids(u), []);
   assert.ok(
     all(u).some(i => i.endsWith(' R-TRUST-UNSAID')),
@@ -628,8 +629,7 @@ async function standInGame({
       return auth ? send(200, { ok: true, profile: {} }) : send(401, { ok: false, why: 'Sign in.' }); // any token
     if (p === '/api/scores' && req.method === 'GET') return send(200, { ok: true, scores: [] }); // public
     if (p === '/api/vouchers/key' && req.method === 'GET') return send(200, { ok: true, publicKey: key });
-    if (p === '/xsolana.json')
-      return send(200, { live: { program: '9cwqM1TXytPnFZsLfmUyv2dg4uW6Ch9C6UJVPns7NFQ', project } });
+    if (p === '/xsolana.json') return send(200, { live: { program: lootProgram(), project } });
     return send(401, { ok: false, why: 'Sign in first.' });
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -653,7 +653,7 @@ test('live: each route asked with no sign-in and a forged one; the key and the e
     keys: ['2LW2C9sZbxoizKZ9eXYrsiF8xLP8GajJpnjAyNYKTrh1'],
     economyPath: 'xsolana.json',
     localLive: {
-      program: '9cwqM1TXytPnFZsLfmUyv2dg4uW6Ch9C6UJVPns7NFQ',
+      program: lootProgram(),
       project: 'ReefWatch1111111111111111111111111111111111',
     },
     vouchers: true,
