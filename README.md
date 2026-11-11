@@ -544,8 +544,23 @@ holds the addresses the economy went live at stays in the project (keep it in gi
 
 `@xgamesfun/solana`'s own examples use a public devnet RPC and `node_modules/` paths; on xgames.fun use `PAGE_RPC` and
 `gf/loot/` as above. Where its help says `xsolana <command>`, run `xcore loot <command>`. `xcore loot check|simulate|cost|explain`
-runs the tools from a terminal. Going live is the person's own step, approved in their own wallet: `xcore loot
-approve` in the folder with `xsolana.json`.
+runs the tools from a terminal.
+
+**Going live** is signed by a key file on your own computer, once you have read what it sends and said yes:
+
+```bash
+xcore loot keygen ~/.config/xsolana/my-game.json                 # a key for the game: prints its address, never the key
+xcore loot approve --keypair ~/.config/xsolana/my-game.json      # in the folder with xsolana.json: everything it would send
+xcore loot approve --keypair ~/.config/xsolana/my-game.json --yes <code>   # sends exactly that: the code is the printout's
+```
+
+Send the address `keygen` prints the devnet SOL `xcore loot cost` names. The key file is the project's owner, so
+whoever can read it controls the project: keep it outside the game's folder and out of git (the tools refuse one inside
+a repository, and `xcore publish` refuses to upload one), back it up like a password, and never paste it anywhere.
+Unless `xsolana.json` names a `treasury`, what the economy earns for you lands at the key's address. A key file signs
+each transaction exactly as it was shown and needs no page; to sign in a browser wallet anyway, ask for the page:
+`xcore loot approve --browser`. With no `XSOLANA_RPC_URL`, `approve` sends through Solana's public devnet RPC, not the
+shared relay: the relay passes only loot's own transactions, and a setup also makes mints and token accounts.
 
 **When loot is upgraded.** This package pins the tools for one build of loot (0.27.0, on devnet since 2026-11-11). loot is upgraded in place on
 devnet. 0.26.1 and 0.27.0 left every account of 0.26.0 as it was, so an economy that went live under 0.26 stays live;
@@ -844,7 +859,8 @@ from a qualified professional before you offer anything of real value.
 
 **On-chain features.** The loot program runs on Solana **devnet** and **has not been audited**: do not use it with
 real value. Blockchain transactions are public and irreversible. You alone control your wallet and keys. Never put a
-private key, seed phrase or secret in a game, and approve only transactions you understand.
+private key, seed phrase or secret in a game, and approve only transactions you understand. The key file an economy
+goes live with owns it: keep it outside the game's folder, and never paste it anywhere.
 
 **Third-party services.** xgames.fun, Cloudflare, Supabase, Railway, GitHub, npm, Solana RPC providers and wallets are
 run by others under their own terms and policies, which you must follow. Their availability, fees and rules can change

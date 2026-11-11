@@ -144,9 +144,15 @@ client into `gf/loot/` beside it. Wire it into their page the way that README's 
 page-relative URL, `solanaApp` with `rpcUrl: PAGE_RPC`); a Godot or Unity game (or any page with `gamesfun.js`) uses
 `GamesFun.loot` instead (`loot_ready`/`loot_connect`/`loot_call` in Godot, `LootReady`/`LootConnect`/`LootCall` in
 Unity). A browser with no wallet is told so, with the game still playable. `xcore dev <folder>` runs the page and
-`server/` against devnet; the economy's calls answer only once it is live there (`xcore loot approve`, devnet's test
-SOL: an economy approved to try it is one the person can approve again later). Going live is the person's own
-`xcore loot approve`, in their wallet: never yours.
+`server/` against devnet; the economy's calls answer only once it is live there (devnet's test SOL: an economy put
+live to try it is one the person can put live again later). Going live is signed by a key file on the person's own
+machine, after their yes, and you open no signing page: `xcore loot keygen ~/.config/xsolana/<game>.json` makes the
+key (it prints the address, which they send the devnet SOL `xcore loot cost` names); `xcore loot approve --keypair
+<that file>`, in the folder with `xsolana.json`, prints everything it would send and sends nothing; you run it again
+with `--yes <code>` only after they have read that printout and said yes. The key file owns the project: never open,
+print or copy it, never keep it in the game's folder, and say so to the person once. Never ask for a seed phrase or
+the key of a wallet they already have. A browser wallet's page (`xcore loot approve --browser`) only when they ask
+for one.
 
 Paying a result has two signers (docs/SERVER.md, "Paying a result", has the rule): xgames.fun's keeper, when the
 server already decides who won and the prize is fixed by place (the server calls `env.GF.loot.report`; the owner
@@ -156,7 +162,8 @@ the own key, run `xcore add vouchers <folder>`: it writes `server/vouchers.js` a
 seed in `.dev.vars`, kept out of git). Then, in order: write `PAY.check` with the person (what their server checks
 before it pays; nothing is paid until it is written) and count payouts in `PAY.paid`; they publish; they run `xcore
 secret set VOUCHER_SEED --new-key` (the live key: made here, sent to xgames.fun only and never kept on their machine; it prints the address);
-that address goes in the grant's `vouchers` (`xcore loot check`); they approve and publish again. Never read the seed
+that address goes in the grant's `vouchers` (`xcore loot check`); the change goes live (`xcore loot approve`, the
+same key file, after their yes) and they publish again. Never read the seed
 out of `.dev.vars` or repeat it.
 
 Design it so a cheater gains little (docs/SERVER.md, "How much your server can check" and "Who gets paid"): never send
