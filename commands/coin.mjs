@@ -2,7 +2,16 @@
 // file, and giving up a launch that was never sent.
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, named } from '../lib/games.mjs';
-import { ABOUT_SOL, coinStatus, dropLaunch, explorerOf, launchCoin, planText, VENUES } from '../lib/coin.mjs';
+import {
+  ABOUT_SOL,
+  coinStatus,
+  dropLaunch,
+  explorerOf,
+  launchCoin,
+  planText,
+  VENUES,
+  VENUE_WORDS,
+} from '../lib/coin.mjs';
 import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore coin [game] [--json]
@@ -19,7 +28,7 @@ economy, runs no market: a coin people can buy and sell is launched on a venue, 
                  (--yes <code>), once the person whose game it is has read that and said yes. xgames.fun's launchpad
                  builds the launch; before the key signs, each transaction is held to being a launch for this one new
                  coin: no buy, no move of a token the key holds, nothing of the game's economy
-      --name         the coin's name (at most 32 bytes)        --ticker   its ticker (2 to 10 bytes, no spaces)
+      --name         the coin's name (at most 32 bytes)        --ticker   its ticker (2 to 10 letters or digits)
       --picture      a picture among the published game's files (the path ${CMD} coin lists)
       --venue        meteora (the default) or pumpfun          --pair     what it trades against (the default: SOL)
       --keypair      the key file that signs and pays: the coin's creator fees belong to its address for good
@@ -57,9 +66,11 @@ function statusText(game, s) {
     lines.push(launch.why ?? s.why ?? 'Launching a coin is not on for this XGames.fun yet.');
     return lines.join('\n');
   }
-  for (const v of s.venues ?? [])
-    lines.push(`  ${v.venue.padEnd(8)} ${v.says}  Pairs: ${v.pairs.map(p => p.symbol).join(', ')}`);
-  if (!(s.venues ?? []).length) lines.push('  The launchpad is not offering a venue right now.');
+  // (a venue this command can launch on, in its own words: what the check holds a launch to)
+  const venues = (s.venues ?? []).filter(v => VENUES[v.venue]);
+  for (const v of venues)
+    lines.push(`  ${v.venue.padEnd(8)} ${VENUE_WORDS[v.venue]}  Pairs: ${v.pairs.map(p => p.symbol).join(', ')}`);
+  if (!venues.length) lines.push('  The launchpad is not offering a venue right now.');
   const pictures = (s.pictures ?? []).map(p => p.path);
   lines.push(
     pictures.length

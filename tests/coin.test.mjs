@@ -26,11 +26,12 @@ import {
   dropLaunch,
   launchCode,
   launchCoin,
+  LEAST_LIQUIDITY_PERCENT,
   LEAST_SHARE_BPS,
+  LEAST_TRADING_FEE_PERCENT,
   MOST_LAMPORTS,
   planText,
   solanaTools,
-  VENUES,
 } from '../lib/coin.mjs';
 import { saveSecret } from '../lib/credentials.mjs';
 import { lootProgram, solanaRoot } from '../lib/economy.mjs';
@@ -91,8 +92,10 @@ const changed = (launch, n, change, options) =>
     change(p);
     return wireOf(p, options);
   });
+/** The plan the fixtures were built to: a coin named Moth Coin (MOTH), linked on https://xgames.example. */
+const PLAN = { name: 'Moth Coin', symbol: 'MOTH', origin: 'https://xgames.example' };
 const check = (launch, venue, wires = launch.transactions.map(fromBase64), more = {}) =>
-  checkLaunch(wires, { wallet: launch.wallet, venue, mint: launch.mint, loot: LOOT, tools, ...more });
+  checkLaunch(wires, { wallet: launch.wallet, venue, mint: launch.mint, loot: LOOT, tools, ...PLAN, ...more });
 const refused = (act, words) =>
   assert.throws(act, e => {
     assert.ok(e instanceof CoinError, e.stack);
@@ -102,39 +105,62 @@ const refused = (act, words) =>
     assert.match(e.message, /Nothing was signed and nothing was sent\.$/);
     return true;
   });
+/** The instruction of `name` among a transaction's parts. */
+const called = (p, name) =>
+  p.instructions.find(ix => Buffer.from(ix.data.subarray(0, 8)).equals(Buffer.from(disc(name))));
+/** A coin's name, ticker and link as both venues' creating instructions begin (three strings, each after its length). */
+const words = (...texts) => bytes(...texts.flatMap(t => [le(Buffer.byteLength(t), 4), Buffer.from(t)]));
+/**
+ * Where the settings a launch is held to sit in the fixture's `create_config` (a curve with a volatility fee and a
+ * fixed supply, as the launchpad makes them): the test below reads the launchpad's own values at each.
+ */
+const SETTING = { tokenType: 71, partner: 74, creator: 76, tradingFee: 159, authority: 160, creationFee: 167 };
 
-test('a real launch of each venue passes: its instructions, the coin its own key signed, the SOL it names', () => {
+test('a real launch of each venue passes: what it does in words, the coin its own key signed, the SOL it names', () => {
+  const METEORA = [
+    'the curve’s settings (no fee for the pool; this key keeps its share of the trading fees)',
+    'the coin and its pool',
+  ];
+  const PUMP = ['the coin, with this key as its creator', 'its creator fee: this key keeps 50%'];
   assert.deepEqual(check(FIXTURE.meteora, 'meteora'), {
     mint: FIXTURE.meteora.mint,
     lamports: 15_000n,
-    steps: ['create_config', 'initialize_virtual_pool_with_spl_token'],
+    steps: METEORA,
   });
-  assert.deepEqual(check(FIXTURE.pumpfun, 'pumpfun').steps, [
-    'create_v2',
-    'sweep_creator_fee',
-    'create_fee_sharing_config',
-    'update_fee_shares_v2 (this key keeps 50% of the creator fee)',
-  ]);
-  // a pump.fun coin paired with a token also makes the fee vault's token account
-  assert.deepEqual(check(FIXTURE.pumpfunUsdc, 'pumpfun').steps.slice(1, 4), [
-    'sweep_creator_fee',
-    'create_fee_sharing_config',
-    'a token account',
-  ]);
+  assert.deepEqual(check(FIXTURE.pumpfun, 'pumpfun'), { mint: FIXTURE.pumpfun.mint, lamports: 15_000n, steps: PUMP });
+  // a pump.fun coin paired with a token also makes the fee vault's token account, counted as its rent
+  assert.deepEqual(check(FIXTURE.pumpfunUsdc, 'pumpfun'), {
+    mint: FIXTURE.pumpfunUsdc.mint,
+    lamports: 3_015_000n,
+    steps: PUMP,
+  });
   // the mutations below take a fixture apart and build it again: built again as it was, it is the same launch
-  for (const [launch, venue] of [
-    [FIXTURE.meteora, 'meteora'],
-    [FIXTURE.pumpfun, 'pumpfun'],
-    [FIXTURE.pumpfunUsdc, 'pumpfun'],
+  for (const [launch, venue, steps] of [
+    [FIXTURE.meteora, 'meteora', METEORA],
+    [FIXTURE.pumpfun, 'pumpfun', PUMP],
+    [FIXTURE.pumpfunUsdc, 'pumpfun', PUMP],
   ])
     assert.deepEqual(
       check(
         launch,
         venue,
         launch.transactions.map(b64 => wireOf(parts(b64))),
-      ),
-      check(launch, venue),
+      ).steps,
+      steps,
     );
+  // the launchpad's own settings, where the tests below change them
+  const settings = called(parts(FIXTURE.meteora.transactions[0]), 'create_config').data;
+  assert.deepEqual(
+    [
+      settings[SETTING.tokenType],
+      settings[SETTING.partner],
+      settings[SETTING.creator],
+      settings[SETTING.tradingFee],
+      settings[SETTING.authority],
+    ],
+    [0, 50, 50, 50, 1],
+  );
+  assert.equal(Buffer.from(settings).readBigUInt64LE(SETTING.creationFee), 0n);
 });
 
 test('anything that is not a launch is refused, in words that say what it held', () => {
@@ -174,7 +200,13 @@ test('anything that is not a launch is refused, in words that say what it held',
         ),
       /transaction 2 of 2 holds an instruction of pump\.fun that is not part of a launch/,
     );
-  for (const name of ['swap', 'swap2', 'transfer_pool_creator', 'claim_creator_trading_fee'])
+  for (const name of [
+    'swap',
+    'swap2',
+    'transfer_pool_creator',
+    'claim_creator_trading_fee',
+    'initialize_virtual_pool_with_token2022',
+  ])
     refused(
       () =>
         check(
@@ -235,22 +267,58 @@ test('anything that is not a launch is refused, in words that say what it held',
     /names loot, the program of the game’s economy/,
   );
 
-  // the System program: only a new account or a transfer of the key's own, and little
+  // the System program: only a new account or a transfer of the key's own, whole, and little
+  const system = (data, keys = [signer, { pubkey: other(), isSigner: false, isWritable: true }]) => ({
+    programId: SYSTEM,
+    keys,
+    data,
+  });
+  const notSystem = /holds a System instruction that is not a new account or a transfer of this key’s/;
+  // (1: the key's own account handed to another program; 3, 11: with a seed; a transfer cut short, or with more after it)
+  refused(
+    () => check(pumpfun, 'pumpfun', add(pumpfun, 1, system(bytes(le(1, 4), decodeBase58(TOKEN)), [signer]))),
+    notSystem,
+  );
+  refused(() => check(pumpfun, 'pumpfun', add(pumpfun, 1, system(bytes(le(11, 4), le(5n, 8))))), notSystem);
+  refused(() => check(pumpfun, 'pumpfun', add(pumpfun, 1, system(bytes(le(2, 4), [1, 0, 0])))), notSystem);
+  refused(() => check(pumpfun, 'pumpfun', add(pumpfun, 1, system(bytes(le(2, 4), le(5n, 8), [0])))), notSystem);
   refused(
     () =>
       check(
         pumpfun,
         'pumpfun',
-        add(pumpfun, 1, { programId: SYSTEM, keys: [signer], data: bytes(le(1, 4), decodeBase58(TOKEN)) }),
+        add(
+          pumpfun,
+          1,
+          system(bytes(le(2, 4), le(5n, 8)), [signer, signer, { pubkey: other(), isSigner: false, isWritable: true }]),
+        ),
       ),
-    /holds a System instruction that is not a new account or a transfer of this key’s/,
+    notSystem,
   );
-  const transfer = lamports => ({
-    programId: SYSTEM,
-    keys: [signer, { pubkey: other(), isSigner: false, isWritable: true }],
-    data: bytes(le(2, 4), le(lamports, 8)),
-  });
+  refused(
+    () =>
+      check(
+        pumpfun,
+        'pumpfun',
+        add(
+          pumpfun,
+          1,
+          system(bytes(le(2, 4), le(5n, 8)), [{ pubkey: other(), isSigner: false, isWritable: true }, signer]),
+        ),
+      ),
+    notSystem,
+  );
+  const transfer = lamports => system(bytes(le(2, 4), le(lamports, 8)));
   assert.equal(check(pumpfun, 'pumpfun', add(pumpfun, 1, transfer(20_000_000n))).lamports, 20_015_000n);
+  // a new account of 0.05 SOL: its lamports are counted as a transfer's are
+  assert.equal(
+    check(
+      pumpfun,
+      'pumpfun',
+      add(pumpfun, 1, system(bytes(le(0, 4), le(50_000_000n, 8), le(165n, 8), decodeBase58(TOKEN)))),
+    ).lamports,
+    50_015_000n,
+  );
   refused(
     () => check(pumpfun, 'pumpfun', add(pumpfun, 1, transfer(MOST_LAMPORTS))),
     /it names 0\.1 SOL of this key’s, more than the 0\.1 SOL a launch may name/,
@@ -287,7 +355,12 @@ test('anything that is not a launch is refused, in words that say what it held',
     () => check(pumpfun, 'pumpfun', add(pumpfun, 0, { programId: BUDGET, keys: [], data: bytes([9]) })),
     /a compute budget instruction of a kind not known here/,
   );
-  // an associated-token instruction that is not a new account (2 moves the tokens of a nested account)
+  refused(
+    () => check(pumpfun, 'pumpfun', add(pumpfun, 0, { programId: BUDGET, keys: [], data: bytes([3], le(5, 4)) })),
+    /a compute budget instruction of a kind not known here/,
+  );
+  // an associated-token instruction that is not a new account (2 moves the tokens of a nested account); and no
+  // more than two new ones, each counted as its rent (they are paid by the key, for whoever they are made for)
   refused(
     () =>
       check(
@@ -296,6 +369,28 @@ test('anything that is not a launch is refused, in words that say what it held',
         changed(pumpfunUsdc, 1, p => (p.instructions.find(ix => ix.programId === ATA).data = bytes([2]))),
       ),
     /holds an associated-token instruction that is not a new token account/,
+  );
+  const account = () => ({
+    programId: ATA,
+    keys: [signer, ...[1, 2, 3].map(() => ({ pubkey: other(), isSigner: false, isWritable: true }))],
+    data: bytes([1]),
+  });
+  assert.equal(
+    check(
+      pumpfun,
+      'pumpfun',
+      changed(pumpfun, 1, p => p.instructions.push(account(), account())),
+    ).lamports,
+    6_015_000n,
+  );
+  refused(
+    () =>
+      check(
+        pumpfun,
+        'pumpfun',
+        changed(pumpfun, 1, p => p.instructions.push(account(), account(), account())),
+      ),
+    /it makes more than 2 token accounts, each paid for by this key/,
   );
 
   // accounts loaded from a lookup table can't be read here, and a launch needs none
@@ -326,41 +421,98 @@ test('anything that is not a launch is refused, in words that say what it held',
     /not one to four transactions/,
   );
   refused(() => check({ ...pumpfun, mint: undefined }, 'pumpfun'), /it does not say which coin it launches/);
+  refused(() => check({ ...pumpfun, mint: pumpfun.wallet }, 'pumpfun'), /it does not say which coin it launches/);
+  refused(() => check(pumpfun, 'pumpfun', undefined, { name: '' }), /the plan it is checked against names no coin/);
 });
 
-test('the launch is for one new coin: its own key signs, and nothing in it is for another', () => {
-  const { pumpfun, meteora } = FIXTURE;
+test('a launch is its venue’s instructions, each once and in order, for one new coin in the places the program reads', () => {
+  const { pumpfun, pumpfunUsdc, meteora } = FIXTURE;
   const first = fromBase64(pumpfun.transactions[0]),
     second = fromBase64(pumpfun.transactions[1]);
-  // the fee split of some other coin of the key's, slipped into this launch
   const theirs = other();
-  for (const name of ['update_fee_shares_v2', 'create_fee_sharing_config', 'sweep_creator_fee'])
+  // The fee split, the fee settings or the sweep of some other coin of the key's, slipped into this launch: the
+  // coin is read from the place the program reads it, so the new coin named elsewhere in it changes nothing.
+  for (const [name, place] of [
+    ['update_fee_shares_v2', 4],
+    ['create_fee_sharing_config', 4],
+    ['sweep_creator_fee', 2],
+  ]) {
+    const retargeted = trailing =>
+      changed(pumpfun, 1, p => {
+        const ix = called(p, name);
+        assert.equal(ix.keys[place].pubkey, pumpfun.mint, `${name} reads its coin from account ${place}`);
+        ix.keys[place] = { ...ix.keys[place], pubkey: theirs };
+        if (trailing) ix.keys.push({ pubkey: pumpfun.mint, isSigner: false, isWritable: false });
+      });
+    for (const trailing of [false, true])
+      refused(
+        () => check(pumpfun, 'pumpfun', retargeted(trailing)),
+        new RegExp(`transaction 2 of 2 holds a ${name} whose coin is not the coin being launched`),
+      );
+  }
+  // and the key in the places it acts from: another payer or authority is another's instruction
+  for (const [n, name, place, what] of [
+    [0, 'create_v2', 5, 'payer'],
+    [1, 'sweep_creator_fee', 0, 'payer'],
+    [1, 'create_fee_sharing_config', 2, 'payer'],
+    [1, 'update_fee_shares_v2', 2, 'authority'],
+  ])
     refused(
       () =>
         check(
           pumpfun,
           'pumpfun',
-          changed(pumpfun, 1, p => {
-            const ix = p.instructions.find(i => Buffer.from(i.data.subarray(0, 8)).equals(Buffer.from(disc(name))));
-            ix.keys = ix.keys.map(k => (k.pubkey === pumpfun.mint ? { ...k, pubkey: theirs } : k));
-          }),
+          changed(
+            pumpfun,
+            n,
+            p => (called(p, name).keys[place] = { pubkey: theirs, isSigner: false, isWritable: true }),
+          ),
         ),
-      new RegExp(`transaction 2 of 2 holds a ${name} that is not for the coin being launched`),
+      new RegExp(`holds a ${name} whose ${what} is not this key`),
     );
-  // a coin that exists already (its key did not sign), named as the one being launched
+  // Each once and in order, and the ones a launch must have: no split, no launch (the coin's fees would be whoever's
+  // the launchpad made them); two splits; the coin made second.
+  refused(() => check(pumpfun, 'pumpfun', [first]), /it has no update_fee_shares_v2, which a launch on pump\.fun has/);
   refused(
-    () => check({ ...meteora, mint: other() }, 'meteora'),
-    /holds a initialize_virtual_pool_with_spl_token that is not for the coin being launched/,
+    () =>
+      check(
+        pumpfun,
+        'pumpfun',
+        changed(pumpfun, 1, p => p.instructions.push(called(p, 'update_fee_shares_v2'))),
+      ),
+    /holds a update_fee_shares_v2 where a launch on pump\.fun has none \(a second one, or out of its order\)/,
   );
+  refused(
+    () =>
+      check(
+        pumpfun,
+        'pumpfun',
+        changed(pumpfun, 1, p => p.instructions.reverse()),
+      ),
+    /where a launch on pump\.fun has none/,
+  );
+  refused(
+    () =>
+      check(
+        pumpfun,
+        'pumpfun',
+        changed(pumpfun, 1, p => p.instructions.pop()),
+      ),
+    /it has no update_fee_shares_v2/,
+  );
+  // a coin that exists already (its key did not sign), named as the one being launched
   refused(
     () => check(pumpfun, 'pumpfun', [second]),
     /the coin it launches is not a new one \(its own key did not sign\)/,
   );
   refused(() => check(pumpfun, 'pumpfun', [second, first]), /the coin it launches is not a new one/);
+  refused(() => check({ ...pumpfun, mint: theirs }, 'pumpfun'), /the coin it launches is not a new one/);
 
   // The rest of a launch begun earlier (a pump.fun coin that exists and wants its second transaction): only for the
-  // coin this folder recorded when it signed the first.
-  assert.deepEqual(check(pumpfun, 'pumpfun', [second], { resume: true, begun: pumpfun.mint }).steps.length, 3);
+  // coin this folder recorded when it signed the first, and never with a coin made in it.
+  assert.deepEqual(check(pumpfun, 'pumpfun', [second], { resume: true, begun: pumpfun.mint }).steps, [
+    'its creator fee: this key keeps 50%',
+  ]);
   refused(
     () => check(pumpfun, 'pumpfun', [second], { resume: true }),
     /the rest of a launch that was not begun from this folder.*finish it where it was begun/,
@@ -369,10 +521,350 @@ test('the launch is for one new coin: its own key signs, and nothing in it is fo
     () => check(pumpfun, 'pumpfun', [second], { resume: true, begun: theirs }),
     /it is for another coin than the one this folder began launching/,
   );
+  refused(
+    () => check(pumpfun, 'pumpfun', [first, second], { resume: true, begun: pumpfun.mint }),
+    /it is called the rest of an earlier launch and makes a coin all the same/,
+  );
+  refused(
+    () => check(meteora, 'meteora', undefined, { resume: true, begun: meteora.mint }),
+    /the rest of an earlier launch, which a launch on Meteora never has/,
+  );
+
+  // Meteora: the settings and the pool, once each, in the one transaction; the pool on those very settings, whose
+  // own new key signed; the coin and the key where the program reads them.
+  const pool = 'initialize_virtual_pool_with_spl_token';
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        changed(meteora, 0, p => p.instructions.shift()),
+      ),
+    /it has no create_config, which a launch on Meteora has/,
+  );
+  // (with no pool made, nothing makes the coin either: its key signs nothing)
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        changed(meteora, 0, p => p.instructions.pop()),
+      ),
+    /the coin it launches is not a new one/,
+  );
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        changed(meteora, 0, p => {
+          const made = p.instructions.pop();
+          p.instructions[0].keys.push(made.keys[3]);
+        }),
+      ),
+    new RegExp(`it has no ${pool}, which a launch on Meteora has`),
+  );
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        changed(meteora, 0, p => p.instructions.push(p.instructions[0])),
+      ),
+    /holds a create_config where a launch on Meteora has none/,
+  );
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        changed(meteora, 0, p => (called(p, pool).keys[0] = { pubkey: theirs, isSigner: false, isWritable: false })),
+      ),
+    /makes the coin’s pool on other settings than the ones this launch makes/,
+  );
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        changed(meteora, 0, p => {
+          // settings at an account nobody's new key signed for (one that exists: another pool's, with its own fees)
+          const config = called(p, 'create_config').keys[0].pubkey;
+          for (const ix of p.instructions)
+            ix.keys = ix.keys.map(k => (k.pubkey === config ? { ...k, pubkey: theirs, isSigner: false } : k));
+        }),
+      ),
+    /makes its curve’s settings at an account whose own key did not sign/,
+  );
+  for (const [place, what] of [
+    [2, 'creator'],
+    [10, 'payer'],
+  ])
+    refused(
+      () =>
+        check(
+          meteora,
+          'meteora',
+          changed(
+            meteora,
+            0,
+            p => (called(p, pool).keys[place] = { pubkey: theirs, isSigner: false, isWritable: true }),
+          ),
+        ),
+      new RegExp(`holds a ${pool} whose ${what} is not this key`),
+    );
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        changed(
+          meteora,
+          0,
+          p => (called(p, 'create_config').keys[4] = { pubkey: theirs, isSigner: false, isWritable: true }),
+        ),
+      ),
+    /holds a create_config whose payer is not this key/,
+  );
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        changed(meteora, 0, p => {
+          const ix = called(p, pool);
+          ix.keys[3] = { ...ix.keys[3], pubkey: theirs, isSigner: false };
+          ix.keys.push({ pubkey: meteora.mint, isSigner: true, isWritable: true });
+        }),
+      ),
+    new RegExp(`holds a ${pool} whose coin is not the coin being launched`),
+  );
+  // (a token account made in a pump.fun launch is the launch's own: the same in a Meteora one is not refused for itself)
+  assert.equal(check(pumpfunUsdc, 'pumpfun').steps.length, 2);
 });
 
-test('a pump.fun coin’s creator fee: the key keeps the half it was told, or the launch is not signed', () => {
+test('the coin is the plan’s: its name, its ticker and its link on chain', () => {
+  const { meteora, pumpfun } = FIXTURE;
+  const pool = 'initialize_virtual_pool_with_spl_token';
+  const link = launch => `https://xgames.example/meta/token/${launch.mint}.json`;
+  for (const [launch, venue, name, tail] of [
+    [meteora, 'meteora', pool, () => []],
+    [pumpfun, 'pumpfun', 'create_v2', l => [decodeBase58(l.wallet), new Uint8Array(11)]],
+  ]) {
+    const renamed = (...said) =>
+      changed(launch, 0, p => (called(p, name).data = bytes(disc(name), words(...said), ...tail(launch))));
+    assert.ok(check(launch, venue, renamed('Moth Coin', 'MOTH', link(launch))), 'as the launchpad made it');
+    // another name or ticker than the plan's (the code the person approved covers theirs, not the launchpad's)
+    refused(
+      () => check(launch, venue, renamed('Moth Coin Classic', 'MOTH', link(launch))),
+      /makes a coin named "Moth Coin Classic" with the ticker "MOTH", not the one in the plan/,
+    );
+    refused(
+      () => check(launch, venue, renamed('Moth Coin', 'MOTHS', link(launch))),
+      /with the ticker "MOTHS", not the one in the plan/,
+    );
+    refused(() => check(launch, venue, undefined, { symbol: 'moth' }), /not the one in the plan/);
+    // a link that is not the coin's own on the xgames.fun the launch came from
+    for (const uri of [
+      `https://evil.example/meta/token/${launch.mint}.json`,
+      `http://xgames.example/meta/token/${launch.mint}.json`,
+      `https://xgames.example/meta/token/${other()}.json`,
+      `https://xgames.example/meta/token/${launch.mint}.json?x=1`,
+      `https://xgames.example/meta/token/${launch.mint}.json#x`,
+      `https://xgames.example@evil.example/meta/token/${launch.mint}.json`,
+      'not a link',
+      '',
+    ])
+      refused(
+        () => check(launch, venue, renamed('Moth Coin', 'MOTH', uri)),
+        /gives the coin a link that is not its own on https:\/\/xgames\.example/,
+      );
+    refused(
+      () => check(launch, venue, undefined, { origin: 'https://other.example' }),
+      /a link that is not its own on https:\/\/other\.example/,
+    );
+    // (with no https xgames.fun to hold it to, a Studio on this machine, the link is still the coin's own, over https)
+    assert.ok(check(launch, venue, undefined, { origin: null }));
+    refused(
+      () =>
+        check(launch, venue, renamed('Moth Coin', 'MOTH', `http://localhost/meta/token/${launch.mint}.json`), {
+          origin: null,
+        }),
+      /a link that is not its own on xgames\.fun/,
+    );
+    // data that is not three strings to its last byte
+    refused(
+      () =>
+        check(
+          launch,
+          venue,
+          changed(launch, 0, p => (called(p, name).data = bytes(called(p, name).data, [0]))),
+        ),
+      new RegExp(`holds a ${name} that can’t be read here`),
+    );
+    refused(
+      () =>
+        check(
+          launch,
+          venue,
+          changed(launch, 0, p => (called(p, name).data = called(p, name).data.subarray(0, 20))),
+        ),
+      /can’t be read here/,
+    );
+  }
+});
+
+test('Meteora’s settings: no fee for the pool, the key’s share of fees and liquidity, a coin nobody can mint more of', () => {
+  const { meteora } = FIXTURE;
+  const set = change =>
+    changed(meteora, 0, p => {
+      const ix = called(p, 'create_config');
+      const data = Buffer.from(ix.data);
+      change(data);
+      ix.data = new Uint8Array(data);
+    });
+  assert.deepEqual([LEAST_TRADING_FEE_PERCENT, LEAST_LIQUIDITY_PERCENT], [50, 50]);
+  // A fee for making the pool, which the pool's creator pays: the venue lets a launchpad set up to 100 SOL.
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        set(d => d.writeBigUInt64LE(90_000_000_000n, SETTING.creationFee)),
+      ),
+    /sets a fee of 90 SOL for making the pool, which this key would pay/,
+  );
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        set(d => d.writeBigUInt64LE(1n, SETTING.creationFee)),
+      ),
+    /sets a fee of 0 SOL for making the pool/,
+  );
+  // The key's share of the trading fees, and of the liquidity the coin moves to its pool with.
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        set(d => (d[SETTING.tradingFee] = 0)),
+      ),
+    /gives this key 0% of the creator’s side of the trading fees, not the 50% it was told/,
+  );
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        set(d => (d[SETTING.tradingFee] = 49)),
+      ),
+    /gives this key 49%/,
+  );
+  assert.ok(
+    check(
+      meteora,
+      'meteora',
+      set(d => (d[SETTING.tradingFee] = 80)),
+    ),
+    'more for the key is no refusal',
+  );
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        set(d => {
+          d[SETTING.creator] = 0;
+          d[SETTING.partner] = 100;
+        }),
+      ),
+    /gives this key 0% of the coin’s liquidity, not the 50% it was told/,
+  );
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        set(d => (d[SETTING.partner] = 10)),
+      ),
+    /of the coin’s liquidity/,
+  );
+  // Someone left able to mint more of the coin or rename it (0, 2, 3, 4), or a coin of another token program.
+  for (const authority of [0, 2, 3, 4])
+    refused(
+      () =>
+        check(
+          meteora,
+          'meteora',
+          set(d => (d[SETTING.authority] = authority)),
+        ),
+      /leaves someone able to mint more of the coin or rename it/,
+    );
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        set(d => (d[SETTING.tokenType] = 1)),
+      ),
+    /leaves someone able to mint more/,
+  );
+  // settings that are not laid out as the program's to their last byte are not read as settings at all
+  for (const change of [
+    d => d.subarray(0, 100),
+    d => Buffer.concat([d, Buffer.from([0])]),
+    d => {
+      d[35] = 7;
+      return d;
+    },
+  ])
+    refused(
+      () =>
+        check(
+          meteora,
+          'meteora',
+          changed(meteora, 0, p => {
+            const ix = called(p, 'create_config');
+            ix.data = new Uint8Array(change(Buffer.from(ix.data)));
+          }),
+        ),
+      /holds curve settings that can’t be read here/,
+    );
+});
+
+test('pump.fun: this key is the coin’s creator, in none of its optional modes, and keeps the half it was told', () => {
   const { pumpfun } = FIXTURE;
+  const made = change =>
+    changed(pumpfun, 0, p => {
+      const ix = called(p, 'create_v2');
+      const data = Buffer.from(ix.data);
+      change(data);
+      ix.data = new Uint8Array(data);
+    });
+  // the creator is in the instruction's own data, after the three strings: another's, and the fees are another's
+  const creatorAt = called(parts(pumpfun.transactions[0]), 'create_v2').data.length - 11 - 32;
+  refused(
+    () =>
+      check(
+        pumpfun,
+        'pumpfun',
+        made(d => Buffer.from(decodeBase58(other())).copy(d, creatorAt)),
+      ),
+    /makes the coin with another creator than this key, so its creator fees would not be this key’s/,
+  );
+  for (let i = 1; i <= 11; i++)
+    refused(
+      () =>
+        check(
+          pumpfun,
+          'pumpfun',
+          made(d => (d[d.length - i] = 1)),
+        ),
+      /makes the coin in a mode of pump\.fun’s that the plan did not say/,
+    );
+
   const split = shares =>
     changed(pumpfun, 1, p => {
       const ix = p.instructions.at(-1);
@@ -383,10 +875,7 @@ test('a pump.fun coin’s creator fee: the key keeps the half it was told, or th
       );
     });
   assert.equal(LEAST_SHARE_BPS, 5000);
-  assert.match(
-    check(pumpfun, 'pumpfun', split([[pumpfun.wallet, 10_000]])).steps.at(-1),
-    /keeps 100% of the creator fee/,
-  );
+  assert.match(check(pumpfun, 'pumpfun', split([[pumpfun.wallet, 10_000]])).steps.at(-1), /this key keeps 100%/);
   assert.match(
     check(
       pumpfun,
@@ -396,7 +885,7 @@ test('a pump.fun coin’s creator fee: the key keeps the half it was told, or th
         [pumpfun.wallet, 5000],
       ]),
     ).steps.at(-1),
-    /keeps 50%/,
+    /this key keeps 50%/,
   );
   refused(
     () =>
@@ -448,18 +937,23 @@ test('a pump.fun coin’s creator fee: the key keeps the half it was told, or th
       ),
     /can’t be read here/,
   );
-});
-
-test('every instruction a venue’s launch is made of is one its program has, and no trade is among them', () => {
-  for (const venue of Object.values(VENUES))
-    for (const names of Object.values(venue.programs))
-      for (const name of names)
-        assert.doesNotMatch(name, /buy|sell|swap|claim|withdraw|transfer|migrate|set_|admin/, name);
+  // the two that take no settings carry none
+  for (const name of ['sweep_creator_fee', 'create_fee_sharing_config'])
+    refused(
+      () =>
+        check(
+          pumpfun,
+          'pumpfun',
+          changed(pumpfun, 1, p => (called(p, name).data = bytes(called(p, name).data, [1]))),
+        ),
+      new RegExp(`holds a ${name} that can’t be read here`),
+    );
 });
 
 // ---- the command's calls --------------------------------------------------------------------------------------------
 
-const ORIGIN = 'https://studio.example';
+// (the fixtures' coins are linked on this xgames.fun: a launch's link is held to the one the command talks to)
+const ORIGIN = 'https://xgames.example';
 const VENUE_LIST = [
   {
     venue: 'meteora',
@@ -580,7 +1074,6 @@ test('a launch sends nothing until it is run with the code it printed; the code 
       description: 'For the moths.',
       picture: 'art/coin.png',
       venue: 'meteora',
-      venueSays: VENUE_LIST[0].says,
       pair: 'SOL',
       wallet: FIXTURE.meteora.wallet,
       resume: false,
@@ -615,7 +1108,8 @@ test('a launch sends nothing until it is run with the code it printed; the code 
     /it holds 0\.5 SOL\n/,
     /takes about 0\.03 SOL from the key/,
     /creator fees belong to\nthis key's address/,
-    /no buy, no\nmove of a token the key holds, nothing of loot/,
+    /holds it to the launch above: this name and\nticker, this key as the coin's creator with the share above, no fee beyond the venue's own, no buy, no move of a\ntoken the key holds, nothing of loot/,
+    /at most 0\.1 SOL in transfers and fees of\nits own\. Anything else is refused and nothing is signed\./,
     /It can’t be undone: a game has one coin/,
     /A devnet coin trades nothing of value/,
     /nothing here is legal advice/,
@@ -668,7 +1162,10 @@ test('with the code: begun for the key’s address, checked, signed here, handed
       mint: FIXTURE.meteora.mint,
       coin: 'MOTH',
       explorer: `https://explorer.solana.com/address/${FIXTURE.meteora.mint}?cluster=devnet`,
-      steps: ['create_config', 'initialize_virtual_pool_with_spl_token'],
+      steps: [
+        'the curve’s settings (no fee for the pool; this key keeps its share of the trading fees)',
+        'the coin and its pool',
+      ],
     },
   );
   assert.deepEqual(sent('POST')[0][3], {
@@ -971,28 +1468,22 @@ test('the command: a plan, then a launch signed by a real key file, against a st
     if (method === 'GET') return [200, status];
     if (method === 'POST') {
       seen.posts.push(json);
-      // a launch as the launchpad builds one: a curve's settings and the coin's pool, signed by their own new keys
-      const signer = { pubkey: json.wallet, isSigner: true, isWritable: true };
-      const message = compileMessage({
-        payer: json.wallet,
-        blockhash: other(),
-        instructions: [
-          {
-            programId: DBC,
-            keys: [{ pubkey: configKey.address, isSigner: true, isWritable: true }, signer],
-            data: bytes(disc('create_config'), le(7n, 8)),
-          },
-          {
-            programId: DBC,
-            keys: [
-              { pubkey: configKey.address, isSigner: false, isWritable: false },
-              signer,
-              { pubkey: mintKey.address, isSigner: true, isWritable: true },
-            ],
-            data: bytes(disc('initialize_virtual_pool_with_spl_token'), le(9n, 8)),
-          },
-        ],
-      });
+      // A launch as the launchpad builds one (the fixture's own, with its real settings), made over for the wallet
+      // that asks, a coin and a curve of new keys, and the coin's words as they were asked for.
+      const built = parts(FIXTURE.meteora.transactions[0]);
+      const config = called(built, 'create_config').keys[0].pubkey;
+      const swap = {
+        [FIXTURE.meteora.wallet]: json.wallet,
+        [FIXTURE.meteora.mint]: mintKey.address,
+        [config]: configKey.address,
+      };
+      for (const ix of built.instructions) ix.keys = ix.keys.map(k => ({ ...k, pubkey: swap[k.pubkey] ?? k.pubkey }));
+      const pool = called(built, 'initialize_virtual_pool_with_spl_token');
+      pool.data = bytes(
+        pool.data.subarray(0, 8),
+        words(json.name, json.symbol, `https://xgames.example/meta/token/${mintKey.address}.json`),
+      );
+      const message = compileMessage({ payer: json.wallet, blockhash: other(), instructions: built.instructions });
       const signatures = signersOf(message).map(a =>
         a === mintKey.address
           ? mintKey.sign(message)

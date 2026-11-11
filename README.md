@@ -813,14 +813,21 @@ xcore coin launch … --yes <code>                   # the same command, with th
 - **Nothing is sent by the first run.** It prints the launch (every choice, the key's address and what it holds, what
   can't be undone) and a code. The same command with `--yes <code>` launches it; a code printed for other choices
   sends nothing.
-- **xgames.fun's launchpad builds the launch's transactions**, so before the key signs, xcore holds each one to being a
-  launch on the venue chosen, for this one new coin: only the instructions a launch is made of, no buy, no move of a
-  token the key holds, nothing of loot (the game's economy, which the same key may own), on pump.fun at least half the
-  creator fee to this key, and at most 0.1 SOL named. Anything else is refused, nothing is signed, and the launch is
-  given up.
+- **xgames.fun's launchpad builds the launch's transactions**, and the code you approve covers only your own
+  choices. So before the key signs, xcore reads every transaction and holds it to the launch the first run printed
+  (`lib/coin-check.mjs` has the whole rule): only the instructions a launch on that venue is made of, each once, with
+  the key and the coin in the places the program reads them; one new coin, whose own key signs, with the name, the
+  ticker and the link of the plan; this key as its creator. On Meteora, a curve whose settings charge no fee for
+  making the pool, give the key its half of the creator's side of trading fees and of liquidity, and leave nobody able
+  to mint more of the coin or rename it. On pump.fun, none of its optional modes, and at least half the creator fee
+  to this key. No buy, no move of a token the key holds, no change to another coin of the key's, nothing that names
+  loot (the game's economy, which the same key may own), no lookup table, and at most 0.1 SOL in transfers, new
+  accounts and fees of the key's own. Anything else is refused in words that say what it held, nothing is signed, and
+  the launch is given up. What this can't read from your machine is the venues' programs themselves: it leans on
+  each doing what its instruction says (they take rent for the coin's own accounts, about 0.02 SOL).
 - `xcore coin drop` gives up a launch that was begun and never sent. `--venue pumpfun` and `--pair <SYMBOL>` choose
-  the other venue and what the coin trades against (the default: Meteora, SOL). An account launches at most three
-  coins a day.
+  the other venue and what the coin trades against (the default: Meteora, SOL). The ticker is 2 to 10 letters or
+  digits, launched in capitals. xgames.fun lets an account launch three coins a day.
 - Then name the coin in the economy: `xcore loot token <mint>` prints its entry for `xsolana.json`'s `tokens`.
 
 The same from a browser wallet: the game's console (xgames.fun/console), Token tab. A devnet coin trades nothing of

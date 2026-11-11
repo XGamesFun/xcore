@@ -277,7 +277,7 @@ site or a domain they did not name. A domain needs `gamesfun.js` 1.2.0+ in the p
 
 **A coin that trades (only when they ask for one).** For a published game, `xcore coin` says where its coin stands
 and what a launch can choose from (Meteora or pump.fun, what each pairs a coin with, the pictures among the published
-files). Ask for the coin's name, its ticker and which picture; then `xcore coin launch --name … --ticker … --picture
+files). Ask for the coin's name, its ticker (2 to 10 letters or digits) and which picture; then `xcore coin launch --name … --ticker … --picture
 <file> --keypair <key file>` prints the whole launch with a code and sends nothing. Show them that printout. Run it
 again with `--yes <code>` only after they have read it and said yes: a game has one coin, for good, and anyone can
 trade it from the moment it lands. The key file is one made on their machine (`xcore loot keygen`, or the one their

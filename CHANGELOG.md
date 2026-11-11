@@ -15,12 +15,18 @@ Until now that was only in a browser (the game's console, Token tab, with a brow
   prompts and opens no page. `--venue` and `--pair` choose the venue and what the coin trades against (the default:
   Meteora, SOL). `xcore coin drop` gives up a launch that was never sent.
 - xgames.fun's launchpad builds the launch's transactions, so the key file would sign something this machine did not
-  make. Before it signs, each transaction is held to being a launch for this one new coin: only the instructions a
-  launch on that venue is made of, no buy, no move of a token the key holds, nothing that names loot (the game's
-  economy, which the same key may own), on pump.fun at least half the creator fee to this key, no lookup table, and at
-  most 0.1 SOL named, priority fee included. Anything else is refused in words that say what it held, nothing is
-  signed, and the launch is given up. The rest of a pump.fun launch (its second transaction, when only the first
-  landed) is signed only for the coin this folder began.
+  make, and the code covers only the person's own choices. Before it signs, every transaction is read and held to the
+  launch the plan printed (`lib/coin-check.mjs`): the venue's launch instructions only, each once and in order, with
+  the key and the coin in the places the program reads them; one new coin whose own key signs, with the plan's name,
+  ticker and link, and this key as its creator; on Meteora no fee for making the pool, the key's half of the creator's
+  side of trading fees and of liquidity, and a coin nobody can mint more of or rename; on pump.fun none of its
+  optional modes and at least half the creator fee to this key; no buy, no move of a token the key holds, nothing
+  that names loot, no lookup table, and at most 0.1 SOL in transfers, new accounts and fees of the key's own.
+  Anything else is refused in words that say what it held, nothing is signed, and the launch is given up. The rest of
+  a pump.fun launch (its second transaction, when only the first landed) is signed only for the coin this folder
+  began. An independent reading found the first form of this check (instructions by name only) could be passed by a
+  launch with a hidden fee or another creator; the settings are read now, and each of its 42 rules has a test that
+  fails without it.
 - It needs an xgames.fun with launching on; one without it says so.
 
 ## 0.6.1 — 2026-11-11
