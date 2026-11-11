@@ -336,6 +336,6 @@ test(
   },
 );
 
-test('the version is 1.8.0', () => {
-  assert.equal(load({ framed: false }).gf.version, '1.8.0');
+test('the version is 1.9.0', () => {
+  assert.equal(load({ framed: false }).gf.version, '1.9.0');
 });

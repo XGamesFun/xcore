@@ -98,8 +98,10 @@ async function ownLink(t, files) {
   const browser = await chrome();
   t.after(() => browser.close());
   const page = await browser.newPage();
+  // no window opens, in a game that asked never to leave its page: the sign-in request, its code and its answer
   await page.addInitScript(() => {
     window.open = () => null;
+    window.GAMESFUN_SIGNIN_STAY = true;
   });
   await page.goto(`http://moth-play.xgames.test:${g.port}/`);
   return { g, page, browser };
