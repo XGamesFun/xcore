@@ -2,6 +2,17 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.4.3 — 2026-11-11
+
+`@xgamesfun/solana` is 0.27.0, for loot 0.27.0 (on devnet since 2026-11-11). No stored record changed shape and no
+instruction changed, so an economy that went live under 0.26 stays live as it is.
+
+- A hold, a loan or a listing whose NFT is gone (taken or burned by whoever controls a collection the project does
+  not) can be closed: `claims()` lists it, `closeGone(asset)` closes it, and a deposit clears what an earlier owner
+  left instead of refusing. Buying or renting a gone listing is refused in words.
+- A farm gives the rounding share of weight that leaves back to the project. A walk takes 400 ends a transaction
+  (it was 500).
+
 ## 0.4.2 — 2026-11-11
 
 `@xgamesfun/solana` is 0.26.4 (loot 0.26.1, as devnet runs it).
