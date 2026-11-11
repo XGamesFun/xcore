@@ -737,8 +737,13 @@ test("rpc: the game's own RPC at api/rpc, only loot's calls, its URL never answe
   assert.deepEqual(await (await call('GET', undefined, {})).json(), { gamesfun: 'rpc', own: false });
   const own = { XSOLANA_RPC_URL: 'https://devnet.rpc.example/?api-key=SECRET' };
   assert.deepEqual(await (await call('GET', undefined, own)).json(), { gamesfun: 'rpc', own: true });
-  for (const url of ['https://mainnet.rpc.example/', 'http://rpc.example/', 'not a url'])
+  for (const url of ['http://rpc.example/', 'not a url'])
     assert.equal((await (await call('GET', undefined, { XSOLANA_RPC_URL: url })).json()).own, false, url);
+  // a game whose economy is on mainnet uses a mainnet RPC of its own (loot has an address there too)
+  assert.equal(
+    (await (await call('GET', undefined, { XSOLANA_RPC_URL: 'https://mainnet.rpc.example/' })).json()).own,
+    true,
+  );
   assert.equal((await call('POST', { jsonrpc: '2.0', id: 1, method: 'getSlot' }, {})).status, 503);
 
   const sent = [];
@@ -776,7 +781,8 @@ test("rpc: the game's own RPC at api/rpc, only loot's calls, its URL never answe
     /refused \(403\): This game's server may not call https:\/\/devnet\.rpc\.example\. Add/,
   );
   // scans only of loot's own programs; transactions only the game's own (a loot instruction, or a plain SOL send)
-  const [LOOT_ID, CORE_ID] = RPC.scanPrograms;
+  const [LOOT_ID] = RPC.loot;
+  const CORE_ID = 'CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d';
   const filters = [{ dataSize: 1 }];
   await refused({ jsonrpc: '2.0', id: 8, method: 'getProgramAccounts', params: ['Prog111', { filters }] }, -32602);
   const scan = await call(
@@ -1191,4 +1197,28 @@ test('the voucher server: PAY.check decides, only a proven wallet is paid, one r
   await object.link('p3', W1);
   assert.equal(await object.linked('p1'), null);
   assert.equal(await object.linked('p3'), W1);
+});
+
+test('rpc: the game’s server passes either cluster’s loot transactions', async () => {
+  const { RPC: R } = await import('../lib/client/server/rpc.js');
+  assert.deepEqual(R.loot, [
+    'xgamesVsZBpCVgJuatfYAFJRmQoccfQf5qtUFNp2Eet',
+    'xgames8C758PyweWB9sDw8evvwsTVwyA2fGRUeAXVPy',
+  ]);
+  for (const p of R.loot) assert.ok(R.scanPrograms.includes(p), p);
+});
+
+test('vouchers on mainnet: the steps never suggest the test key, and say to take it out when a grant names it', async () => {
+  const tmp = await tempDir();
+  const dir = await fixture(tmp, 'static');
+  const spec = {
+    network: 'mainnet',
+    grants: [{ key: 'clear', name: 'Clear', id: GRANT.id }],
+    live: { project: GRANT.project },
+  };
+  await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify(spec));
+  const r = await addVouchers(dir);
+  const said = r.steps.join('\n');
+  assert.match(said, /The economy is on mainnet: never add the test key to a grant/);
+  assert.doesNotMatch(said, /add the test key's address too/);
 });

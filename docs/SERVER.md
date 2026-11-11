@@ -316,7 +316,7 @@ xcore secret set XSOLANA_RPC_URL         # the RPC's URL with its key: the serve
 - `RPC` at the top of `server/rpc.js` is what it passes on: the calls loot's page client makes, one at a time;
   `getProgramAccounts` only with filters and only of loot's own programs (loot, Metaplex Core, lookup tables); and
   `sendTransaction` only for the game's own transactions (one with a loot instruction, or a plain SOL send). So a
-  stranger calling `api/rpc` cannot spend your RPC's credits on anything else. Mainnet URLs are not used (loot runs on devnet until it is audited).
+  stranger calling `api/rpc` cannot spend your RPC's credits on anything else. The URL is on the economy's cluster: devnet's, or mainnet's for an economy whose file says `"network": "mainnet"`.
 - The server's entry, where `api/rpc` runs, may call only `backend.json`'s origins: `xcore add rpc` adds the RPC's
   (`https://host` alone, never the key) when `XSOLANA_RPC_URL` is in `.dev.vars` or `.env`, and publish says when it
   is missing.

@@ -56,7 +56,7 @@ test('the two sample servers: no server finding in either; the economy review of
   const d = await review(decided);
   assert.deepEqual(ids(b), []);
   assert.deepEqual(ids(d), []);
-  // @xgamesfun/solana (0.28.1 here) has `xsolana review`: the economy is read too. A "bounds" grant with no total is the
+  // @xgamesfun/solana (0.28.4 here) has `xsolana review`: the economy is read too. A "bounds" grant with no total is the
   // trade-off the review names (medium); a "decides" one isn't.
   assert.equal(b.economy.available, true);
   assert.deepEqual(all(b), ['medium R-CLAIM-UNCAPPED', 'info R-VOUCHER-KEY', 'info R-AUTHORITY']);
@@ -100,7 +100,7 @@ test('the two sample servers: no server finding in either; the economy review of
   assert.match(c.stdout, /^review: PASS 0 high/);
   assert.match(c.stdout, /evidence .*review-2/);
   assert.match(c.stdout, /^paid route grant:found-whale: bounds$/m);
-  assert.match(c.stdout, /economy: xsolana\.json, \d+ routes? reviewed by @xgamesfun\/solana 0\.28\.1/);
+  assert.match(c.stdout, /economy: xsolana\.json, \d+ routes? reviewed by @xgamesfun\/solana 0\.28\.4/);
 });
 
 test('PAY.check: the template pays nothing; one that pays from the request alone is high, and the command exits 1', async t => {
@@ -535,7 +535,7 @@ test('payOnly, the voucher key and the grants, trust: each finding fires, and no
     delete s.grants[0].trust;
   });
   const u = await review(dir);
-  // the installed @xgamesfun/solana (0.28.1) says it itself (R-TRUST-UNSAID), so this package's own line stays out
+  // the installed @xgamesfun/solana (0.28.4) says it itself (R-TRUST-UNSAID), so this package's own line stays out
   assert.deepEqual(ids(u), []);
   assert.ok(
     all(u).some(i => i.endsWith(' R-TRUST-UNSAID')),
@@ -594,6 +594,16 @@ test(".dev.vars: tracked by git, not ignored, in the published folder; a seed or
   r = await review(dir);
   assert.deepEqual(ids(r), ['medium test-key-in-grant']);
   assert.equal(r.server.facts.testKey, test);
+  // on mainnet the same grant signs real-money claims with a key whose seed sits in .dev.vars: high
+  await editJson(path.join(dir, 'xsolana.json'), s => {
+    s.network = 'mainnet';
+  });
+  r = await review(dir);
+  assert.ok(ids(r).includes('high test-key-in-grant'), ids(r).join(', '));
+  assert.ok(r.findings.find(f => f.id === 'test-key-in-grant').fix.startsWith('The economy is on mainnet'));
+  await editJson(path.join(dir, 'xsolana.json'), s => {
+    delete s.network;
+  });
   // a brought game whose static folder (what its build copies as it is) holds a .dev.vars
   const brought = await sample(tmp, 'decided', 'brought');
   await writeFile(
