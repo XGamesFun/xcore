@@ -143,7 +143,7 @@ function remade(fixture, venue, quote, wallet = fixture.wallet) {
       ? bytes(making.data.subarray(0, 8), link)
       : bytes(making.data.subarray(0, 8), link, decodeBase58(wallet), new Uint8Array(11));
   if (venue === 'pumpfun' && wallet !== fixture.wallet) {
-    // the fee split names its shareholders in its data: the key's half is the new wallet's
+    // the fee split names its shareholders in its data: the key's share is the new wallet's
     const split = called(built[1], 'update_fee_shares_v2');
     split.data = bytes(split.data.subarray(0, 12), decodeBase58(wallet), split.data.subarray(44));
   }
@@ -229,7 +229,7 @@ const METEORA_STEPS = [
   'the curve’s settings (no fee for the pool; this key keeps its share of the trading fees)',
   'the coin and its pool',
 ];
-const PUMP_STEPS = ['the coin, with this key as its creator', 'its creator fee: this key keeps 50%'];
+const PUMP_STEPS = ['the coin, with this key as its creator', 'its creator fee: this key keeps 90%'];
 
 test('a real launch of each venue passes: what it does in words, the SOL it names, each transaction’s blockhash', () => {
   // the launchpad's own bytes, with the signatures its SDKs' keys made
@@ -266,7 +266,7 @@ test('a real launch of each venue passes: what it does in words, the SOL it name
       d[SETTING.movingFee],
       d.readUInt32LE(SETTING.points),
     ],
-    [0, 0, 50, 0, 50, 1, 50, 1, 0, 2],
+    [0, 0, 10, 0, 90, 1, 90, 1, 0, 2],
   );
   assert.deepEqual(
     [
@@ -808,7 +808,7 @@ test('a launch is its venue’s instructions, each once and in order, with the k
   // coin this folder recorded when it signed the first, as it was planned then, and never with a coin made in it.
   const begun = { mint: pumpfun.mint, venue: 'pumpfun', name: 'Moth Coin', symbol: 'MOTH' };
   assert.deepEqual(check(pumpfun, 'pumpfun', [second], { resume: true, begun }).steps, [
-    'its creator fee: this key keeps 50%',
+    'its creator fee: this key keeps 90%',
   ]);
   refused(
     () => check(pumpfun, 'pumpfun', [second], { resume: true }),
@@ -1052,7 +1052,7 @@ test('Meteora’s settings: no fee for the pool or for moving to it, the key’s
       change(d);
       return d;
     });
-  assert.deepEqual([LEAST_TRADING_FEE_PERCENT, LEAST_LIQUIDITY_PERCENT], [50, 50]);
+  assert.deepEqual([LEAST_TRADING_FEE_PERCENT, LEAST_LIQUIDITY_PERCENT], [90, 90]);
   // A fee for making the pool, which the pool's creator pays: the venue lets a launchpad set up to 100 SOL.
   refused(
     () =>
@@ -1099,22 +1099,22 @@ test('Meteora’s settings: no fee for the pool or for moving to it, the key’s
         'meteora',
         set(d => (d[SETTING.tradingFee] = 0)),
       ),
-    /gives this key 0% of the creator’s side of the trading fees, not the 50% it was told/,
+    /gives this key 0% of the creator’s side of the trading fees, not the 90% it was told/,
   );
   refused(
     () =>
       check(
         meteora,
         'meteora',
-        set(d => (d[SETTING.tradingFee] = 49)),
+        set(d => (d[SETTING.tradingFee] = 89)),
       ),
-    /gives this key 49%/,
+    /gives this key 89%/,
   );
   assert.ok(
     check(
       meteora,
       'meteora',
-      set(d => (d[SETTING.tradingFee] = 80)),
+      set(d => (d[SETTING.tradingFee] = 95)),
     ),
     'more for the key is no refusal',
   );
@@ -1128,36 +1128,49 @@ test('Meteora’s settings: no fee for the pool or for moving to it, the key’s
           d[SETTING.partnerLocked] = 100;
         }),
       ),
-    /gives this key 0% of the coin’s liquidity, not the 50% it was told/,
+    /gives this key 0% of the coin’s liquidity, not the 90% it was told/,
   );
   refused(
     () =>
       check(
         meteora,
         'meteora',
-        set(d => (d[SETTING.partnerLocked] = 10)),
+        set(d => (d[SETTING.partnerLocked] = 20)),
       ),
     /of the coin’s liquidity/,
   );
-  // (the key's half may be locked or free: both count as its own)
+  // (the key's part may be locked or free: both count as its own)
   assert.ok(
     check(
       meteora,
       'meteora',
       set(d => {
-        d[SETTING.creatorLocked] = 20;
+        d[SETTING.creatorLocked] = 60;
         d[SETTING.creatorFree] = 30;
       }),
     ),
   );
-  // The launchpad's half free to be taken out while the key's is locked.
+  // (85% of the liquidity, all its own: still less than the 90% a launch is held to)
   refused(
     () =>
       check(
         meteora,
         'meteora',
         set(d => {
-          d[SETTING.partnerFree] = 50;
+          d[SETTING.creatorLocked] = 85;
+          d[SETTING.partnerLocked] = 15;
+        }),
+      ),
+    /gives this key 85% of the coin’s liquidity/,
+  );
+  // The launchpad's part free to be taken out while the key's is locked.
+  refused(
+    () =>
+      check(
+        meteora,
+        'meteora',
+        set(d => {
+          d[SETTING.partnerFree] = 10;
           d[SETTING.partnerLocked] = 0;
         }),
       ),
@@ -1241,7 +1254,7 @@ test('Meteora’s settings: no fee for the pool or for moving to it, the key’s
   assert.ok(check(meteora, 'meteora', curve(1)));
 });
 
-test('pump.fun: this key is the coin’s creator, in none of its optional modes, and keeps the half it was told', () => {
+test('pump.fun: this key is the coin’s creator, in none of its optional modes, and keeps the 90% it was told', () => {
   const made = change =>
     changed(pumpfun, 0, p => {
       const ix = called(p, 'create_v2');
@@ -1281,18 +1294,18 @@ test('pump.fun: this key is the coin’s creator, in none of its optional modes,
       );
     });
   const { wallet, partner } = pumpfun;
-  assert.equal(LEAST_SHARE_BPS, 5000);
+  assert.equal(LEAST_SHARE_BPS, 9000);
   assert.match(check(pumpfun, 'pumpfun', split([[wallet, 10_000]])).steps.at(-1), /this key keeps 100%/);
   assert.match(
     check(
       pumpfun,
       'pumpfun',
       split([
-        [partner, 5000],
-        [wallet, 5000],
+        [partner, 1000],
+        [wallet, 9000],
       ]),
     ).steps.at(-1),
-    /this key keeps 50%/,
+    /this key keeps 90%/,
   );
   const least = (shares, said) => refused(() => check(pumpfun, 'pumpfun', split(shares)), said);
   least(
@@ -1300,7 +1313,15 @@ test('pump.fun: this key is the coin’s creator, in none of its optional modes,
       [wallet, 4000],
       [partner, 6000],
     ],
-    /gives this key 40% of the coin’s creator fee, not the half it was told/,
+    /gives this key 40% of the coin’s creator fee, not the 90% it was told/,
+  );
+  // (half and half, as launches were split before 2026-11-11: refused now)
+  least(
+    [
+      [wallet, 5000],
+      [partner, 5000],
+    ],
+    /gives this key 50% of the coin’s creator fee, not the 90% it was told/,
   );
   least([[partner, 10_000]], /gives this key 0% of the coin’s creator fee/);
   least(
@@ -1552,7 +1573,7 @@ test('a launch sends nothing until it is run with the code it printed; the code 
     /ticker +MOTH/,
     /picture +art\/coin\.png/,
     // the venue in this command's own words, never the server's
-    /where +Meteora: a curve of its own, then a pool\. You keep about 40% of its trading fees\./,
+    /where +Meteora: a curve of its own, then a pool\. You keep 90% of its trading fees after Meteora’s own cut \(xgames\.fun takes 10%\)\./,
     /paired with +SOL\n/,
     new RegExp(`signed by +${meteora.wallet} \\(the key file ~/\\.config/xsolana/moth\\.json\\)`),
     /it holds 0\.5 SOL\n/,
