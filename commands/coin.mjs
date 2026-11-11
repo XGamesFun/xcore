@@ -4,6 +4,8 @@ import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, named } from '../lib/games.mjs';
 import {
   ABOUT_SOL,
+  clean,
+  cleanAddress,
   coinStatus,
   dropLaunch,
   explorerOf,
@@ -26,52 +28,60 @@ economy, runs no market: a coin people can buy and sell is launched on a venue, 
   launch         what launching would do, signed by a key file on this machine (${CMD} loot keygen <file> makes one;
                  send it about ${ABOUT_SOL} devnet SOL). It sends nothing until it is run again with the code it prints
                  (--yes <code>), once the person whose game it is has read that and said yes. xgames.fun's launchpad
-                 builds the launch; before the key signs, each transaction is held to being a launch for this one new
-                 coin: no buy, no move of a token the key holds, nothing of the game's economy
+                 builds the launch; before the key signs, every transaction is read and held to the launch that
+                 was printed (this name, ticker and pair, this key as the coin's creator, no buy, no move of a token
+                 the key holds, nothing of the game's economy), and a devnet RPC is asked that it is devnet's
       --name         the coin's name (at most 32 bytes)        --ticker   its ticker (2 to 10 letters or digits)
       --picture      a picture among the published game's files (the path ${CMD} coin lists)
       --venue        meteora (the default) or pumpfun          --pair     what it trades against (the default: SOL)
       --keypair      the key file that signs and pays: the coin's creator fees belong to its address for good
   drop           gives up a launch that was begun and never sent
-A game has one coin, and its name, ticker and picture stay as launched. The same from a browser wallet: the game's
+A game has one coin, and its name and ticker stay as launched. The same from a browser wallet: the game's
 console (xgames.fun/console), Token tab. A coin made elsewhere is named in the economy with ${CMD} loot token <mint>.`;
 
 const venueName = v => VENUES[v]?.name ?? v;
 
-/** Where the game's coin stands, in words. */
+/**
+ * Where the game's coin stands, in words. Everything of xgames.fun's answer that is shown is cleaned first (a name
+ * or a reason is the server's text: on a terminal it could hide or forge a line), and an address is one or is not shown.
+ */
 function statusText(game, s) {
   const own = s.own ?? null,
     launch = s.launch ?? {};
+  const symbol = clean(own?.symbol, 20),
+    mint = cleanAddress(own?.mint);
   if (own?.kind === 'launched')
     return [
-      `${game}'s coin is live on Solana devnet: $${own.symbol} (${own.name}), on ${venueName(own.venue)}${own.pair ? `, paired with ${own.pair}` : ''}.`,
-      `  mint      ${own.mint}`,
-      `  explorer  ${explorerOf(own.mint)}`,
-      `To use it in the game's economy, name it in xsolana.json's "tokens": ${CMD} loot token ${own.mint} prints its entry.`,
+      `${game}'s coin is live on Solana devnet: $${symbol} (${clean(own.name, 60)}), on ${clean(venueName(own.venue), 20)}${own.pair ? `, paired with ${clean(own.pair, 20)}` : ''}.`,
+      `  mint      ${mint}`,
+      `  explorer  ${explorerOf(mint)}`,
+      `To use it in the game's economy, name it in xsolana.json's "tokens": ${CMD} loot token ${mint} prints its entry.`,
       'A devnet coin trades nothing of value.',
     ].join('\n');
   if (own?.kind === 'linked')
-    return `${game} uses $${own.symbol}, a token made elsewhere (${own.mint}). A game has one coin: stop using it (the game's console, Token tab) to launch one of its own.`;
+    return `${game} uses $${symbol}, a token made elsewhere (${mint}). A game has one coin: stop using it (the game's console, Token tab) to launch one of its own.`;
   if (launch.sent)
-    return `${game}'s launch of $${own?.symbol ?? 'its coin'} was sent to Solana and a check on chain has not passed yet. Ask again in a moment: ${CMD} coin`;
+    return `${game}'s launch of $${symbol || 'its coin'} was handed to xgames.fun to send to Solana, and a check on chain has not passed yet. Ask again in a moment: ${CMD} coin (if it stays so for more than ten minutes, write to xgames.fun)`;
   if (launch.partly)
-    return `${game}'s coin $${own?.symbol ?? ''} exists on Solana and its launch wants one more transaction. Run the launch again with the same choices and key to send it.`;
+    return `${game}'s coin $${symbol} exists on Solana and its launch wants one more transaction. Run the launch again with the same choices and key to send it.`;
   const lines = [];
   if (launch.started)
     lines.push(
-      `${game} has a launch of $${own?.symbol ?? 'a coin'} that was begun and never sent. Launch again (it is built anew), or give it up: ${CMD} coin drop`,
+      `${game} has a launch of $${symbol || 'a coin'} that was begun and is not on Solana. Launch again (it is built anew), or give it up: ${CMD} coin drop`,
     );
   else lines.push(`${game} has no coin yet.`);
   if (!launch.on) {
-    lines.push(launch.why ?? s.why ?? 'Launching a coin is not on for this XGames.fun yet.');
+    lines.push(clean(launch.why ?? s.why) || 'Launching a coin is not on for this XGames.fun yet.');
     return lines.join('\n');
   }
   // (a venue this command can launch on, in its own words: what the check holds a launch to)
-  const venues = (s.venues ?? []).filter(v => VENUES[v.venue]);
+  const venues = (Array.isArray(s.venues) ? s.venues : []).filter(v => VENUES[v?.venue] && Array.isArray(v.pairs));
   for (const v of venues)
-    lines.push(`  ${v.venue.padEnd(8)} ${VENUE_WORDS[v.venue]}  Pairs: ${v.pairs.map(p => p.symbol).join(', ')}`);
+    lines.push(
+      `  ${v.venue.padEnd(8)} ${VENUE_WORDS[v.venue]}  Pairs: ${v.pairs.map(p => clean(p?.symbol, 16)).join(', ')}`,
+    );
   if (!venues.length) lines.push('  The launchpad is not offering a venue right now.');
-  const pictures = (s.pictures ?? []).map(p => p.path);
+  const pictures = (Array.isArray(s.pictures) ? s.pictures : []).map(p => clean(p?.path, 200)).filter(Boolean);
   lines.push(
     pictures.length
       ? `  pictures  ${pictures.slice(0, 12).join(', ')}${pictures.length > 12 || s.morePictures ? ', …' : ''}`
@@ -143,7 +153,9 @@ export default {
         const s = await dropLaunch(dir);
         if (out) out(s);
         else
-          console.log(`Gave up ${game}'s launch: nothing of it was sent. The game has no coin, and can begin another.`);
+          console.log(
+            `xgames.fun gave up ${game}'s launch (it does so only for one it never sent). The game has no coin, and can begin another.`,
+          );
         return 0;
       }
 
@@ -181,13 +193,18 @@ export default {
             `  explorer  ${r.explorer}`,
             `To use it in the game's economy, name it in xsolana.json's "tokens": ${CMD} loot token ${r.mint} prints its entry.`,
             'Its creator fees belong to the key file’s address: keep the file, and a copy of it somewhere safe.',
+            ...(r.independent
+              ? []
+              : [
+                  `(That it was devnet's was read through ${r.checkedThrough}: Solana's public RPC did not answer. Set XSOLANA_RPC_URL to a devnet RPC of your own to have it read apart from xgames.fun.)`,
+                ]),
           ].join('\n'),
         );
       else
         console.log(
           r.partly
-            ? `The coin exists on Solana (${r.mint}) and its launch wants one more transaction. Run the launch again with the same choices and key to send it.`
-            : `The launch was sent to Solana and a check on chain has not passed yet (${r.mint}). Ask again in a moment: ${CMD} coin`,
+            ? `xgames.fun says the coin exists on Solana (${r.mint}) and its launch wants one more transaction. Run the launch again with the same choices and key to send it.`
+            : `The launch was handed to xgames.fun to send to Solana, and a check on chain has not passed yet (${r.mint}). Ask again in a moment: ${CMD} coin`,
         );
       return 0;
     }, args),

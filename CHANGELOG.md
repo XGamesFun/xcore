@@ -16,17 +16,26 @@ Until now that was only in a browser (the game's console, Token tab, with a brow
   Meteora, SOL). `xcore coin drop` gives up a launch that was never sent.
 - xgames.fun's launchpad builds the launch's transactions, so the key file would sign something this machine did not
   make, and the code covers only the person's own choices. Before it signs, every transaction is read and held to the
-  launch the plan printed (`lib/coin-check.mjs`): the venue's launch instructions only, each once and in order, with
-  the key and the coin in the places the program reads them; one new coin whose own key signs, with the plan's name,
-  ticker and link, and this key as its creator; on Meteora no fee for making the pool, the key's half of the creator's
-  side of trading fees and of liquidity, and a coin nobody can mint more of or rename; on pump.fun none of its
-  optional modes and at least half the creator fee to this key; no buy, no move of a token the key holds, nothing
-  that names loot, no lookup table, and at most 0.1 SOL in transfers, new accounts and fees of the key's own.
-  Anything else is refused in words that say what it held, nothing is signed, and the launch is given up. The rest of
-  a pump.fun launch (its second transaction, when only the first landed) is signed only for the coin this folder
-  began. An independent reading found the first form of this check (instructions by name only) could be passed by a
-  launch with a hidden fee or another creator; the settings are read now, and each of its 42 rules has a test that
-  fails without it.
+  launch the plan printed (`lib/coin-check.mjs`, which also says what it does not read): the venue's launch
+  instructions only, each once and in order, with exactly the accounts its program takes and the key, the coin and the
+  pair in the places the program reads them; one coin whose own new key signs (the signature is checked), with the
+  plan's name, ticker and link byte for byte, and this key as its creator; on Meteora no fee for making the pool or
+  for moving to it, the key's half of the creator's side of trading fees and of liquidity, a fixed supply, and a coin
+  nobody can mint more of or rename; on pump.fun none of its optional modes and at least half the creator fee to this
+  key; no buy, nothing of the System or Token programs, nothing that names loot (on either cluster), no lookup table,
+  and at most 0.1 SOL in fees of the key's own. Anything else is refused in words that say what it held, nothing is
+  signed, and the launch is given up. The rest of a pump.fun launch (its second transaction, when only the first
+  landed) is signed only for the coin, the venue, the name and the ticker this folder recorded when it began.
+- Nothing in a transaction names its cluster, so a devnet RPC is asked, before the key signs, that each transaction's
+  blockhash is one of devnet's and that the coin's address holds nothing yet: your own RPC (`XSOLANA_RPC_URL`), else
+  Solana's public one, else (when that does not answer, and said so) xgames.fun's own. With none to ask, nothing is
+  signed.
+- Not read, and said so in the plan: the picture and the description (what the coin's link serves), and on Meteora
+  the curve's shape. What xgames.fun sends back is cleaned before a terminal shows it, and after a launch is handed
+  in, what was sent is given as xgames.fun's word.
+- Two independent readings shaped this check. The first found that matching instructions by name let a launch hide a
+  fee or name another creator; the second, that a slot filled with bytes passed for the new coin's signature, and
+  that the pair and the cluster were not held. Each rule now has a test that fails without it.
 - It needs an xgames.fun with launching on; one without it says so.
 
 ## 0.6.2 — 2026-11-11
