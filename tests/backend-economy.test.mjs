@@ -9,7 +9,7 @@ import { adopt, addLoot } from '../lib/publish/adopt.mjs';
 import { ECONOMY_FILE, economyFile, solanaRoot } from '../lib/economy.mjs';
 import { solanaRpc, rpcWords, SHARED_RPC } from '../lib/solana-rpc.mjs';
 import { fixture, run, tempDir } from './helpers.mjs';
-import { ownWords } from '../commands/loot.mjs';
+import { fromFolder, ownWords, rpcFor } from '../commands/loot.mjs';
 
 test('backend use custom: backend.json in the folder the build copies, its origins checked', async t => {
   const tmp = await tempDir();
@@ -145,8 +145,77 @@ test("gamesfun loot runs @xgamesfun/solana's own tools on the economy file", asy
   await rename(path.join(tmp.dir, 'xsolana.json'), path.join(tmp.dir, 'public', 'xsolana.json'));
   const p = run(['loot', 'publish', 'public/xsolana.json'], { cwd: tmp.dir });
   assert.equal(p.status, 0, p.stderr);
-  assert.match(p.stdout, /xcore loot approve public\/xsolana\.json/);
-  assert.doesNotMatch(p.stdout, /npx -y|xsolana (approve|check)/);
+  // (going live: a key file made here, then what it would send; the page only when asked for)
+  assert.match(p.stdout, /xcore loot keygen ~\/\.config\/xsolana\/[a-z0-9-]+\.json/);
+  assert.match(p.stdout, /xcore loot approve public\/xsolana\.json --keypair ~\/\.config\/xsolana\/[a-z0-9-]+\.json/);
+  assert.match(p.stdout, /xcore loot approve public\/xsolana\.json --browser/);
+  assert.doesNotMatch(p.stdout, /npx -y|xsolana (approve|check|keygen)/);
+});
+
+test('gamesfun loot approve opens nothing unless told how it is signed; a key file is made outside the game', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const examples = path.join(solanaRoot(), 'examples');
+  const game = path.join(tmp.dir, 'game');
+  await mkdir(path.join(game, 'public'), { recursive: true });
+  await writeFile(
+    path.join(game, 'public', 'xsolana.json'),
+    await readFile(path.join(examples, 'artwork-auction.json')),
+  );
+  // No way to sign named: the two ways, in this package's words, and nothing started.
+  const bare = run(['loot', 'approve', 'public/xsolana.json'], { cwd: game });
+  assert.equal(bare.status, 1);
+  assert.match(bare.stderr, /say how going live is signed/);
+  assert.match(bare.stderr, /--keypair <keyfile>/);
+  assert.match(bare.stderr, /xcore loot keygen <file>/);
+  // A key file: its address is printed, never the key; the command it names is this package's.
+  const keys = path.join(tmp.dir, 'keys');
+  const made = run(['loot', 'keygen', path.join(keys, 'game.json')], { cwd: game });
+  assert.equal(made.status, 0, made.stderr);
+  const bytes = JSON.parse(await readFile(path.join(keys, 'game.json'), 'utf8'));
+  assert.equal(bytes.length, 64);
+  assert.ok(!made.stdout.includes(bytes.slice(0, 4).join(',')));
+  assert.match(made.stdout, /Its address:\n {2}[1-9A-HJ-NP-Za-km-z]{32,44}\n/);
+  assert.match(made.stdout, /xcore loot approve xsolana\.json --keypair /);
+  // A key file named from where the person stands is found from the economy file's own folder, and its name ending
+  // in .json is never taken for the economy file. (A key that does not exist is said before anything is read.)
+  await mkdir(path.join(game, 'k'));
+  const missing = run(['loot', 'approve', 'public/xsolana.json', '--keypair', 'k/none.json'], { cwd: game });
+  assert.equal(missing.status, 1);
+  // (the game's own k/ folder, however the system writes a path; never the economy file's folder)
+  assert.match(missing.stderr, /game[\\/]k[\\/]none\.json does not exist/);
+  assert.doesNotMatch(missing.stderr, /public[\\/]k[\\/]none\.json/);
+  const first = run(['loot', 'approve', '--keypair=k/none.json', 'public/xsolana.json'], { cwd: game });
+  assert.equal(first.status, 1);
+  assert.match(first.stderr, /game[\\/]k[\\/]none\.json does not exist/);
+  assert.doesNotMatch(first.stderr, /public[\\/](k[\\/])?none\.json/);
+});
+
+test('a key file named beside flags is given whole; approve never goes to the shared relay', () => {
+  const cwd = path.resolve('/games/mine');
+  assert.deepEqual(
+    fromFolder(['approve', 'public/xsolana.json', '--keypair', 'keys/k.json', '--yes', 'ab12cd34'], cwd),
+    ['approve', 'public/xsolana.json', '--keypair', path.join(cwd, 'keys/k.json'), '--yes', 'ab12cd34'],
+  );
+  assert.deepEqual(fromFolder(['approve', '--keypair=keys/k.json'], cwd), [
+    'approve',
+    `--keypair=${path.join(cwd, 'keys/k.json')}`,
+  ]);
+  assert.deepEqual(fromFolder(['approve', '--keypair', '~/.config/xsolana/k.json'], cwd), [
+    'approve',
+    '--keypair',
+    '~/.config/xsolana/k.json',
+  ]);
+  assert.deepEqual(fromFolder(['approve', '--keypair', '/abs/k.json'], cwd), ['approve', '--keypair', '/abs/k.json']);
+  // Going live makes mints and token accounts, which the shared relay does not pass: with no RPC of the person's
+  // own, approve is left to the tools' default; every other command reads through the relay.
+  const shared = solanaRpc({}, { file: null });
+  assert.equal(rpcFor('approve', {}, shared), null);
+  assert.equal(rpcFor('status', {}, shared), SHARED_RPC);
+  assert.equal(rpcFor('check', {}, shared), SHARED_RPC);
+  const own = solanaRpc({ XSOLANA_RPC_URL: 'https://own.example/rpc' }, { file: null });
+  assert.equal(rpcFor('approve', {}, own), 'https://own.example/rpc');
+  assert.equal(rpcFor('approve', { XSOLANA_RPC_URL: ' https://env.example/rpc ' }, shared), 'https://env.example/rpc');
 });
 
 test("xsolana's words as xcore's", () => {
@@ -155,6 +224,15 @@ test("xsolana's words as xcore's", () => {
     say('runs this: npx -y @xgamesfun/solana@0.20.1 approve xsolana.json'),
     'runs this: xcore loot approve public/xsolana.json',
   );
+  assert.equal(
+    say('1. npx -y @xgamesfun/solana@0.27.2 keygen ~/.config/xsolana/my-game.json'),
+    '1. xcore loot keygen ~/.config/xsolana/my-game.json',
+  );
+  assert.equal(
+    say('2. npx -y @xgamesfun/solana@0.27.2 approve xsolana.json --keypair ~/.config/xsolana/my-game.json'),
+    '2. xcore loot approve public/xsolana.json --keypair ~/.config/xsolana/my-game.json',
+  );
+  assert.equal(say('(`xsolana keygen <file>` makes a key file)'), '(`xcore loot keygen <file>` makes a key file)');
   assert.equal(
     say('`xsolana check` then xsolana_simulate; xsolana_save stays'),
     '`xcore loot check` then xcore loot simulate; xsolana_save stays',
