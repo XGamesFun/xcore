@@ -1198,3 +1198,12 @@ test('the voucher server: PAY.check decides, only a proven wallet is paid, one r
   assert.equal(await object.linked('p1'), null);
   assert.equal(await object.linked('p3'), W1);
 });
+
+test('rpc: the game’s server passes either cluster’s loot transactions', async () => {
+  const { RPC: R } = await import('../lib/client/server/rpc.js');
+  assert.deepEqual(R.loot, [
+    'xgamesVsZBpCVgJuatfYAFJRmQoccfQf5qtUFNp2Eet',
+    'xgames8C758PyweWB9sDw8evvwsTVwyA2fGRUeAXVPy',
+  ]);
+  for (const p of R.loot) assert.ok(R.scanPrograms.includes(p), p);
+});

@@ -156,7 +156,11 @@ export default {
     }
     const env = { ...process.env };
     // (on the cluster of the economy in the folder it runs in: devnet unless its file says mainnet)
-    const rpc = rpcFor(args[0], process.env, solanaRpc(process.env, { cluster: economyCluster(cwd) }));
+    const rpc = rpcFor(
+      args[0],
+      process.env,
+      solanaRpc(process.env, { cluster: economyCluster(file ? path.resolve(file) : cwd) }),
+    );
     if (rpc) env.XSOLANA_RPC_URL = rpc;
     else delete env.XSOLANA_RPC_URL;
     // its words name its own commands (`npx -y @xgamesfun/solana@… approve xsolana.json --keypair …`, `xsolana check`):

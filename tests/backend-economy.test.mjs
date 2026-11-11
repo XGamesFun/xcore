@@ -319,3 +319,62 @@ test('the RPC follows the economy’s cluster: mainnet’s relay with ?cluster=m
   writeFileSync(pathMod.join(dir, 'xsolana.json'), JSON.stringify({ version: 2 }));
   assert.equal(economyCluster(dir), 'devnet');
 });
+
+test('the cluster is read where the economy is: a named file, the folder, a brought game’s static folder; loot.json too; an unknown network is devnet', async () => {
+  const { economyCluster, LOOT_PROGRAMS } = await import('../lib/solana-rpc.mjs');
+  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const p = (await import('node:path')).default;
+  const dir = mkdtempSync(p.join(tmpdir(), 'xcore-where-'));
+  writeFileSync(p.join(dir, 'other.json'), JSON.stringify({ version: 2, network: 'mainnet' }));
+  assert.equal(economyCluster(p.join(dir, 'other.json')), 'mainnet', 'a file named on the command');
+  assert.equal(economyCluster(dir), 'devnet', 'the folder has none');
+  writeFileSync(p.join(dir, 'loot.json'), JSON.stringify({ version: 2, network: 'mainnet' }));
+  assert.equal(economyCluster(dir), 'mainnet', 'an older game’s loot.json');
+  writeFileSync(p.join(dir, 'xsolana.json'), JSON.stringify({ version: 2, network: 'testnet' }));
+  assert.equal(economyCluster(dir), 'devnet', 'a network loot does not know');
+  // a brought game: its economy in its static folder (gamesfun.json)
+  const brought = mkdtempSync(p.join(tmpdir(), 'xcore-brought-'));
+  mkdirSync(p.join(brought, 'public'));
+  writeFileSync(
+    p.join(brought, 'gamesfun.json'),
+    JSON.stringify({ name: 'g', page: { static: 'public', out: 'dist' } }),
+  );
+  writeFileSync(p.join(brought, 'public', 'xsolana.json'), JSON.stringify({ version: 2, network: 'mainnet' }));
+  assert.equal(economyCluster(brought), 'mainnet');
+  assert.deepEqual(Object.keys(LOOT_PROGRAMS), ['devnet', 'mainnet']);
+});
+
+test('the page’s wallet chain and relay follow the economy’s cluster', async () => {
+  const w = await import('../loot-page/wallets.js');
+  assert.deepEqual(
+    [w.chainOf('devnet'), w.chainOf('mainnet'), w.chainOf(undefined)],
+    ['solana:devnet', 'solana:mainnet', 'solana:devnet'],
+  );
+  assert.equal(w.pageRpc('devnet'), w.PAGE_RPC);
+  assert.equal(w.pageRpc('mainnet'), `${w.PAGE_RPC}?cluster=mainnet`);
+});
+
+test('a mainnet page: the wallet signer names its chain, or the kit settles on devnet before solanaApp names mainnet', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { readFileSync } = await import('node:fs');
+  const play = new URL('../node_modules/@xgamesfun/solana/js/play/index.js', import.meta.url).href;
+  const run = chain => {
+    const code = `import * as p from ${JSON.stringify(play)};
+const wallet = { name: 'W', features: { 'solana:signTransaction': { signTransaction: async () => [] } } };
+const signer = p.walletStandardSigner(wallet, { address: '11111111111111111111111111111111' }${chain ? `, ${JSON.stringify(chain)}` : ''});
+try { p.solanaApp({ spec: { network: 'mainnet', live: { project: '11111111111111111111111111111111' } }, rpcUrl: 'https://mainnet.example/', wallet: signer }); console.log('ok'); } catch (e) { console.log(e.message); }`;
+    return execFileSync(process.execPath, ['--input-type=module', '-e', code], {
+      encoding: 'utf8',
+      env: { ...process.env, XSOLANA_CLUSTER: '' },
+    }).trim();
+  };
+  assert.match(run(null), /already works on devnet/, 'the hazard: the default chain settles devnet');
+  assert.equal(run('solana:mainnet'), 'ok');
+  // and the page names it
+  const page = readFileSync(new URL('../lib/client/gamesfun.js', import.meta.url), 'utf8');
+  assert.match(
+    page,
+    /walletStandardSigner\(\s*w,\s*account,\s*m\.wallets\.chainOf \? m\.wallets\.chainOf\(lootCluster\(\)\)/,
+  );
+});
