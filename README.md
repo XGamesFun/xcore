@@ -480,6 +480,21 @@ and the `xsolana-economy` skill, which turn a one-line idea into a checked econo
 fail or lose money on chain (a prize a pool cannot pay, a pool nothing fills, a farm that empties a lottery, a claim with
 no limit), `xsolana_simulate` shows where the money goes day by day, and `xsolana_cost` what going live costs.
 
+**A token.** An economy's tokens are of three kinds, and the `xsolana-economy` skill asks which one is meant ("When
+they ask for a token"):
+
+- **A token the economy makes** (`"source": "project"`): points, tickets and shards the project mints as its rules
+  say, or with `supply` a fixed supply minted once to your wallet and never again. It is named on chain as it goes
+  live, so wallets show it by name: give it a `name`, a `symbol` and a `uri`, a link to a JSON file that names its
+  picture (`{ "name": "Ember", "symbol": "EMBR", "image": "https://…/ember.png" }`), hosted anywhere that stays up.
+  Without a `uri` it shows by name and ticker with no picture. Only your wallet can change the three afterwards.
+- **A coin made elsewhere** (`"source": "existing"`): `xcore loot token <mint>` reads it from the chain and prints its
+  whole entry for `tokens`, with what its mint's own keys can do (mint more, freeze an account, keep a fee on every
+  transfer), so nothing is typed by hand. Going live reads the mint again and refuses a spec that denies a power the
+  mint has.
+- **A coin people trade** is not something loot makes: it runs no market. Launch it on a launchpad or an exchange,
+  then name it as a coin made elsewhere.
+
 `xcore loot add <folder>` says where the economy goes (`xsolana.json` in the `static` folder) and, once it is
 there, copies the page client beside it (`gf/loot/`, a copy: never edit it; publish keeps it current). The page loads
 it at run time with a page-relative URL, so a bundler leaves it alone:
@@ -528,7 +543,7 @@ holds the addresses the economy went live at stays in the project (keep it in gi
 runs the tools from a terminal. Going live is the person's own step, approved in their own wallet: `xcore loot
 approve` in the folder with `xsolana.json`.
 
-**When loot is upgraded.** This package pins the tools for one build of loot (0.26.0, on devnet since 2026-11-10). loot is upgraded in place on
+**When loot is upgraded.** This package pins the tools for one build of loot (0.26.1, on devnet since 2026-11-10). loot is upgraded in place on
 devnet, and no version so far has carried accounts over: an economy that went live on an earlier build goes live
 again (`xcore loot approve`), and the next publish brings `gf/loot/` up to the installed package. **Nothing runs by
 itself** on chain: the page client sends what a player needs (settles, refunds, claims, a draw that is due); a

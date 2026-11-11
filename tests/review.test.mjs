@@ -55,7 +55,7 @@ test('the two sample servers: no server finding in either; the economy review of
   const d = await review(decided);
   assert.deepEqual(ids(b), []);
   assert.deepEqual(ids(d), []);
-  // @xgamesfun/solana (0.26.0 here) has `xsolana review`: the economy is read too. A "bounds" grant with no total is the
+  // @xgamesfun/solana (0.26.3 here) has `xsolana review`: the economy is read too. A "bounds" grant with no total is the
   // trade-off the review names (medium); a "decides" one isn't.
   assert.equal(b.economy.available, true);
   assert.deepEqual(all(b), ['medium R-CLAIM-UNCAPPED', 'info R-VOUCHER-KEY', 'info R-AUTHORITY']);
@@ -99,7 +99,7 @@ test('the two sample servers: no server finding in either; the economy review of
   assert.match(c.stdout, /^review: PASS 0 high/);
   assert.match(c.stdout, /evidence .*review-2/);
   assert.match(c.stdout, /^paid route grant:found-whale: bounds$/m);
-  assert.match(c.stdout, /economy: xsolana\.json, \d+ routes? reviewed by @xgamesfun\/solana 0\.26\.0/);
+  assert.match(c.stdout, /economy: xsolana\.json, \d+ routes? reviewed by @xgamesfun\/solana 0\.26\.3/);
 });
 
 test('PAY.check: the template pays nothing; one that pays from the request alone is high, and the command exits 1', async t => {
@@ -534,7 +534,7 @@ test('payOnly, the voucher key and the grants, trust: each finding fires, and no
     delete s.grants[0].trust;
   });
   const u = await review(dir);
-  // the installed @xgamesfun/solana (0.26.0) says it itself (R-TRUST-UNSAID), so this package's own line stays out
+  // the installed @xgamesfun/solana (0.26.3) says it itself (R-TRUST-UNSAID), so this package's own line stays out
   assert.deepEqual(ids(u), []);
   assert.ok(
     all(u).some(i => i.endsWith(' R-TRUST-UNSAID')),
@@ -821,6 +821,12 @@ test('xcore loot review: passed to xsolana review, said as this package; without
     ownWords()('`xsolana review xsolana.json`, xsolana_review'),
     '`xcore loot review xsolana.json`, xcore loot review',
   );
+  // the tools' own words for reading a coin made elsewhere, as this package's
+  assert.equal(
+    ownWords()('Run `xsolana token So11111111111111111111111111111111111111112` (xsolana_token): it reads the mint.'),
+    'Run `xcore loot token So11111111111111111111111111111111111111112` (xcore loot token): it reads the mint.',
+  );
+  assert.match(run(['loot', '--help']).stdout, /xcore loot token <mint>/);
 });
 
 test('publish says to run the review when a game that pays through vouchers changed since its last one', async t => {

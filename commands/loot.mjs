@@ -24,6 +24,8 @@ A game's economy on loot, one shared Solana program (devnet only until it is aud
   xcore loot check|simulate|cost|explain [file]   refusals and warnings; where the money goes; what it costs; in words
   xcore loot review [file]         what a cheater gets from each route that pays, and the trade-offs in words (xcore
                                    review adds the game's server and, with --live, the published game)
+  xcore loot token <mint>          a coin made elsewhere, read from the chain: its entry for the economy's "tokens",
+                                   with what its mint's own keys can do (mint more, freeze, a fee on transfers)
   xcore loot approve [file]        in a game's folder: put its economy live, approved in your own wallet
   xcore loot help                  everything else xsolana does (its help says \`xsolana <command>\`: run each as
                                    \`xcore loot <command>\`)
@@ -108,9 +110,9 @@ export default {
 
 /** xsolana's commands a person runs as `xcore loot <command>`. */
 const COMMANDS =
-  'guide|examples|check|simulate|cost|explain|review|publish|approve|status|connect|mcp|tool|version|help';
+  'guide|examples|check|simulate|cost|explain|review|publish|approve|status|token|connect|mcp|tool|version|help';
 /** Its tools an agent calls (xsolana_check …) that are also a command here. */
-const TOOLS = 'guide|examples|check|simulate|cost|explain|review|publish|status';
+const TOOLS = 'guide|examples|check|simulate|cost|explain|review|publish|status|token';
 
 /**
  * xsolana's text as xcore's: its pinned npx forms and its `xsolana <command>` become `xcore loot <command>`, and the

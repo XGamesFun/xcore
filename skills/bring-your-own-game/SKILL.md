@@ -134,7 +134,11 @@ xcore loot add <folder>         # or gamesfun_loot_add {"game": "<folder>"}
 It says where `xsolana.json` goes (the `static` folder of a build project). Design the economy with the
 `xsolana-economy` skill and the `xsolana_*` tools (`xcore loot connect` adds them: `xsolana_guide`,
 `xsolana_examples`, `xsolana_check`, `xsolana_simulate`, then `xsolana_save` into that file); fix every refusal
-`xsolana_check` gives and tell the person its warnings in plain words. Then run `loot add` again: it copies the page
+`xsolana_check` gives and tell the person its warnings in plain words. When they want a token, that skill's "When they
+ask for a token" says which of the kinds it is: a token the economy makes (named on chain as it goes live: ask for its
+name, its ticker and a picture's link first), a coin made elsewhere (`xcore loot token <mint>` reads its whole entry
+from the chain: never type its decimals or powers), or a coin people trade, which loot does not make (they launch it
+elsewhere, then it is a coin made elsewhere). Then run `loot add` again: it copies the page
 client into `gf/loot/` beside it. Wire it into their page the way that README's §4 shows (a run-time import with a
 page-relative URL, `solanaApp` with `rpcUrl: PAGE_RPC`); a Godot or Unity game (or any page with `gamesfun.js`) uses
 `GamesFun.loot` instead (`loot_ready`/`loot_connect`/`loot_call` in Godot, `LootReady`/`LootConnect`/`LootCall` in
