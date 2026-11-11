@@ -318,3 +318,35 @@ test('env.GF.files: a public file is plainly media or data; a body in memory is 
   const over = await s.run('files.head', ['c.png']);
   assert.deepEqual([over.code, /Too many file calls this minute .*allows 120/.test(over.why)], ['rate', true]);
 });
+
+test('names a request brings ("constructor", "__proto__") are keys like any other: no tab, board, rule or save every object has', async t => {
+  const { s, tick, dir } = await storeOf(t);
+  // the page's question with no tap, for a tab named like what every object has: nobody, until that tab signs in
+  for (const tab of ['constructor', 'tostring', 'hasownproperty', 'valueof'])
+    assert.equal(await s.signinSession(tab), null, tab);
+  await s.signinForget('constructor');
+  await s.signinRemember('constructor', 'Ana');
+  assert.equal((await s.signinSession('constructor')).player.name, 'Ana');
+  await s.signinForget('constructor');
+  assert.equal(await s.signinSession('constructor'), null);
+  // a board, a rule and a player named so
+  assert.deepEqual((await s.run('scores.top', ['constructor'])).entries ?? [], [], 'no such board yet');
+  assert.equal((await s.page('scores.submit', ['constructor', 'dev:a', 5], 'dev:a')).ok, true);
+  tick();
+  assert.equal((await s.run('scores.top', ['constructor'])).entries[0].score, 5);
+  assert.equal((await s.run('scores.setup', ['__proto__', { writer: 'server' }])).ok, true);
+  tick();
+  assert.equal((await s.page('scores.submit', ['__proto__', 'dev:a', 1], 'dev:a')).code, 'server-only');
+  assert.deepEqual((await s.run('saves.get', ['constructor', 'main'])).value, null);
+  assert.equal((await s.run('saves.put', ['dev:a', '__proto__', { level: 2 }])).ok, true);
+  assert.deepEqual((await s.run('saves.get', ['dev:a', '__proto__'])).value, { level: 2 });
+  assert.deepEqual(
+    (await s.run('saves.list', ['dev:a'])).keys.map(k => k.key),
+    ['__proto__'],
+  );
+  // and they are kept as written, read back the same by the next store
+  await s.flush();
+  const again = createPlatformStore({ dir, slug: 'moth' });
+  assert.deepEqual((await again.run('saves.get', ['dev:a', '__proto__'])).value, { level: 2 });
+  assert.equal(await again.signinSession('tostring'), null);
+});

@@ -63,9 +63,12 @@ function standIn() {
           });</script>`,
           'text/html',
         );
-      if (url.pathname === '/xpost')
-        return send(200, `<iframe id="g" src="http://moth-play.xgames.test:${port}/"></iframe>`, 'text/html');
       return send(404, {});
+    }
+    // a post on X: another site frames the game alone (nobody answers it there)
+    if (host === 'x.test' && url.pathname === '/xpost') {
+      const port = req.headers.host.split(':')[1];
+      return send(200, `<iframe id="g" src="http://moth-play.xgames.test:${port}/"></iframe>`, 'text/html');
     }
     // a site of the creator's own that embeds the game (xcore embed), and tries to hand it a sign-in: it may not
     if (host === 'evil.test' && url.pathname === '/frame') {
@@ -182,13 +185,13 @@ async function chrome() {
   return chromium.launch({
     executablePath: found.path,
     args: [
-      '--host-resolver-rules=MAP *.xgames.test 127.0.0.1, MAP xgames.test 127.0.0.1, MAP *.mygame.test 127.0.0.1, MAP evil.test 127.0.0.1',
+      '--host-resolver-rules=MAP *.xgames.test 127.0.0.1, MAP xgames.test 127.0.0.1, MAP *.mygame.test 127.0.0.1, MAP evil.test 127.0.0.1, MAP x.test 127.0.0.1',
     ],
   });
 }
 
 test(
-  'on its own link: a window on xgames.fun signs the player in, then saves, scores and the database go signed in',
+  'on its own link, a game that stays: a window on xgames.fun signs the player in, then saves, scores and the database go signed in',
   { skip, timeout: 60_000 },
   async t => {
     const g = await standIn();
@@ -196,6 +199,10 @@ test(
     const browser = await chrome();
     t.after(() => browser.close());
     const page = await browser.newPage();
+    // a game that asked never to leave its page (else the click takes the tab to X and back: client-signin.test.mjs)
+    await page.addInitScript(() => {
+      window.GAMESFUN_SIGNIN_STAY = true;
+    });
     await page.goto(`http://moth-play.xgames.test:${g.port}/`);
     assert.equal(await page.evaluate(() => GamesFun.slug), 'moth');
     assert.equal(await page.evaluate(() => GamesFun.local), false);
@@ -265,7 +272,7 @@ test(
 );
 
 test(
-  'with no window (blocked, or a phone): the code to type at <site>/go is said, and the sign-in still lands',
+  'with no window (blocked) in a game that stays: the code to type at <site>/go is said, and the sign-in still lands',
   { skip, timeout: 60_000 },
   async t => {
     const g = await standIn();
@@ -273,9 +280,10 @@ test(
     const browser = await chrome();
     t.after(() => browser.close());
     const page = await browser.newPage();
-    // the browser blocks the window (a phone's app browser, a blocker): window.open answers null
+    // the browser blocks the window (a blocker), in a game that asked never to leave its page
     await page.addInitScript(() => {
       window.open = () => null;
+      window.GAMESFUN_SIGNIN_STAY = true;
     });
     await page.goto(`http://moth-play.xgames.test:${g.port}/`);
     await page.evaluate(() => {
@@ -283,7 +291,9 @@ test(
     });
     await page.waitForFunction(() => codes.length > 0);
     const code = await page.evaluate(() => codes[0]);
-    assert.equal(code.window, false);
+    // on a page of its own gamesfun.js draws the way to sign in itself (the link, and the code behind a line of its
+    // own: tests/client-signin.test.mjs), so the game is told as it is for a window: nothing for it to show plainly
+    assert.deepEqual([code.window, code.panel], [true, true]);
     assert.equal(code.site, `xgames.test:${g.port}`);
     g.s.approved = true;
     assert.equal((await page.evaluate(() => window.signedIn)).id, 'x:42');
@@ -321,6 +331,11 @@ test(
       { type: 'gf:auth-signin', with: 'x' },
     ]);
     assert.equal(g.s.requests.length, 0, 'no request of its own');
+    assert.deepEqual(
+      g.s.seen.filter(l => l.includes('/api/player/v1/')),
+      [],
+      'nor a question to xgames.fun, a Sign out of its own or a move to X: the page above does it all',
+    );
     assert.equal((await frame.evaluate(() => GamesFun.saves.put('main', 1))).error, null);
     assert.ok(g.s.seen.includes('PUT moth-play.xgames.test/platform/v1/saves/main (tok-page)'));
   },
@@ -478,7 +493,7 @@ test(
     const browser = await chrome();
     t.after(() => browser.close());
     const page = await browser.newPage();
-    await page.goto(`http://xgames.test:${g.port}/xpost`);
+    await page.goto(`http://x.test:${g.port}/xpost`);
     const frame = await (await page.waitForSelector('#g')).contentFrame();
     await frame.waitForFunction(() => window.GamesFun);
     await frame.evaluate(() => GamesFun.ready);
@@ -523,7 +538,7 @@ test('inside a post on X (a frame no page answers): it signs in by itself', { sk
   const browser = await chrome();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(`http://xgames.test:${g.port}/xpost`);
+  await page.goto(`http://x.test:${g.port}/xpost`);
   const frame = await (await page.waitForSelector('#g')).contentFrame();
   await frame.waitForFunction(() => window.GamesFun);
   await frame.evaluate(async () => {

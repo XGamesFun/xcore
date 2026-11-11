@@ -91,7 +91,19 @@ published game would get: fix the game, not the stand-in.
   `GamesFun` autoload, a Unity project `Assets/Plugins/GamesFun/`. Replace the game's own login, its local save file
   or its localhost leaderboard with these calls (listed at the top of the file it writes); sign-in starts from a click,
   and when `onCode` / `sign_in_code` / `SignInCode` fires with `window: false`, the game shows the code and the site;
-  with `window: true` a sign-in window is open, so at most a quiet line, never an overlay over the game.
+  with `window: true` the player has a way to sign in on screen (a window, or the small panel `gamesfun.js` draws
+  where none opens), so at most a quiet line, never an overlay over the game.
+  Read the player after `GamesFun.ready` and follow `onChange` / `player_changed` / `PlayerChanged`, never only the
+  answer of the sign-in call: on the game's own host (`<name>-play.xgames.fun`, where a post's card on X and
+  xgames.fun's wallet hand-off open it) xgames.fun is asked who is here as the page loads, and a player who chose this
+  game in this browser is signed in with no tap. There **the tap on Sign in takes the tab to X and back, on a phone and
+  a computer, so the game starts again**, signed in: call `signIn` in the click handler itself, nothing awaited
+  before it; `GamesFun.signInEnded` says `'cancelled'` or `'failed'` when it came back with nobody. Tell the person
+  that; if their game cannot start again at that moment (a run in progress with nothing saved), either sign in before
+  play starts or pass `stay: true` (`GamesFun.signIn({stay: true})`, `sign_in("x", true)`, `SignIn("x", true)`), which
+  opens a window instead. Sign out (`GamesFun.signOut()`) tells xgames.fun to forget the game in that browser. A game
+  that drew its own button as a link takes its address from `GamesFun.signInLink('x')`. A game whose `gamesfun.js` is
+  older than 1.9.0 gets none of this until `xcore add signin` brings the file up to date and it is published again.
   Never ask for a password or keep accounts of your own.
 - **Data the game keeps for everyone** (levels players make, profiles, a world's state) where it used a localhost
   database or a JSON file: `xcore add database <folder>`, then `GamesFun.db` calls. Read RULES at the top of

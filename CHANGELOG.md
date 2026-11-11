@@ -2,6 +2,57 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.6.3 — 2026-11-11
+
+**Change of behaviour: on a game's own host, Sign in now sends the tab to X and back, so the game starts again.** On
+`https://<name>-play.xgames.fun/`, as the whole tab, `GamesFun.signIn()` no longer opens a window beside the game, on
+a computer as on a phone: the tab goes to xgames.fun and X (or Google), and the page loads afresh, signed in, with
+whatever the game held in memory gone. A game that cannot start again at that moment keeps the old way, a window on
+xgames.fun, with `GamesFun.signIn({stay: true})` (or for the whole page `globalThis.GAMESFUN_SIGNIN_STAY = true` before
+`gamesfun.js`, or `data-signin-stay` on its `<script>`); Godot's `sign_in("x", true)` and Unity's
+`SignIn("x", true)` the same.
+
+**A game on its own host knows who is signed in, with no tap.** A post's card on X, and xgames.fun's wallet hand-off
+inside a wallet app's browser, open a game as the whole tab at `https://<name>-play.xgames.fun/`, with no play page
+around it. There the game asked a player to sign in again, though xgames.fun would have said who they were.
+`gamesfun.js` is 1.9.0; apart from the change above, a game that loads it needs no change of its own:
+
+- **As the page loads**, on its own host, it asks xgames.fun who is here (`GET /api/player/v1/session?slug=<name>`
+  on xgames.fun, with its cookie). A player who chose to sign in to the game in that browser (or arrived by a hand-off
+  that carried that choice) is signed in with no tap: `GamesFun.ready` answers with them (it waits for the answer,
+  1.5 s at most), `GamesFun.player` and `GamesFun.token` are set and `GamesFun.onChange` is told, as after a sign-in.
+  When xgames.fun names nobody, the game is signed out and nothing more is asked. Shortly before the token's hour ends
+  it is asked again, with nothing shown.
+- **Sign in, from the tap** (`GamesFun.signIn()`, `GamesFun.signIn('google')`: the name alone works now too) takes the
+  tab to `https://xgames.fun/api/player/v1/x/begin?slug=<name>&back=<this page>` (or `…/google/begin`), inside the
+  call, and xgames.fun sends it on to X and back to `back`, this page's address with no fragment at all (the change of
+  behaviour above). `GamesFun.signInLink('x')` gives a game that draws its own button the address for its `<a href>`
+  (`''` where the tab cannot go); its click calls `GamesFun.signIn({how: 'x', link: true})`.
+- **Back with nobody signed in** (`#gf-signin=cancelled` or `#gf-signin=failed` in the address): the word is taken
+  out of the address as the page loads, and `GamesFun.signInEnded` says which.
+- **Sign out** (`GamesFun.signOut()`) tells xgames.fun to forget the game in that browser
+  (`POST /api/player/v1/session/forget` on xgames.fun; one that gets no answer is posted again as the next page loads,
+  until it is answered), and the browser itself asks no more until the next tap on Sign in. A Sign out in the first
+  moment of a page, before its sign-in has started, counts as well.
+- **No more questions than xgames.fun allows**: as the page loads, before a token ends and when the player is back from
+  a sign-in, never on a timer, at most twelve an hour from a tab, and none after a `429` until it allows again.
+- **In a frame** none of this is asked. Framed by the play page, the page above signs in, as before. Framed by anything
+  else (X's timeline, a site or a page of xgames.fun's that embeds the game, a play page that has not answered yet) the
+  game asks xgames.fun nothing as it loads and keeps no sign-in: the tap opens the window on xgames.fun, as before, and
+  that sign-in lasts as long as the page. On a domain of the game's own, and on a host games share, sign-in is the
+  window, as before.
+- A reload keeps a sign-in for the token's hour (the tab keeps it, only as the top window of a host that serves this
+  one game), and the top window asks its own host for a newer sign-in client at `/platform/v1/signin/v1.js`, running
+  the one it carries where none comes (`GamesFun.signInClient`).
+- `xcore dev` answers the three addresses above for the game it serves (each tab its own player), so Sign in there takes
+  the tab round its stand-in for X and back, as on the game's own host; `GamesFun.signIn({name: 'Ana'})` signs a named
+  dev player in at once. A tab, board, rule or save named like what every object has (`constructor`, `__proto__`) is
+  a name like any other there.
+
+To adopt it, run `xcore add signin <folder>` (it brings `gamesfun.js`, or the Godot or Unity glue, up to date; `xcore
+check` says when a copy is older), export again for Godot and Unity, and publish. Read the player from
+`GamesFun.ready` and `GamesFun.onChange`, not only from what `signIn` answers: on its own host the page is leaving.
+
 ## 0.6.2 — 2026-11-11
 
 **A game opened by itself on its own host can open in the player's wallet app too.** A post's card in X's app opens
