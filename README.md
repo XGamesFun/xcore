@@ -543,7 +543,7 @@ holds the addresses the economy went live at stays in the project (keep it in gi
 runs the tools from a terminal. Going live is the person's own step, approved in their own wallet: `xcore loot
 approve` in the folder with `xsolana.json`.
 
-**When loot is upgraded.** This package pins the tools for one build of loot (0.26.0, on devnet since 2026-11-10). loot is upgraded in place on
+**When loot is upgraded.** This package pins the tools for one build of loot (0.26.1, on devnet since 2026-11-10). loot is upgraded in place on
 devnet, and no version so far has carried accounts over: an economy that went live on an earlier build goes live
 again (`xcore loot approve`), and the next publish brings `gf/loot/` up to the installed package. **Nothing runs by
 itself** on chain: the page client sends what a player needs (settles, refunds, claims, a draw that is due); a

@@ -2,9 +2,9 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.4.1 — 2026-11-10
 
-Needs `@xgamesfun/solana` 0.26.3 (the pin moves when it is on npm).
+`@xgamesfun/solana` is 0.26.3 (loot 0.26.1, as devnet runs it).
 
 - `xcore loot token <mint>` reads a coin made elsewhere from the chain and prints its entry for an economy's `tokens`,
   with what its mint's own keys can do. A token the economy makes itself is named on chain as it goes live (its
