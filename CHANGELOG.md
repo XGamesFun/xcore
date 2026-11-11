@@ -2,6 +2,24 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.6.2 — 2026-11-11
+
+**A game opened by itself on its own host can open in the player's wallet app too.** A post's card in X's app opens
+the game as the whole tab at `https://<name>-play.xgames.fun/`, with no play page around it, so 0.6.0's calls answered
+`null` and `no-page` there and the wallet's browser arrived signed out. `gamesfun.js` is 1.8.0:
+
+- `GamesFun.openWallet(app, {view, href})` on the game's own host, as the top window, sends the tab, inside the call,
+  to xgames.fun's wallet page: `<site>/wallet/open?slug=<name>&app=<app>&back=<this page>` (the site and the name the
+  game's own sign-in uses; `back` without its fragment, or `href` with `view: 'claim'` when it is an address on this
+  same host). That page opens the app or shows its links, and the wallet's browser comes back to `back` signed in. It
+  answers `{data: {asked: true, left: true}}`. Framed by anything other than the play page (X's timeline, another
+  site) it is still `no-page`: a frame cannot move the tab.
+- `GamesFun.canOpenWallet()` there is `true` when loot's page client (`gf/loot/wallets.js`) finds no wallet in the
+  browser, `false` when it finds one, and `null` until that has settled (or with no `gf/loot/`). In the play page it
+  follows the page, as before.
+- `GamesFun.walletNeeded()` there answers `{data: {told: false}}` (nobody to tell) instead of an error, so one Claim
+  button works in both places (README §3, "A wallet app, for a claim").
+
 ## 0.6.1 — 2026-11-11
 
 **`xcore loot approve --browser` takes what Phantom signs.** The tools are `@xgamesfun/solana` 0.28.1 (on loot 0.28.0,

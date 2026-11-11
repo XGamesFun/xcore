@@ -254,41 +254,55 @@ its own. It answers `{on, how: 'page' | 'browser' | 'tab' | 'none'}` (`none`: an
 screen for a page); pressed again it comes back, and `GamesFun.onFullscreen(on => …)` follows every change.
 
 **A wallet app, for a claim.** A player who opens a game from a post in X's app is in X's own browser, which has no
-wallet. Inside xgames.fun's play page, the page can open the game in a wallet app's browser (Phantom or Solflare), or
-in the person's own browser, already signed in. Three calls:
+wallet. The game can be opened in a wallet app's browser (Phantom or Solflare), or in the person's own browser,
+already signed in, from either of the two places a player meets it:
 
-- `GamesFun.canOpenWallet()` → `true` (no wallet in this browser, and the play page opens a wallet app when asked),
-  `false` (it will not: a wallet is here), or `null` (not known: no play page around the game, or an older one).
-  `GamesFun.onCanOpenWallet(can => …)` follows each change: a wallet can show up a moment after the page loads.
-- `GamesFun.walletNeeded()`: call it when the Claim button shows, so the play page gets ready and the later tap opens
-  the app at once. Safe to call each time the button shows: the page is told once a page load. It answers
-  `{data: {told: true}}`, or `code: 'no-page'` (no play page around the game: nothing sent).
-- `GamesFun.openWallet(app = 'phantom', {view, href} = {})`: `app` is `'phantom'`, `'solflare'` or `'browser'`;
-  `view` left out opens this play page as it is, `'claim'` with `href` (an address of this game's own play page,
-  `https://xgames.fun/play/<name>?…`) opens that address, `'wallet'` xgames.fun's page that adds a wallet. It answers
-  `{data: {asked: true}}`; the page answers nothing more (it opens the app, or shows its own sheet with the links).
-  Errors, with nothing opened: `code: 'invalid'` (a bad argument), `'no-page'` (no play page around the game),
-  `'not-offered'` (`canOpenWallet()` is not `true`).
+- **inside xgames.fun's play page** (`xgames.fun/play/<name>`): the page around the game opens the app when asked;
+- **on its own host, as the whole tab** (`https://<name>-play.xgames.fun/`: a post's card on X opens the game there
+  by itself): the tab goes to xgames.fun's wallet page
+  (`https://xgames.fun/wallet/open?slug=<name>&app=<app>&back=<this page>`), which opens the app or shows its links,
+  and the wallet's browser comes back to this page signed in.
+
+Framed by anything else (X's timeline shows the game in a frame inside X's own site; another site embeds it) a frame
+cannot move the tab, so nothing opens and the game shows its own fallback. Three calls, the same in both places:
+
+- `GamesFun.canOpenWallet()` → `true` (no wallet in this browser, and the game can be opened in one), `false` (a wallet
+  is here), or `null` (not known: framed by something other than the play page, an older play page, or on its own host
+  before the look for a wallet has settled). On its own host the look is loot's page client's (`gf/loot/wallets.js`,
+  as `gf.loot.ready()` asks it, once more about 1.5 s after it starts: a wallet can register late), started by the
+  first of these calls; a game without `gf/loot/` gets `null` there. `GamesFun.onCanOpenWallet(can => …)` follows each
+  change.
+- `GamesFun.walletNeeded()`: call it when the Claim button shows. In the play page, the page gets ready so the later tap
+  opens the app at once (it is told once a page load): `{data: {told: true}}`. On its own host there is nobody to
+  tell, and it starts the look for a wallet: `{data: {told: false}}`. Framed by anything else: `code: 'no-page'`.
+- `GamesFun.openWallet(app = 'phantom', {view, href} = {})`: `app` is `'phantom'`, `'solflare'` or `'browser'`. In the
+  play page, `view` left out opens the play page as it is, `'claim'` with `href` (an address of this game's own play
+  page, `https://xgames.fun/play/<name>?…`) that address, `'wallet'` xgames.fun's page that adds a wallet; it answers
+  `{data: {asked: true}}`, or `code: 'not-offered'` when `canOpenWallet()` is not `true` there. On its own host the
+  tab goes to the wallet page and it answers `{data: {asked: true, left: true}}` (the page is leaving); the way back
+  is this page's address without its fragment, or `href` with `'claim'` when that is an address on this same host.
+  Errors, with nothing opened: `code: 'invalid'` (a bad argument), `'no-page'` (framed by something else).
 
 **Call `openWallet` inside the player's tap**, in the click handler itself, with no `await` or timer before it: the
-message goes out in the call, and a browser lets the page open an app only from a tap. So a Claim button chooses:
+message (or the tab's move) goes in the call, and a browser opens an app only from a tap. One Claim button for both
+places:
 
 ```js
 const gf = GamesFun; // walletHere: (await gf.loot.ready()).data.wallets.length > 0, asked before
-gf.walletNeeded(); // when the Claim button shows
+gf.walletNeeded(); // when the Claim button shows (on its own host it starts the look for a wallet)
 claimButton.onclick = () => {
   if (walletHere) return claim(); // a wallet in this browser: the game's own claim
   if (gf.canOpenWallet() === true) {
     gf.openWallet('phantom', { view: 'claim', href: claimLink }); // no await before this line
     return showNote('Opening your wallet app…');
   }
-  copyLink(); // no wallet and no play page that opens one: the game's own fallback
+  copyLink(); // no wallet and no way to open one here: the game's own fallback
 };
 ```
 
-`gamesfun.js` builds no wallet links itself. Under `xcore dev` and on this machine there is no play page around the
-game, so `canOpenWallet()` is `null` and `openWallet` answers `no-page`: test the fallback there, and the wallet app
-on xgames.fun.
+`gamesfun.js` builds no wallet app's links itself: xgames.fun's pages do. Under `xcore dev` and on this machine there is
+no play page and no xgames.fun, so `canOpenWallet()` is `null` and `openWallet` answers `no-page`: test the fallback
+there, and the wallet app on xgames.fun.
 
 **A leaderboard is the player's own word until the server takes it.** A signed-in player submits their own scores
 from the page, so anyone can submit any score for themselves from the browser's console. A game with its own server
@@ -823,7 +837,7 @@ A game made with xcore 0.1.0 that has `server/database.js` (`xcore add database`
 without one needs none: the D1 database, `xcore db` and `xcore files` are new.
 
 1. **Run `xcore add database` again.** It brings `server/database.js` up to date (your `RULES` and `LIMITS` are
-   kept), with `gamesfun.js` (1.7.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
+   kept), with `gamesfun.js` (1.8.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
    needs an owner (step 3) as `file:line` with its change; `xcore publish` lists them again until each names its
    owner. On its first start the new `database.js` moves the documents to a table keyed by collection, owner and id,
    each under its owner. After that, do not roll the game back to a version with 0.1.0's `database.js`: its writes
