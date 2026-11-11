@@ -28,14 +28,20 @@ Until now that was only in a browser (the game's console, Token tab, with a brow
   landed) is signed only for the coin, the venue, the name and the ticker this folder recorded when it began.
 - Nothing in a transaction names its cluster, so a devnet RPC is asked, before the key signs, that each transaction's
   blockhash is one of devnet's and that the coin's address holds nothing yet: your own RPC (`XSOLANA_RPC_URL`), else
-  Solana's public one, else (when that does not answer, and said so) xgames.fun's own. With none to ask, nothing is
-  signed.
+  Solana's public one, never xgames.fun's (it built the launch). With none to ask, or an `XSOLANA_RPC_URL` that can't
+  be used, nothing is signed.
+- The first run keeps its plan in the folder (`.gamesfun/coin-plan.json`), and `--yes` is held to it choice by
+  choice, including the defaults xgames.fun chose and whether it is the rest of an earlier launch: a server that
+  steers a default between the two runs gets nothing signed, whatever the code. `xcore coin` says when the coin
+  xgames.fun names is not the one this folder's key launched; `--json` escapes what would hide text in a terminal.
 - Not read, and said so in the plan: the picture and the description (what the coin's link serves), and on Meteora
   the curve's shape. What xgames.fun sends back is cleaned before a terminal shows it, and after a launch is handed
   in, what was sent is given as xgames.fun's word.
-- Two independent readings shaped this check. The first found that matching instructions by name let a launch hide a
-  fee or name another creator; the second, that a slot filled with bytes passed for the new coin's signature, and
-  that the pair and the cluster were not held. Each rule now has a test that fails without it.
+- Three independent readings shaped this check. The first found that matching instructions by name let a launch hide
+  a fee or name another creator; the second, that a slot filled with bytes passed for the new coin's signature, and
+  that the pair and the cluster were not held; the third, that the code alone could be steered, that falling back to
+  xgames.fun's RPC let it vouch for its own launch, and that the token programs and the key's own fee account were
+  not pinned. Each rule now has a test that fails without it.
 - It needs an xgames.fun with launching on; one without it says so.
 
 ## 0.6.3 — 2026-11-11

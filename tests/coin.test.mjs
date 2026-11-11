@@ -38,6 +38,7 @@ import {
   MOST_LAMPORTS,
   planText,
   solanaTools,
+  localRpc,
   WRAPPED_SOL,
 } from '../lib/coin.mjs';
 import { saveSecret } from '../lib/credentials.mjs';
@@ -679,6 +680,34 @@ test('a launch is its venue’s instructions, each once and in order, with the k
       () => check(launch, venue, set(launch, n, name, place, { pubkey: theirs })),
       new RegExp(`holds a ${name} whose pair is not the pair in the plan`),
     );
+  // the token program, where each reads one: another program there would be handed the coin's or the pair's accounts
+  for (const [launch, venue, n, name, place] of [
+    [meteora, 'meteora', 0, 'initialize_virtual_pool_with_spl_token', 11],
+    [meteora, 'meteora', 0, 'initialize_virtual_pool_with_spl_token', 12],
+    [pumpfun, 'pumpfun', 0, 'create_v2', 7],
+    [pumpfunUsdc, 'pumpfun', 0, 'create_v2', 18],
+    [pumpfun, 'pumpfun', 1, 'sweep_creator_fee', 4],
+    [pumpfun, 'pumpfun', 1, 'update_fee_shares_v2', 15],
+  ])
+    refused(
+      () => check(launch, venue, set(launch, n, name, place, { pubkey: theirs })),
+      new RegExp(`holds a ${name} whose token program is not`),
+    );
+  // (a pump.fun coin is a Token-2022 mint: SPL Token in its place is not its program)
+  refused(
+    () =>
+      check(
+        pumpfun,
+        'pumpfun',
+        set(pumpfun, 0, 'create_v2', 7, { pubkey: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' }),
+      ),
+    /whose token program is not Token-2022/,
+  );
+  // the key's own account of the pair, where a pump.fun split paired with a token pays its share
+  refused(
+    () => check(pumpfunUsdc, 'pumpfun', set(pumpfunUsdc, 1, 'update_fee_shares_v2', 20, { pubkey: theirs })),
+    /pays this key’s share of the creator fee to an account that is not this key’s own/,
+  );
   // (the whole of a launch paired with a token, where the plan said SOL, and the other way)
   refused(() => check({ ...pumpfunUsdc, quote: WRAPPED_SOL }, 'pumpfun'), /no part of this launch/);
   refused(() => check({ ...pumpfun, quote: USDC }, 'pumpfun'), /with 16 accounts, where its program takes 20/);
@@ -1538,7 +1567,7 @@ test('a launch sends nothing until it is run with the code it printed; the code 
 
   // the same choices give the same code, whatever the key holds; any other choice, another
   assert.equal(launchCode(planned.plan), planned.code);
-  assert.equal(launchCode({ ...planned.plan, balance: 1n, resume: true }), planned.code);
+  assert.equal(launchCode({ ...planned.plan, balance: 1n }), planned.code);
   for (const [k, v] of [
     ['game', 'g-10'],
     ['name', 'Moth Coin '],
@@ -1549,6 +1578,7 @@ test('a launch sends nothing until it is run with the code it printed; the code 
     ['pair', 'USDC'],
     ['quote', USDC],
     ['wallet', other()],
+    ['resume', true],
   ])
     assert.notEqual(launchCode({ ...planned.plan, [k]: v }), planned.code, k);
 
@@ -1563,6 +1593,28 @@ test('a launch sends nothing until it is run with the code it printed; the code 
       launchCoin(dir, form, { ...opts, yes }),
       e => e instanceof CoinError && e.code === 'code' && /That code is not for this launch/.test(e.message),
     );
+  // What is sent is held to the plan this folder kept when it was printed, choice by choice, not to the code alone:
+  // a plan kept with another choice (what a server steering the defaults between the runs would give, even with a
+  // code that matched) sends nothing, and with no kept plan nothing is sent.
+  const planFile = path.join(dir, '.gamesfun', 'coin-plan.json');
+  const kept = JSON.parse(await readFile(planFile, 'utf8'));
+  const origin = Object.keys(kept)[0];
+  for (const [k, v] of [
+    ['pair', 'USDC'],
+    ['venue', 'pumpfun'],
+    ['quote', USDC],
+    ['resume', true],
+  ]) {
+    const steered = structuredClone(kept);
+    steered[origin].choices = steered[origin].choices.map(([c, was]) => [c, c === k ? v : was]);
+    await writeFile(planFile, JSON.stringify(steered));
+    const e = await launchCoin(dir, FORM, { ...opts, yes: planned.code }).catch(x => x);
+    assert.equal(e?.code, 'code', k);
+  }
+  await writeFile(planFile, '{}');
+  assert.equal((await launchCoin(dir, FORM, { ...opts, yes: planned.code }).catch(x => x))?.code, 'code');
+  // (a venue named like what every object has is no venue)
+  assert.equal((await launchCoin(dir, { ...FORM, venue: 'constructor' }, opts).catch(x => x))?.code, 'usage');
   assert.deepEqual([sent('POST').length, sent('PUT').length, key.signed.length], [0, 0, 0]);
 });
 
@@ -1720,7 +1772,7 @@ test('devnet is asked before the key signs: its own blockhashes, a coin that is 
   assert.equal(s.error?.code, 'chain');
   assert.match(
     s.error.message,
-    /^Solana devnet could not be read from here \(.*\)\. Try again in a minute, or set XSOLANA_RPC_URL to a devnet RPC of your own\. Nothing was signed\.$/,
+    /^Solana devnet could not be read from here \(.*\), and whether a launch is devnet’s is not asked of xgames\.fun, which built it\. Try again in a minute, or set XSOLANA_RPC_URL to a devnet RPC of your own\. Nothing was signed\.$/,
   );
   assert.ok(s.rpcs().every(c => c[1] === OWN_RPC));
   nothing(s);
@@ -1729,7 +1781,8 @@ test('devnet is asked before the key signs: its own blockhashes, a coin that is 
   assert.equal(s.error?.code, 'chain');
   nothing(s);
 
-  // With no RPC of their own: Solana's public one is asked, and xgames.fun's only when that does not answer, said so.
+  // With no RPC of their own: Solana's public one is asked. xgames.fun's is listed (the key's balance may be read
+  // there) but never decides a signature: with the public one away, nothing is signed.
   assert.deepEqual(
     devnetRpcs({}).map(r => [r.url, r.independent]),
     [
@@ -1748,10 +1801,9 @@ test('devnet is asked before the key signs: its own blockhashes, a coin that is 
   );
   assert.ok(s.rpcs().every(c => c[1] === DEVNET_RPC));
   s = await tried(chains => (chains[DEVNET_RPC] = null), { ownRpc: false });
-  assert.deepEqual(
-    [s.error, s.result.launched, s.result.checkedThrough, s.result.independent],
-    [null, true, 'xgames.fun’s own devnet RPC', false],
-  );
+  assert.equal(s.error?.code, 'chain');
+  assert.match(s.error.message, /not asked of xgames\.fun, which built it/);
+  nothing(s);
   // (and held to the same there: a public RPC that answers "another cluster" is not passed over for the next)
   s = await tried(chains => (chains[DEVNET_RPC].genesis = MAINNET_GENESIS), { ownRpc: false });
   assert.equal(s.error?.code, 'not-devnet');
@@ -1885,11 +1937,15 @@ test('the rest of a pump.fun launch is signed only for the coin this folder bega
   state.prepared = { ok: true, transactions: [pumpfun.transactions[1]], mint: pumpfun.mint, resume: true };
   state.chains[OWN_RPC].accounts.add(pumpfun.mint);
   state.after = { ...state.status, own: live, launch: { on: true, started: false, sent: false, partly: false } };
+  // (the old code is not the rest's: the rest of a launch is another plan, read again)
+  const stale = await launchCoin(dir, form, { ...opts, yes: code }).catch(e => e);
+  assert.equal(stale.code, 'code');
   const again = await launchCoin(dir, form, opts);
   assert.equal(again.plan.resume, true);
-  assert.equal(again.code, code, 'the same choices, the same code');
+  assert.notEqual(again.code, code, 'the rest of a launch is another plan, with another code');
+  const restCode = again.code;
   assert.match(
-    planText(again.plan, { game: 'g', keyFile: 'k', code, command: 'c' }),
+    planText(again.plan, { game: 'g', keyFile: 'k', code: restCode, command: 'c' }),
     /launched on Solana devnet \(the rest of a launch begun earlier\):/,
   );
   // (the plan says the rest of a launch, and what was built is a new one)
@@ -1902,7 +1958,8 @@ test('the rest of a pump.fun launch is signed only for the coin this folder bega
   await rejects(form, /the coin it is the rest of is not on devnet/);
   state.chains[OWN_RPC].accounts.add(pumpfun.mint);
   assert.equal(key.signed.length, 2);
-  const done = await launchCoin(dir, form, { ...opts, yes: code });
+  await launchCoin(dir, form, opts);
+  const done = await launchCoin(dir, form, { ...opts, yes: restCode });
   assert.deepEqual([done.launched, key.signed.length, sent('PUT').at(-1)[3].transactions.length], [true, 3, 1]);
   // for another coin, under another name, or from a folder that began none, it is not signed
   state.prepared = { ...rest, mint: pumpfunUsdc.mint };
@@ -1912,6 +1969,23 @@ test('the rest of a pump.fun launch is signed only for the coin this folder bega
   await writeFile(path.join(dir, '.gamesfun', 'coin.json'), '{}');
   await rejects(form, /not begun from this folder/);
   assert.equal(key.signed.length, 3);
+});
+
+test('a venue named like what every object has is no venue; an XSOLANA_RPC_URL that can’t be used is said, not passed over', async t => {
+  refused(() => check(meteora, 'constructor'), /a venue this command does not know/);
+  refused(() => check(meteora, '__proto__'), /a venue this command does not know/);
+  const { dir, state, key, opts, sent } = await setup(t);
+  state.status = {
+    ...state.status,
+    venues: [...state.status.venues, { venue: 'constructor', pairs: [{ symbol: 'SOL', name: 'Solana', mint: 'SOL' }] }],
+  };
+  assert.equal((await launchCoin(dir, { ...FORM, venue: 'constructor' }, opts).catch(x => x))?.code, 'usage');
+  // (http to another machine: not a setting this command uses, and not swapped for Solana's public RPC either)
+  const bad = { ...opts, env: { ...opts.env, XSOLANA_RPC_URL: 'http://rpc.example/devnet' } };
+  const planned = await launchCoin(dir, FORM, bad);
+  const e = await launchCoin(dir, FORM, { ...bad, yes: planned.code }).catch(x => x);
+  assert.deepEqual([e?.code, /Fix XSOLANA_RPC_URL/.test(e?.message ?? '')], ['rpc', true]);
+  assert.deepEqual([sent('PUT').length, key.signed.length], [0, 0]);
 });
 
 test('what a launch is refused for before anything is begun', async t => {
@@ -2091,6 +2165,22 @@ test('what xgames.fun sends is cleaned before a terminal shows it', () => {
   assert.equal(clean('x'.repeat(500)).length, 300);
   assert.equal(clean('x'.repeat(500), 20).length, 20);
   assert.equal(clean('Moth Coin (MOTH) à la carte'), 'Moth Coin (MOTH) à la carte');
+  // what shows as nothing: no-break and other spaces, the soft hyphen, the fillers, the blank Braille cell, the
+  // variation selectors, the tag characters, the grapheme joiner, the Mongolian separator
+  const nothingShown = [
+    0xa0, 0xad, 0x34f, 0x115f, 0x180e, 0x2007, 0x202f, 0x205f, 0x2800, 0x3000, 0x3164, 0xfe0f, 0xffa0, 0xe0041, 0xe0100,
+  ];
+  for (const c of nothingShown) assert.equal(clean(`a${String.fromCodePoint(c)}b`), 'ab', c.toString(16));
+  // a validator on this machine, and only that, is its own cluster
+  for (const url of ['http://localhost:8899', 'http://127.0.0.1:8899/', 'http://[::1]:8899'])
+    assert.ok(localRpc(url), url);
+  for (const url of [
+    'http://localhost.evil.example:8899',
+    'https://example.com/http://localhost',
+    'http://127.0.0.1.evil.example',
+    'xhttp://localhost',
+  ])
+    assert.ok(!localRpc(url), url);
   for (const not of [undefined, null, 7, {}, ['a']]) assert.equal(clean(not), '');
   assert.equal(cleanAddress(WRAPPED_SOL), WRAPPED_SOL);
   for (const not of ['x', `${WRAPPED_SOL}\n`, `${WRAPPED_SOL} \u001b[8m`, undefined, 7, 'O'.repeat(40)])
@@ -2294,8 +2384,26 @@ test('the command: a plan, then a launch signed by a real key file, against a st
   };
   r = await xc([]);
   assert.doesNotMatch(r.stdout.replaceAll('\n', ''), HIDDEN);
-  assert.match(r.stdout, /\n +mint +\(not an address\)\n/);
-  assert.equal(r.stdout.split('\n').filter(l => /^ +mint /.test(l)).length, 1);
+  // (and a coin xgames.fun names that is not the one this folder's key launched is said as that, never shown as the
+  // game's: here it is no address at all)
+  assert.match(
+    r.stdout,
+    new RegExp(
+      `^xgames\\.fun names \\(not an address\\) as moth-run's coin, but the coin this folder's key launched is ${mint} \\(\\$MOTH, recorded in \\.gamesfun/coin\\.json\\)\\.\\n`,
+    ),
+  );
+  assert.equal(r.stdout.split('\n').filter(l => /^ +mint /.test(l)).length, 0);
+  // the same through --json: the server's text with every hiding character escaped, and `differs` said
+  // (a direction mark JSON itself leaves as it is: escaped all the same)
+  seen.own = { ...seen.own, name: `${seen.own.name}${String.fromCodePoint(0x202e)}` };
+  const j = await xc(['--json']);
+  assert.match(j.stdout, /\\u202e/);
+  assert.doesNotMatch(j.stdout.replaceAll('\n', ''), HIDDEN);
+  assert.deepEqual([JSON.parse(j.stdout).differs, JSON.parse(j.stdout).recorded.mint], [true, mint]);
+  // another coin, at an address: the same
+  seen.own = { ...seen.own, mint: other(), symbol: 'MOTH', name: 'Moth Coin', venue: 'meteora', pair: 'SOL' };
+  r = await xc([]);
+  assert.match(r.stdout, /^xgames\.fun names \S+ as moth-run's coin, but the coin this folder's key launched is /);
   seen.own = null;
   seen.live = false;
   seen.why = 'off\n\u001b[2Kxcore: launched \u202e';

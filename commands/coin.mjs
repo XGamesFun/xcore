@@ -1,6 +1,6 @@
 // `xcore coin`: a coin that trades for a published game (../lib/coin.mjs): where it stands, launching one with a key
 // file, and giving up a launch that was never sent.
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, parse, UsageError } from '../lib/cli.mjs';
 import { resolveGame, named } from '../lib/games.mjs';
 import {
   ABOUT_SOL,
@@ -11,6 +11,7 @@ import {
   explorerOf,
   launchCoin,
   planText,
+  safeJson,
   VENUES,
   VENUE_WORDS,
 } from '../lib/coin.mjs';
@@ -39,7 +40,7 @@ economy, runs no market: a coin people can buy and sell is launched on a venue, 
 A game has one coin, and its name and ticker stay as launched. The same from a browser wallet: the game's
 console (xgames.fun/console), Token tab. A coin made elsewhere is named in the economy with ${CMD} loot token <mint>.`;
 
-const venueName = v => VENUES[v]?.name ?? v;
+const venueName = v => (typeof v === 'string' && Object.hasOwn(VENUES, v) ? VENUES[v].name : v);
 
 /**
  * Where the game's coin stands, in words. Everything of xgames.fun's answer that is shown is cleaned first (a name
@@ -50,6 +51,12 @@ function statusText(game, s) {
     launch = s.launch ?? {};
   const symbol = clean(own?.symbol, 20),
     mint = cleanAddress(own?.mint);
+  // (xgames.fun's word for which coin is the game's, against what this folder's own key launched)
+  if (s.differs)
+    return [
+      `xgames.fun names ${cleanAddress(own?.kind === 'launched' ? own.mint : launch.mint)} as ${game}'s coin, but the coin this folder's key launched is ${cleanAddress(s.recorded?.mint)} ($${clean(s.recorded?.symbol, 20)}, recorded in .gamesfun/coin.json).`,
+      'Do not name the first in the game’s economy until that is explained: write to xgames.fun.',
+    ].join('\n');
   if (own?.kind === 'launched')
     return [
       `${game}'s coin is live on Solana devnet: $${symbol} (${clean(own.name, 60)}), on ${clean(venueName(own.venue), 20)}${own.pair ? `, paired with ${clean(own.pair, 20)}` : ''}.`,
@@ -75,7 +82,9 @@ function statusText(game, s) {
     return lines.join('\n');
   }
   // (a venue this command can launch on, in its own words: what the check holds a launch to)
-  const venues = (Array.isArray(s.venues) ? s.venues : []).filter(v => VENUES[v?.venue] && Array.isArray(v.pairs));
+  const venues = (Array.isArray(s.venues) ? s.venues : []).filter(
+    v => typeof v?.venue === 'string' && Object.hasOwn(VENUES, v.venue) && Array.isArray(v.pairs),
+  );
   for (const v of venues)
     lines.push(
       `  ${v.venue.padEnd(8)} ${VENUE_WORDS[v.venue]}  Pairs: ${v.pairs.map(p => clean(p?.symbol, 16)).join(', ')}`,
@@ -141,7 +150,7 @@ export default {
           if (!value?.trim()) throw new UsageError(`launch needs ${flag}\n\n${usage}`);
       const dir = await resolveGame(rest[0]);
       const game = named(dir);
-      const out = values.json ? printJson : null;
+      const out = values.json ? v => process.stdout.write(safeJson(v) + '\n') : null;
 
       if (verb === 'status') {
         const s = await coinStatus(dir, { refresh: true });
