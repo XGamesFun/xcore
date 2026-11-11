@@ -75,6 +75,8 @@ test("xcore dev answers as xgames.fun's side of sign-in: the client's address, t
   // nobody is signed in until a click (the dev host's own sign-in); then the question answers, for that tab only
   const ask = tab => http(`${dev.origin}/api/player/v1/session?slug=moth&tab=${tab}`);
   assert.deepEqual((await ask('tabaaaaaa1')).json, { player: null });
+  for (const named of ['constructor', 'tostring', 'valueof'])
+    assert.deepEqual((await ask(named)).json, { player: null }, `a tab named ${named} is nobody`);
   await http(`${dev.origin}/platform/v1/dev/token`, { method: 'POST', body: '{"id":"tabaaaaaa1","name":"Ana"}' });
   const session = (await ask('tabaaaaaa1')).json;
   assert.deepEqual(session.player, { wallet: null, level: 1, x: null, google: null, name: 'Ana', by: 'dev' });
