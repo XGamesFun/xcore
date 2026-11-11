@@ -41,6 +41,8 @@ xcore domain add play.mygame.com ./my-game       # Creator or Scale: it plays at
 (`xcore` on npm is another package: always run this one as `npx -y @xgamesfun/xcore …`, or install it.) It needs Node 24
 or newer, and Chrome, Edge or Chromium for the check (else it downloads Playwright's Chromium once). With an agent,
 the skill in `skills/bring-your-own-game/` walks the same steps, and `xcore loot connect` adds the economy's tools.
+Before an economy, a draw or anything a player pays for, read [docs/BEFORE-YOU-BUILD.md](docs/BEFORE-YOU-BUILD.md): the
+traps a real promo fell into, and the two habits that catch them.
 
 **Making a game from an idea** is the kit's (`@xgamesfun/kit`): base worlds, the build loop, the studio page, its six
 gates. The kit brings this package, and `xcore` hands the kit every command it does not have itself (`create`,
@@ -1054,6 +1056,8 @@ without one needs none: the D1 database, `xcore db` and `xcore files` are new.
 ## Documentation
 
 - [docs/SERVER.md](docs/SERVER.md): a game's own server code (`server/`, the `gf-server-v1` contract)
+- [docs/BEFORE-YOU-BUILD.md](docs/BEFORE-YOU-BUILD.md): challenge before you build, walk it through before it ships, and
+  the traps behind both
 - [skills/bring-your-own-game/SKILL.md](skills/bring-your-own-game/SKILL.md): the same steps, for a coding agent
 - [CHANGELOG.md](https://github.com/XGamesFun/xcore/blob/main/CHANGELOG.md), [CONTRIBUTING.md](https://github.com/XGamesFun/xcore/blob/main/CONTRIBUTING.md), [SECURITY.md](https://github.com/XGamesFun/xcore/blob/main/SECURITY.md)
 
