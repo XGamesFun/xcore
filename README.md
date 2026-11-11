@@ -900,8 +900,9 @@ with `scope` (`"player"` or `"game"`) and `plan` when it goes past a rate.
 
 A coin people can buy and sell, for a published game: on Solana devnet by default, to rehearse, and on mainnet (real
 money) with `--cluster mainnet` where xgames.fun has mainnet launching on. loot runs no market, so the coin is
-launched on a venue through xgames.fun's launchpad: **Meteora** (a curve of its own, then a pool; you keep about 40%
-of its trading fees) or **pump.fun** (its curve; the creator fee is shared half and half with xgames.fun). A game has
+launched on a venue through xgames.fun's launchpad: **Meteora** (a curve of its own, then a pool; you keep 90% of its
+trading fees after Meteora's own cut) or **pump.fun** (its curve; you keep 90% of the creator fee). xgames.fun never
+takes more than 10% of a coin's creator fees, and xcore refuses to sign a launch that gives it more. A game has
 one coin, and its name and ticker stay as launched.
 
 ```bash
@@ -926,9 +927,10 @@ xcore coin launch … --yes <code>                   # the same command, with th
     program takes, and the key, the coin and the pair in the places the program reads them;
   - one coin whose own new key signs (the signature is checked), with the plan's name, ticker and link, byte for
     byte, paired with what the plan said, and this key as its creator;
-  - on Meteora: no fee for making the pool or for moving to it, the key's half of the creator's side of trading fees
-    and of liquidity, the launchpad's half of the liquidity locked, a fixed supply, and nobody able to mint more of
-    the coin or rename it; on pump.fun: none of its optional modes, and at least half the creator fee to this key;
+  - on Meteora: no fee for making the pool or for moving to it, at least 90% of the creator's side of trading fees
+    and of liquidity to this key, the launchpad's part of the liquidity locked, a fixed supply, and nobody able to
+    mint more of the coin or rename it; on pump.fun: none of its optional modes, and at least 90% of the creator fee
+    to this key;
   - no buy, nothing of the System or Token programs (so no move of the key's SOL or of a token it holds), a token
     program (and on pump.fun Token-2022 for the coin) in every place an instruction reads one, the key's share of a
     pump.fun fee paid to the key's own account, no change to another coin of the key's, nothing that names loot (the

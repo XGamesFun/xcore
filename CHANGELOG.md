@@ -2,6 +2,14 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.9.1 — 2026-11-11
+
+**A coin's creator keeps at least 90% of its fees.** xgames.fun takes at most 10% of a coin's creator fees (its
+owner's rule, 2026-11-11), and its launchpad now builds that split: on pump.fun the creator fee is shared 90/10 (was
+50/50); on Meteora the creator gets 90% of the trading fee left after Meteora's own cut (was 50%) and 90% of the
+graduated pool's locked liquidity (was 50%). `xcore coin` holds a launch to it: one that gives the key less than 90%
+of any of these is refused, whoever built it. The plan's words say so.
+
 ## 0.9.0 — 2026-11-11
 
 **`xcore coin --cluster mainnet`**: a game's real coin, where xgames.fun has mainnet launching on (it is off until
