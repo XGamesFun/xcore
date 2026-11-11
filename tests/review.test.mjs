@@ -63,7 +63,7 @@ test('the two sample servers: no server finding in either; the economy review of
   const d = await review(decided);
   assert.deepEqual(ids(b), []);
   assert.deepEqual(ids(d), []);
-  // @xgamesfun/solana (0.28.6 here) has `xsolana review`: the economy is read too. A "bounds" grant with no total is the
+  // the installed @xgamesfun/solana has `xsolana review`: the economy is read too. A "bounds" grant with no total is the
   // trade-off the review names (medium); a "decides" one isn't.
   assert.equal(b.economy.available, true);
   assert.deepEqual(all(b), ['medium R-CLAIM-UNCAPPED', 'info R-VOUCHER-KEY', 'info R-AUTHORITY']);
@@ -156,7 +156,13 @@ test('the two sample servers: no server finding in either; the economy review of
   assert.match(c.stdout, /evidence .*review-2/);
   assert.match(c.stdout, /^paid route grant:found-whale: bounds; bounded$/m);
   assert.match(c.stdout, /^server: 1 paid routes in the ledger, 1 keys in custody; 5 api\/ routes named/m);
-  assert.match(c.stdout, /economy: xsolana\.json, \d+ routes? reviewed by @xgamesfun\/solana 0\.28\.6/);
+  const kit = JSON.parse(
+    await readFile(new URL('../node_modules/@xgamesfun/solana/package.json', import.meta.url), 'utf8'),
+  ).version;
+  assert.match(
+    c.stdout,
+    new RegExp(`economy: xsolana\\.json, \\d+ routes? reviewed by @xgamesfun/solana ${kit.replace(/\./g, '\\.')}`),
+  );
 });
 
 test('PAY.check in the ledger: the template pays nothing (payout-signer); the request deciding is payout-input (high with the body read), and its declared trust a payout-trust mismatch; the command exits 1', async t => {
@@ -656,7 +662,7 @@ test('the ledger against the grants: payOnly and perPerson (payout-signer, payou
     delete s.grants[0].trust;
   });
   const u = await review(dir);
-  // the installed @xgamesfun/solana (0.28.6) says it itself (R-TRUST-UNSAID), so this package's own line stays out
+  // the installed @xgamesfun/solana says it itself (R-TRUST-UNSAID), so this package's own line stays out
   assert.deepEqual(ids(u), []);
   assert.ok(
     all(u).some(i => i.endsWith(' R-TRUST-UNSAID')),
