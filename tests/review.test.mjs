@@ -41,9 +41,12 @@ async function sample(tmp, name, as = name) {
   return dir;
 }
 const review = (dir, o = {}) => reviewGame(dir, { env: INSTALLED, ...o });
-// xcore's own findings (the server, live); the economy's come from @xgamesfun/solana's review (`all` has them too)
-const ids = r => r.findings.filter(f => f.source !== 'economy').map(f => `${f.severity} ${f.id}`);
-const all = r => r.findings.map(f => `${f.severity} ${f.id}`);
+// xcore's own findings (the server, live); the economy's come from @xgamesfun/solana's review (`all` has them too). The
+// design ↔ code pass's (source design: tests/design-code.test.mjs) are left out of both: a sample whose check keeps
+// state asks about its server bound (bound-undeclared), which is that pass's to test.
+const ids = r =>
+  r.findings.filter(f => f.source !== 'economy' && f.source !== 'design').map(f => `${f.severity} ${f.id}`);
+const all = r => r.findings.filter(f => f.source !== 'design').map(f => `${f.severity} ${f.id}`);
 // a server finding's cases (the ledger's reasons under one code)
 const one = (r, id) => r.findings.find(f => f.id === id);
 const cases = (r, id) => r.findings.filter(f => f.id === id).flatMap(f => f.cases ?? [f.place]);
@@ -1116,7 +1119,7 @@ test('publish says to run the review when a game that pays through vouchers chan
 
 // ---- For the person: "Ask the person" and "Tell the person, as written" -------------------------------------------
 
-const FROM = ['economy', 'server', 'custody', 'plan'];
+const FROM = ['economy', 'server', 'design', 'custody', 'plan'];
 /** Each line is {text, from}: a sentence, and one of the four sources. */
 function assertLines(list, name) {
   assert.ok(Array.isArray(list), `${name} is a list`);

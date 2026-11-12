@@ -248,6 +248,9 @@ xcore loot review               # the economy's part alone (@xgamesfun/solana's 
   before building on the answers. Keep neither in private notes. Never call a bounded result safe. Where a paid route
   rests on a weaker level, put the choice to the person with your pick: a smaller prize and tighter caps, or the
   stronger level and what it costs to build (review.md ends with both for each route).
+- **Declare what the server does.** Confirm each draft in review.md's "Design and code" (`offchain`, `serverLimit`)
+  with the person, add the confirmed ones to `xsolana.json`, and run `xcore loot check` again: a loop through the server
+  shows only once it is declared.
 
 After publishing, `xcore review <folder> --live` asks the published game as a stranger (no sign-in, a forged one;
 nothing it sends can spend or sign) and checks its voucher key and economy against the folder. Under `xcore dev`,
