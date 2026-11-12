@@ -188,6 +188,16 @@ about games made on the kit; the kit's `verify` runs this same check for one):
 The report also says whether the game has a [preview picture](#preview-picture-xcore-card) (`assets/card.jpg`): a
 warning when it has none, or one xgames.fun cannot draw or will crop or blur, never a failed check.
 
+Its last section, **First session (as a first-time player on a phone, in the play frame)**, walks the game's first
+minutes as a new player would: in the play page's frame at a phone's size, a touch at a time (up to 6 taps, about 45
+s), on what such a player taps (a "Play" or "Start", then a "Claim" or "Open", else the centre of the largest canvas;
+never a field to type in, a link out of the game or a settings button), or on the path `gamesfun.json` declares
+(`"journey": [{"tap": "#play"}, {"wait": 500}, {"tap": "#claim"}]`). It says what was tapped and what appeared, the
+taps until play answered, the first moment a sign-in, a wallet or SOL was needed (a `GamesFun.loot.call` that signs
+needs a wallet with SOL for its fee), the wallet prompts, the waits it showed, what failed or the frame blocked on the
+way (screenshots `journey-1.png`…), and ends with a few sentences to pass on as they are. It informs and never fails
+the check; publish's own check does not run it. `--json` has it as `firstSession`.
+
 A backend that does not answer this machine is a note, not a failure. The game's play is its own: the page check says
 it starts clean and stays inside what the hosting allows, nothing more. Publish's gate runs the same check, and a game
 whose check fails goes up as a private draft only.

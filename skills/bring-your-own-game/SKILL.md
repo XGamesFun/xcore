@@ -106,7 +106,7 @@ sandboxed frame opened with a query string, under the play host's page policy, n
 nothing from the root, something on screen, no pop-up, form submit or top-level navigation in the frame), it stays
 inside its origins. Open the three screenshots in `evidence/verify-N/` and look at them. Its report also says whether the game has a preview picture
 (§7): a warning, never a failure. A failing check 4 names the origin and why: declare it in
-`backend.json` if the game really calls it, or remove the call. The page check does not say the game plays well:
+`backend.json` if the game really calls it, or remove the call. Read its "First session" section (a first-time player on a phone in the play frame: taps to play, the first sign-in, wallet or SOL, waits, blocks) and pass its "Tell the person" lines on to the person as they are; when the walk could not reach the game's first reward, declare the path in `gamesfun.json` (`"journey": [{"tap": "<css selector>"} | {"wait": ms}]`) and check again. The page check does not say the game plays well:
 that is the person's own game; ask them what to try, and try it with `xcore dev <folder>` (the game as xgames.fun
 hosts it, with its server, sign-in, saves, rooms and economy RPC, refusing what xgames.fun refuses on the Free plan;
 `--plan creator` for a Creator game) or their own. A refusal there (`rate`, `full`, `too-many`, `order`) is one the
