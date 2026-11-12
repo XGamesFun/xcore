@@ -24,6 +24,7 @@ import {
   reviewGame,
   reviewNudge,
   withoutComments,
+  counts,
 } from '../lib/review.mjs';
 import { seedAddress } from '../lib/add.mjs';
 import { ROOT, run, tempDir } from './helpers.mjs';
@@ -66,8 +67,14 @@ test('the two sample servers: no server finding in either; the economy review of
   // the installed @xgamesfun/solana has `xsolana review`: the economy is read too. A "bounds" grant with no total is the
   // trade-off the review names (medium); a "decides" one isn't.
   assert.equal(b.economy.available, true);
-  assert.deepEqual(all(b), ['medium R-CLAIM-UNCAPPED', 'info R-VOUCHER-KEY', 'info R-AUTHORITY']);
-  assert.deepEqual(all(d), ['info R-VOUCHER-KEY', 'info R-AUTHORITY']);
+  // (the economy's findings are the installed package's to word; what this package owes is to carry them, severity
+  // and all: the "bounds" grant's uncapped claim is named, the "decides" one's isn't, and nothing in either is high)
+  assert.ok(all(b).includes('medium R-CLAIM-UNCAPPED'), all(b).join(', '));
+  assert.ok(!all(d).includes('medium R-CLAIM-UNCAPPED'), all(d).join(', '));
+  for (const r of [b, d]) {
+    assert.ok(all(r).includes('info R-VOUCHER-KEY') && all(r).includes('info R-AUTHORITY'), all(r).join(', '));
+    assert.ok(!all(r).some(f => f.startsWith('high ')), all(r).join(', '));
+  }
   assert.equal(b.ok, true, 'no high finding');
   assert.equal(b.outDir, path.join(bounded, 'evidence', 'review-1'));
   assert.deepEqual(
@@ -146,7 +153,8 @@ test('the two sample servers: no server finding in either; the economy review of
   assert.match(md, /\| the live voucher key \| not known here .* \| xgames\.fun \| its holder: xgames\.fun only/);
   assert.match(md, /- \*\*Its record\*\*: signed by the server's own key .* counted by an X account\./);
   const json = JSON.parse(await readFile(path.join(b.outDir, 'review.json'), 'utf8'));
-  assert.deepEqual(json.counts, { high: 0, medium: 1, low: 0, info: 2 });
+  assert.deepEqual(json.counts, counts(b.findings), 'review.json counts what was found');
+  assert.equal(json.counts.high, 0);
   assert.deepEqual(json.ledger, b.ledger, 'the ledger in review.json');
   assert.deepEqual(json.custody, b.custody, 'the custody list in review.json');
   // the next review is the next folder; the command says it all and exits 0
