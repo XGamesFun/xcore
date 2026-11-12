@@ -21,6 +21,10 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
   new version, or a private draft when checks fail; a domain or an embed is removed again, an embed within a minute; a
   plan change moves a slot and no money).
 
+**`xcore review` no longer passes a payout check it cannot read.** A `server/vouchers.js` whose `PAY.check` is
+commented out or gone is a high finding (`pay-unreadable`): before, review said "PAY.check: not found in the file" and
+passed, while every claim failed.
+
 **`xcore connect`** gives Claude Code and Codex the bring-your-own-game skill (copied into each agent's skills folder,
 the one `xcore loot connect` uses for the solana kit's) and everything `xcore loot connect` does, then prints a few
 lines a person may paste into a project's AGENTS.md or CLAUDE.md. It writes nothing into the project. `--dry-run`
