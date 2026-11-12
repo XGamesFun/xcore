@@ -24,8 +24,11 @@ The security review of a game, read as a cheater would: what a script gets witho
                (--live http://127.0.0.1:<port>/game/).
   --out <dir>  where the record goes (default: <game>/evidence/review-N/: review.md and review.json)
   --json       the record as JSON
-review.md ends with the trade-offs for the person: for each route that pays, how the server checks it (decides,
-replays or bounds), what a cheater gets, and what the stronger level would cost. Any high finding exits 1.
+review.md opens with two blocks for the person: "Ask the person" (questions whose answers change the design) and
+"Tell the person, as written" (final sentences: the economy check's own, each paid route's ceiling, keys out of place,
+and what stops when the plan caps the server); review.json has them as ask and tell, each with its from. It ends with
+the trade-offs: for each route that pays, how the server checks it (decides, replays or bounds), what a cheater gets,
+and what the stronger level would cost. Any high finding exits 1.
 docs/SERVER.md, "What a payout rests on", is the guide.`;
 
 /** --live takes an origin or nothing: `--live`, `--live <http…>`, `--live=<http…>`. → {args without it, live} */
@@ -103,6 +106,16 @@ function summary(r, where) {
   if (r.tradeoffs.length)
     lines.push(
       `For the person: ${shown(r.outDir)}/review.md ends with each paid route's level, what a cheater gets and what the stronger level costs. Tell them, and let them choose.`,
+    );
+  const ask = r.ask ?? [],
+    tell = r.tell ?? [];
+  const fromEconomy = list => list.filter(x => x.from === 'economy').length;
+  lines.push(
+    `ask the person: ${ask.length} question${ask.length === 1 ? '' : 's'} (${fromEconomy(ask)} from the economy); tell the person: ${tell.length} sentence${tell.length === 1 ? '' : 's'} (${fromEconomy(tell)} from the economy)${r.told?.why ? `; the economy's own: none (${r.told.why})` : ''}`,
+  );
+  if (ask.length || tell.length)
+    lines.push(
+      `Pass them on as written: review.md's "Tell the person, as written" lines ("> ") said as they are, its "Ask the person" questions ("? ") asked before building on the answers; neither kept in private notes.`,
     );
   return lines.join('\n');
 }

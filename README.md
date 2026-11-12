@@ -772,8 +772,11 @@ A game that pays is read the way a cheater reads it before players are paid. `xc
 
 Each grant a voucher pays says how much its server checks before signing: `"trust": "decides"`, `"replays"` or
 `"bounds"` (docs/SERVER.md, "What a payout rests on"). `review.md` ends with the trade-offs for the person: for each paid route, its level,
-what a cheater gets, and what the stronger level would cost. `xcore publish` says when a game that pays through
-vouchers changed since its last review (it never refuses for it).
+what a cheater gets, and what the stronger level would cost. It opens with two blocks for the agent to pass on: "Ask
+the person" (questions whose answers change the design) and "Tell the person, as written" (final sentences: the economy
+check's own, each paid route's ceiling, keys out of place, and what stops when the plan caps the server), also in
+`review.json` as `ask` and `tell`. `xcore publish` says when a game that pays through vouchers changed since its last
+review (it never refuses for it).
 
 ## 5. Publish
 
