@@ -375,6 +375,27 @@ Its `review.md` ends with the trade-offs to tell the person. `@xgamesfun/solana`
 `proofRequest` / `verifyProof` (a wallet's signed proof: the link uses them), and `makeCodes` / `codeVoucher` (promo
 codes with keys nobody can guess, 80 bits by default).
 
+### What your server does, declared
+
+Most game economies lean on their server, and that is fine when the economy says so. The economy tools follow value
+only through `xsolana.json`, so two things the server does must be declared there, or the checks can't see them:
+
+- **What it converts**, in `"offchain"`: anything the server turns what a player holds or did into (a code that
+  multiplies earnings, a stake that counts as an entry, a prize bought with farm yield):
+  `{ "key", "name", "takes": "<token>" | "item:<key>", "gives": "<token>" | "item:<key>" | "farm:<key>", "rate" }`.
+  Undeclared, every loop through it is invisible: a farm whose yield buys a bigger prize looks safe.
+- **What it bounds**, on each grant a voucher pays, in `"serverLimit"`: the most the server signs for one identity a
+  window, `{ "per": "person" | "wallet" | "all", "amount", "every": "1h", "total" }` (amount in the prize's own units;
+  `every` defaults to `"1d"`). Undeclared, the tools compute with the chain's caps, which only bound a leaked voucher
+  key and are often far looser. (Read by @xgamesfun/solana after 0.28.12; an older one refuses the field.)
+
+`xcore review` checks them against the code, both ways: a conversion in `server/` with no declaration
+(`code-undeclared`), a declaration no code does (`design-unbuilt`), and a grant whose bound lives in its check with no
+`serverLimit` (`bound-undeclared`, with the question to ask). Its `review.md` section "Design and code" drafts each
+missing declaration from the code, runs the economy check on a copy of the spec with them, and says what appears only
+with them (a loop through the server, the bound the server really keeps). The drafts are read from code: confirm each
+with the person before adding it.
+
 ### Paying a result: xgames.fun's keeper, or a voucher key of your own
 
 A reward for a result (a score, a win, a podium) is a grant in the game's economy, claimed with a voucher: a
