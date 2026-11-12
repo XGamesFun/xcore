@@ -17,12 +17,14 @@ The order: **adopt → fix the list → check → (backend) → (economy) → (r
 **One method, every step** ([docs/BEFORE-YOU-BUILD.md](../../docs/BEFORE-YOU-BUILD.md)). For anything that touches
 money, a token, a flow a player taps through, or can't be undone:
 
-- **Challenge before you build.** Name the simplest version that gets most of the outcome, run the five lenses on both,
+- **Challenge before you build.** Name the simplest version that gets most of the outcome, run the six lenses on both,
   and recommend one with its trade. Build what they asked once they have seen it and still want it. Not taste, and
   never the same decision twice.
-- **The five lenses**, in every state (before, running, done, won, lost, cancelled, abandoned, undone, after the end),
+- **The six lenses**, in every state (before, running, done, won, lost, cancelled, abandoned, undone, after the end),
   as a player, the owner and a cheater: follow the value; one intent, one step; check every assumption (and its
-  deadline); who makes it happen; where each rule is enforced. Run them again before you say it is done.
+  deadline); who makes it happen; where each rule is enforced; how the player experiences it. Run them again before
+  you say it is done. The better version is the one that plays best, then the cleaner one, then the more secure one:
+  an on-chain guard when it costs the player nothing, the server otherwise (said plainly).
 
 And three invariants that hold everywhere, so no step needs its own rule:
 

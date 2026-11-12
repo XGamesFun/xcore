@@ -9,14 +9,24 @@ finds the problems, so there is no list of rules to keep up with.
 The person names a mechanism; what they want is an outcome. Before building what they asked:
 
 1. **Name the simplest version that gets most of the outcome.** Often it is 90% of the request and far smoother.
-2. **Run the five lenses (below) on both versions.**
+2. **Run the six lenses (below) on both versions.**
 3. **Recommend one, in a sentence, with its trade.** Not a survey of options.
 4. **Build what they asked only once they have seen the trade and still want it**, and then build it well.
 
 Challenge the economy, the flow and anything irreversible. Don't challenge taste, and don't challenge a decision twice:
 once they have heard the trade, it is theirs.
 
-## The five lenses
+What makes one version better than another, in this order of weight:
+
+- **How it feels to play.** The player's experience is a first-class requirement, not a polish step: a design that is
+  safe but confusing, slow or full of prompts is not the better design.
+- **Clean.** Fewer parts, fewer tokens, fewer steps that someone must remember to send.
+- **Secure where it counts.** Use an on-chain guard when there is a clear one that costs the player nothing (a cap the
+  program keeps, a gate, a refund it enforces). When the only guard on chain would make playing worse, hold the rule on
+  the server instead and say so: most game economies lean on their server, and that is fine when it is said plainly.
+  A small loss of security for a large gain in smoothness is usually the right trade; name it when you make it.
+
+## The six lenses
 
 Run them before you build, and again before you say it is done. Each one is a question you answer for the design in
 front of you, in every state it can reach: before it opens, while it runs, completed, won, lost, cancelled or failed,
@@ -38,7 +48,13 @@ cheater.
    shipped): who sends it, who pays, from which key, and what happens if nobody does or their machine is off.
 5. **Where each rule is enforced.** For every rule the design relies on: is it held by the chain, by the server, or
    only by the page? A rule only the page holds is a suggestion to a script. Anything shown as true (a winner, a
-   balance, a limit) is read from where it is enforced.
+   balance, a limit) is read from where it is enforced. Prefer the chain when it costs the player nothing; otherwise the
+   server, said plainly.
+6. **How the player experiences it.** Walk it as a first-time player on a phone, from the link to the first reward:
+   what they need before they can start (a wallet, devnet SOL, a sign-in), every wait (a cooldown, a draw time, a
+   voucher's life), every prompt and what it says, and what they see when something fails or ends. A problem is a step
+   that surprises them, a wait they don't understand, a prerequisite they can't meet in the place they are (an app's
+   own browser), or an ending they never hear about.
 
 Bring what you find with a recommendation for each. A deadline goes first.
 
@@ -61,6 +77,8 @@ found it first. They illustrate the lenses; they are not rules to check one by o
 | A token still earned after the last draw; a prize with no shipping step       | 4    | After it ends: who tells players it's over, and who reaches the winner?                |
 | Human checks with a few answers and no cost for a wrong one                   | 5    | Held only by guessing being slow: a blind script passes in about 15 tries.             |
 | A button hidden on the page as the only bar to an action                      | 5    | A script calls the program directly.                                                   |
+| Every player claim and entry paid by the player in devnet SOL                 | 6    | A first-time player must find a faucet before anything works, and many stop there.     |
+| An on-chain cap on claims per person, against players who claim every 4 min   | 6, 5 | The most engaged players are locked out first: hold that rule on the server instead.   |
 
 ## Where this lives
 
