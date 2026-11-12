@@ -40,7 +40,8 @@ xcore domain add play.mygame.com ./my-game       # Creator or Scale: it plays at
 
 (`xcore` on npm is another package: always run this one as `npx -y @xgamesfun/xcore …`, or install it.) It needs Node 24
 or newer, and Chrome, Edge or Chromium for the check (else it downloads Playwright's Chromium once). With an agent,
-the skill in `skills/bring-your-own-game/` walks the same steps, and `xcore loot connect` adds the economy's tools.
+the skill in `skills/bring-your-own-game/` walks the same steps: `xcore connect` copies it into Claude Code's and Codex's
+skills, adds the economy's tools (what `xcore loot connect` does), and prints a few lines for a project's AGENTS.md.
 Before an economy, a draw or anything a player pays for, read [docs/BEFORE-YOU-BUILD.md](docs/BEFORE-YOU-BUILD.md): one
 method (challenge before you build, then six lenses) that finds what a design gets wrong.
 
