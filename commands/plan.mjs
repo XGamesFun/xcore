@@ -38,7 +38,10 @@ export default {
       const out = values.json ? printJson : null;
       const plain = e => {
         if (e?.status === 404)
-          throw new Error(`this xgames.fun does not offer plans yet (${CMD} plan needs a newer xgames.fun).`);
+          throw Object.assign(
+            new Error(`this xgames.fun does not offer plans yet (${CMD} plan needs a newer xgames.fun).`),
+            { code: 'no-plans' },
+          );
         throw e;
       };
       if (values.all) {
@@ -56,11 +59,15 @@ export default {
         return 0;
       }
       const r = await setActive(dir, verb === 'activate').catch(e => {
+        // which games sit in which slots is what the person needs next, whichever slot is missing
         if (e?.status === 409)
-          throw new Error(
-            e.code === 'no-free-slot'
-              ? `${e.message} Archive a game you no longer need on your console (xgames.fun/console), or move another game to a paid slot.`
-              : `${e.message} Open one with ${CMD} plan deactivate <another game>, or buy a paid slot on xgames.fun (your console → Plans, in SOL or USDC).`,
+          throw Object.assign(
+            new Error(
+              e.code === 'no-free-slot'
+                ? `${e.message} Archive a game you no longer need on your console (xgames.fun/console), or move another game to a paid slot.`
+                : `${e.message} Open one with ${CMD} plan deactivate <another game>, or buy a paid slot on xgames.fun (your console → Plans, in SOL or USDC).`,
+            ),
+            { code: e.code ?? 'no-slot', next: `${CMD} plan --all` },
           );
         return plain(e);
       });

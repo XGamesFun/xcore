@@ -7,7 +7,7 @@ import path from 'node:path';
 import { saveSecret } from '../lib/credentials.mjs';
 import { credentialKey } from '../lib/publish/client.mjs';
 import { accountPlan, describeAccount, describeGame, gamePlan, setActive } from '../lib/publish/plans.mjs';
-import { tempDir } from './helpers.mjs';
+import { run, tempDir } from './helpers.mjs';
 
 const ORIGIN = 'https://studio.example';
 const LIMITS = {
@@ -139,4 +139,20 @@ test('plan in words: the tier, the month, the limits, capped and the slots', () 
   assert.match(slots, /\nPaid slots: 1 of 1 in use \(their games run on Creator\)/);
   assert.match(paid, /usage credit \$5\.00/);
   assert.match(account, /Scale {3}Showground {2}\$9\.99 {2}\(granted\)/);
+});
+
+test('plan --json: a refusal carries its code and the command that moves it on', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = path.join(tmp.dir, 'my game');
+  await mkdir(dir);
+  await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>g</title>\n');
+  const env = { GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'), GAMESFUN_STUDIO: ORIGIN };
+  const r = run(['plan', 'my game', '--json'], { cwd: tmp.dir, env });
+  assert.equal(r.status, 1);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.ok, false);
+  assert.equal(out.code, 'not-published');
+  assert.match(out.next, / publish ['"]my game['"]$/);
+  assert.match(out.error, /not on https:\/\/studio\.example yet/);
 });
