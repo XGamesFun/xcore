@@ -74,6 +74,11 @@ test('connect: the skill copied for each agent found, the solana kit connected, 
     await readFile(path.join(copied, 'SKILL.md'), 'utf8'),
     await readFile(path.join(ROOT, 'skills', 'bring-your-own-game', 'SKILL.md'), 'utf8'),
   );
+  assert.deepEqual(
+    (await readdir(path.join(copied, 'references'))).sort(),
+    (await readdir(path.join(ROOT, 'skills', 'bring-your-own-game', 'references'))).sort(),
+    'its references come with it',
+  );
   assert.ok(existsSync(path.join(home, '.claude', 'skills', 'xsolana-economy', 'SKILL.md')), 'the solana skill too');
   assert.ok(
     calls.some(c => /^claude mcp add .* xsolana -- /.test(c)),
