@@ -364,15 +364,37 @@ wallet is free, so a cap per wallet multiplies with every wallet. The levers tha
 what you would accept losing to a patient script (small amounts, capped a day), and keep entry fees and prize pools
 for results the server decided and for chance (the oracle).
 
-`xcore review` reads this as a cheater would: the economy's routes, a `PAY.check` that pays from the request alone,
-the `payOnly` against the grants, and with `--live` each `api/` route asked with no sign-in and with a forged one. Its
-`review.md` ends with the trade-offs to tell the person. `@xgamesfun/solana`'s skill reference
+`xcore review` computes these three steps for every route that pays, as one record each (its payout ledger: who signs,
+what decides it, who is paid, the identity its limits count, the trust declared and observed, and the ceiling), with
+the economy's own review beside it and, with `--live`, each `api/` route asked with no sign-in and with a forged one.
+Its `review.md` ends with the trade-offs to tell the person. `@xgamesfun/solana`'s skill reference
 `skills/xsolana-economy/references/trust-and-cheating.md` has Solana's own exploit checklist.
 
 `server/gf-loot/` carries @xgamesfun/solana's server helpers for this (`import { … } from './gf-loot/results/index.js'`):
 `holds({ rpc, spec, wallet, item })` and `collectiblesOf(…)` (the game's collectibles a wallet holds, from the chain),
 `proofRequest` / `verifyProof` (a wallet's signed proof: the link uses them), and `makeCodes` / `codeVoucher` (promo
 codes with keys nobody can guess, 80 bits by default).
+
+### What your server does, declared
+
+Most game economies lean on their server, and that is fine when the economy says so. The economy tools follow value
+only through `xsolana.json`, so two things the server does must be declared there, or the checks can't see them:
+
+- **What it converts**, in `"offchain"`: anything the server turns what a player holds or did into (a code that
+  multiplies earnings, a stake that counts as an entry, a prize bought with farm yield):
+  `{ "key", "name", "takes": "<token>" | "item:<key>", "gives": "<token>" | "item:<key>" | "farm:<key>", "rate" }`.
+  Undeclared, every loop through it is invisible: a farm whose yield buys a bigger prize looks safe.
+- **What it bounds**, on each grant a voucher pays, in `"serverLimit"`: the most the server signs for one identity a
+  window, `{ "per": "person" | "wallet" | "all", "amount", "every": "1h", "total" }` (amount in the prize's own units;
+  `every` defaults to `"1d"`). Undeclared, the tools compute with the chain's caps, which only bound a leaked voucher
+  key and are often far looser. (Read by @xgamesfun/solana after 0.28.12; an older one refuses the field.)
+
+`xcore review` checks them against the code, both ways: a conversion in `server/` with no declaration
+(`code-undeclared`), a declaration no code does (`design-unbuilt`), and a grant whose bound lives in its check with no
+`serverLimit` (`bound-undeclared`, with the question to ask). Its `review.md` section "Design and code" drafts each
+missing declaration from the code, runs the economy check on a copy of the spec with them, and says what appears only
+with them (a loop through the server, the bound the server really keeps). The drafts are read from code: confirm each
+with the person before adding it.
 
 ### Paying a result: xgames.fun's keeper, or a voucher key of your own
 

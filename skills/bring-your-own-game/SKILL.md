@@ -101,11 +101,12 @@ no full screen for a page (`how: 'none'`): there the button can hide, or say "Ad
 xcore check <folder>            # with the kit's tools: gamesfun_verify {"dir": "<folder>"}
 ```
 
-Four checks: it builds, it fits the hosting, the page starts (phone and desktop, under the play host's page policy, no
-console errors, nothing missing, nothing from the root, something on screen), it stays inside its origins. Open the two
-screenshots in `evidence/verify-N/` and look at them. Its report also says whether the game has a preview picture
+Four checks: it builds, it fits the hosting, the page starts (phone and desktop, and phone inside the play page's
+sandboxed frame opened with a query string, under the play host's page policy, no console errors, nothing missing,
+nothing from the root, something on screen, no pop-up, form submit or top-level navigation in the frame), it stays
+inside its origins. Open the three screenshots in `evidence/verify-N/` and look at them. Its report also says whether the game has a preview picture
 (§7): a warning, never a failure. A failing check 4 names the origin and why: declare it in
-`backend.json` if the game really calls it, or remove the call. The page check does not say the game plays well:
+`backend.json` if the game really calls it, or remove the call. Read its "First session" section (a first-time player on a phone in the play frame: taps to play, the first sign-in, wallet or SOL, waits, blocks) and pass its "Tell the person" lines on to the person as they are; when the walk could not reach the game's first reward, declare the path in `gamesfun.json` (`"journey": [{"tap": "<css selector>"} | {"wait": ms}]`) and check again. The page check does not say the game plays well:
 that is the person's own game; ask them what to try, and try it with `xcore dev <folder>` (the game as xgames.fun
 hosts it, with its server, sign-in, saves, rooms and economy RPC, refusing what xgames.fun refuses on the Free plan;
 `--plan creator` for a Creator game) or their own. A refusal there (`rate`, `full`, `too-many`, `order`) is one the
@@ -242,11 +243,14 @@ xcore loot review               # the economy's part alone (@xgamesfun/solana's 
   only inputs), `"replays"` (the server runs the page's inputs again) or `"bounds"` (the page plays and reports; the
   server checks its clock, order and caps). It is what `PAY.check` really does, not what you hope it does: a server
   that times a run the page simulated is `bounds`, whatever it is called.
-- **Tell the person**, in plain words, from the end of `review.md`: for each paid route, the level it uses, what a
-  cheater gets (a bounded result pays a script that waits and reports, without playing; a decided one pays what a bot
-  that plays well wins), and what the stronger level would cost to build (replaying: a deterministic step and about
-  3 ms of CPU a second played; deciding: the rules moved to the server, a request each step). Let them choose: a
-  smaller prize and tighter caps, or the stronger level. Never call a bounded result safe.
+- **Pass on what it says for the person, as written.** `review.md` opens with two blocks: say its "Tell the person,
+  as written" lines (`> `) to the person as they are, in your own answer; ask its "Ask the person" questions (`? `)
+  before building on the answers. Keep neither in private notes. Never call a bounded result safe. Where a paid route
+  rests on a weaker level, put the choice to the person with your pick: a smaller prize and tighter caps, or the
+  stronger level and what it costs to build (review.md ends with both for each route).
+- **Declare what the server does.** Confirm each draft in review.md's "Design and code" (`offchain`, `serverLimit`)
+  with the person, add the confirmed ones to `xsolana.json`, and run `xcore loot check` again: a loop through the server
+  shows only once it is declared.
 
 After publishing, `xcore review <folder> --live` asks the published game as a stranger (no sign-in, a forged one;
 nothing it sends can spend or sign) and checks its voucher key and economy against the folder. Under `xcore dev`,

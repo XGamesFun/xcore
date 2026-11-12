@@ -58,7 +58,7 @@ brought game, with the studio around it; its MCP tools for a brought game are `g
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **The page**               | Static files, served as they are (GET and HEAD). `index.html` at the root of what is published is the game's entry. A folder URL ending in `/` serves that folder's `index.html`; any other missing path is a "not found" page, with no fallback to `index.html` (a client-side router works from the entry page; a deep link to `/level/3` reloads to "not found").                                                                                                                                                                                                                                                                   |
 | **Where it is served**     | At its own origin's root once published (the link `xcore publish` prints). Under a folder in xgames.fun Studio's preview, in `xcore dev` and in the kit's dev server (`/game/`). A game uses relative URLs (`./assets/x.js`, not `/assets/x.js`), so it works in all of them.                                                                                                                                                                                                                                                                                                                                                          |
-| **Inside the play page**   | xgames.fun shows the game in a frame (`sandbox="allow-scripts allow-same-origin allow-pointer-lock"`, `allow="autoplay; fullscreen; gamepad; clipboard-write"`): no form submits, no pop-ups and no top-level navigation, so a `<form>`, `window.open` or a link that leaves does nothing there. Sign-in, the wallet and full screen go through `gamesfun.js`, which the play page answers. Test a flow inside the play page, not only the bare game.                                                                                                                                                                                  |
+| **Inside the play page**   | xgames.fun shows the game in a frame (`sandbox="allow-scripts allow-same-origin allow-pointer-lock"`, `allow="autoplay; fullscreen; gamepad; clipboard-write"`): no form submits, no pop-ups and no top-level navigation, so a `<form>`, `window.open` or a link that leaves does nothing there. Sign-in, the wallet and full screen go through `gamesfun.js`, which the play page answers. `xcore check` loads the game in this frame too, and fails a page that tries one of them as it loads. Test a flow inside the play page, not only the bare game.                                                                             |
 | **Its server, if any**     | `server/` and `gamesfun.json` → `server`: a Cloudflare Worker that answers the game's `/api/*`, with up to 8 Durable Objects and the platform binding `env.GF` (sign-in, saves, scores, loot reports). [docs/SERVER.md](docs/SERVER.md). Bundled into one file on publish; never a public file.                                                                                                                                                                                                                                                                                                                                        |
 | **A backend of its own**   | Any public `https://` or `wss://` origin, listed in `backend.json` → `origins` (at most 8, public names only, no IP address, no localhost). The play host lets the page reach exactly those.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Solana**                 | Through the game's own devnet RPC (`xcore add rpc`: its server's `api/rpc`), else the play host's `/loot/v1/rpc` (xgames.fun's shared devnet relay, counted toward the game's plan), with the page client in the game (`gf/loot/`, from `@xgamesfun/solana`).                                                                                                                                                                                                                                                                                                                                                                          |
@@ -177,13 +177,26 @@ about games made on the kit; the kit's `verify` runs this same check for one):
 1. **it builds** (skipped for plain files, or with `--no-build`)
 2. **it fits the hosting**: everything publish would refuse, and what breaks once hosted, on exactly what would go up
 3. **the page starts**: served under a folder with the play host's page policy, in Chrome at a phone's size and a
-   desktop's: no error thrown, nothing in the console's errors, none of its own files missing, nothing asked for from
-   the root, something on screen (screenshots in `evidence/verify-N/`)
+   desktop's, and at a phone's size inside the play page's frame (its `sandbox` and `allow`, see
+   [Inside the play page](#what-the-hosting-takes)), opened from a link with a query string as a shared one is: no
+   error thrown, nothing in the console's errors, none of its own files missing, nothing asked for from the root,
+   something on screen, and (in the frame) no pop-up, form submit or top-level navigation as it loads (screenshots
+   `phone.png`, `desktop.png` and `framed.png` in `evidence/verify-N/`)
 4. **it stays inside its origins**: every request is one the hosted page may make; a script, style, font or frame from
    another site, or a connection to an origin `backend.json` does not list, fails it
 
 The report also says whether the game has a [preview picture](#preview-picture-xcore-card) (`assets/card.jpg`): a
 warning when it has none, or one xgames.fun cannot draw or will crop or blur, never a failed check.
+
+Its last section, **First session (as a first-time player on a phone, in the play frame)**, walks the game's first
+minutes as a new player would: in the play page's frame at a phone's size, a touch at a time (up to 6 taps, about 45
+s), on what such a player taps (a "Play" or "Start", then a "Claim" or "Open", else the centre of the largest canvas;
+never a field to type in, a link out of the game or a settings button), or on the path `gamesfun.json` declares
+(`"journey": [{"tap": "#play"}, {"wait": 500}, {"tap": "#claim"}]`). It says what was tapped and what appeared, the
+taps until play answered, the first moment a sign-in, a wallet or SOL was needed (a `GamesFun.loot.call` that signs
+needs a wallet with SOL for its fee), the wallet prompts, the waits it showed, what failed or the frame blocked on the
+way (screenshots `journey-1.png`…), and ends with a few sentences to pass on as they are. It informs and never fails
+the check; publish's own check does not run it. `--json` has it as `firstSession`.
 
 A backend that does not answer this machine is a note, not a failure. The game's play is its own: the page check says
 it starts clean and stays inside what the hosting allows, nothing more. Publish's gate runs the same check, and a game
@@ -750,11 +763,18 @@ A game that pays is read the way a cheater reads it before players are paid. `xc
 
 - **The economy**: `@xgamesfun/solana`'s own review (`xcore loot review`): each route that pays, what it trusts, its
   ceiling, and the trade-offs in words. An installed version without it says so in one line, and the rest goes on.
-- **The server**: `PAY.check` still the template (it pays nothing) or one that pays from the request alone (it never
-  reads `env`, so nothing the server keeps); `VOUCHERS.payOnly` against the grants (`'any'` with `perPerson`, whose
-  claims fail; `'any'` on a grant worth farming); a voucher key and the grants that name it; `trust` on every grant a
-  voucher pays; `.dev.vars` in git or in the published folder; a seed or key in the page's files; the test key in a
-  grant; every `api/` route the code names.
+- **The server**, as two analyses. The **payout ledger**: for each route that pays, who signs it (the server's own key,
+  the keeper, a key the game's code holds, or nothing), what decides it (no check yet, the request alone, or state the
+  server keeps), who is paid (a proven wallet, or one the code or the request names), the identity its limits count
+  (`VOUCHERS.payOnly`: a wallet, which is free; an X or Google account; an X account), its limits, its `trust` declared
+  and observed, and its **ceiling**: what one person can take, identities × limit for each × time. Its findings are
+  `payout-input` (the request decides something a cheater shouldn't), `payout-ceiling` (unbounded, high; or bounded only
+  by a total every player shares, medium), `payout-signer` (nothing signs it, or what it signs can't be claimed) and
+  `payout-trust` (the trust declared is missing, unknown, or not what the code does). **Key custody**: for each key (the
+  test key in `.dev.vars`, the live key on xgames.fun, any key or seed in the page's files), every place its bytes are
+  (tracked by git, not ignored, in a served folder, in the page's files, named by a grant) and who can read it; each
+  place outside its one holder is a `key-custody` finding, a level higher when the key signs on mainnet. Besides
+  them: a server that works before checking a player's token, and every `api/` route the code names.
 - **Live** (`--live`, after publishing; `--live <origin>` for another, such as `xcore dev`'s
   `http://127.0.0.1:<port>/game/`): each of those routes asked with no sign-in and with a forged one, GET and POST (a
   route that pays gets an empty body: nothing it sends can spend or sign); `api/vouchers/key` against the grants' keys;
@@ -762,8 +782,11 @@ A game that pays is read the way a cheater reads it before players are paid. `xc
 
 Each grant a voucher pays says how much its server checks before signing: `"trust": "decides"`, `"replays"` or
 `"bounds"` (docs/SERVER.md, "What a payout rests on"). `review.md` ends with the trade-offs for the person: for each paid route, its level,
-what a cheater gets, and what the stronger level would cost. `xcore publish` says when a game that pays through
-vouchers changed since its last review (it never refuses for it).
+what a cheater gets, and what the stronger level would cost. It opens with two blocks for the agent to pass on: "Ask
+the person" (questions whose answers change the design) and "Tell the person, as written" (final sentences: the economy
+check's own, each paid route's ceiling, keys out of place, and what stops when the plan caps the server), also in
+`review.json` as `ask` and `tell`. `xcore publish` says when a game that pays through vouchers changed since its last
+review (it never refuses for it).
 
 ## 5. Publish
 
