@@ -2,6 +2,66 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.10.0 — 2026-11-12
+
+**Consent gates match the code.** A change that can't be undone now prints first and goes on only with
+`--yes <code>`, as `xcore loot approve` and `xcore coin launch` already did:
+
+- `xcore db query --write --live`, `db import --live` and `db restore --live` print exactly what they would change
+  (the game; the statement and its params, the file's name, size and SHA-256, or the time and what it goes back to)
+  with an 8-hex code over that change, and change nothing. Run again with `--yes <code>` they go on; a code printed for
+  another change is refused. At a terminal, typing the word (write, import, restore) still works. **Breaking:** a bare
+  `--yes` is a usage error now, and the refusal no longer tells a script to add it; with `--json` the printout is
+  `{planned: true, code, plan, next}`.
+- `xcore secret delete <NAME>`, and `secret set <NAME>` when the live server has that name already, print what they
+  replace or remove (never a value) with a code, and act only with `--yes <code>`; a new name is set at once.
+  `--new-key` over a voucher key says the old key is gone for good and what that breaks until the grant names the new
+  address.
+- publish, domains, embeds and `plan activate`/`deactivate` stay as they are: each can be undone (publishing makes a
+  new version, or a private draft when checks fail; a domain or an embed is removed again, an embed within a minute; a
+  plan change moves a slot and no money).
+
+**`xcore connect`** gives Claude Code and Codex the bring-your-own-game skill (copied into each agent's skills folder,
+the one `xcore loot connect` uses for the solana kit's) and everything `xcore loot connect` does, then prints a few
+lines a person may paste into a project's AGENTS.md or CLAUDE.md. It writes nothing into the project. `--dry-run`
+says what it would do; with a checkout of the game kit here, `connect` stays the kit's.
+
+**The skill, trimmed to its method.** `skills/bring-your-own-game/SKILL.md` goes from 31,832 to about 12,400
+characters: the method and four invariants first (it said "three" and listed four), the consent invariant as the
+code now enforces it, and the order of commands, with per-case detail in `references/` (sign-in, saves and rooms; a
+server and paying results; the economy in the page). The fix table and the restatements of what `check` and
+`plan --help` print are gone, as are the unreleased kit's `gamesfun_*` tools, the key-file and economy-loop detail
+the xsolana-economy skill owns, and the never-list: each rule now says its reason. "As written" is kept for legal and
+trust facts; the legal warning comes once at the first chance-prize flag and again at mainnet, as in the solana kit.
+`npm test` holds it there: the skill's size, every `xcore` command, subcommand and flag it and its references name,
+counts against their lists, links, and no `gamesfun_*` names.
+
+**Errors name the next step.** `xcore plan --json` refusals carry `code` (`not-published`, `no-plans`, a slot's
+code) and `next`. adopt's fixes that declare a backend name the game's folder (`backend use custom <folder> --url …`),
+so run from a parent folder they write backend.json into the game. `xcore loot … --json` hands back the kit's JSON
+untouched. An unknown command is told the nearest of xcore's commands, and only a command of the unreleased game kit
+is told it is the kit's. `xcore loot connect --dry-run` shows the MCP command it really registers
+(`npx -y --package=@xgamesfun/solana@… xsolana mcp`), not `xcore loot mcp`.
+
+Since 0.9.1, also:
+
+- **docs/BEFORE-YOU-BUILD.md**: one method for anything that touches money, a token, a flow a player taps through or
+  can't be undone. Challenge before you build (the simplest version that gets most of the outcome, with its trade),
+  then six lenses in every state as a player, the owner and a cheater, ranked by how it plays, then clean, then
+  secure. The skill opens with it.
+- **`xcore check` tests the page where players meet it**: inside the play page's sandboxed frame, with a query string,
+  failing a pop-up, a form submit or top-level navigation. It walks a first session as a new player on a phone (up to
+  6 taps in about 45 s, or the path in `gamesfun.json` → `journey`) and reports taps, sign-in, wallet and SOL needs,
+  waits and what to tell the person.
+- **`xcore review` reads payouts by lens**: a payout ledger (each paying route: who signs, what decides it, its
+  ceiling) and key custody replace thirteen per-case findings. review.md opens with "Ask the person" and "Tell the
+  person, as written" (from the economy, the server, custody and the plan's caps), and "Design and code" compares
+  what the economy declares the server does (`offchain`, `serverLimit`) with `server/`, drafts the missing
+  declarations and checks the economy again with them.
+- adopt no longer reads `gamesfun.js`'s own `api/` paths as the page calling its own `api/`.
+- `@xgamesfun/solana` 0.28.17 (from 0.28.6): the one-approval buy, the deep checker (flows, lenses, Tell and Ask
+  lines), `xsolana_design`, `serverLimit`, ranked endings and fund runway.
+
 ## 0.9.1 — 2026-11-11
 
 **A coin's creator keeps at least 90% of its fees.** xgames.fun takes at most 10% of a coin's creator fees (its
