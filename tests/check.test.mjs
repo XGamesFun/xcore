@@ -2,12 +2,14 @@
 // list fails "it stays inside its origins". Skipped where there is no Chrome, Edge or Chromium (and no Playwright one).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { adopt } from '../lib/publish/adopt.mjs';
 import { findChrome, playwrightChromium, playwrightCli } from '../lib/browser.mjs';
-import { pageVerify } from '../lib/check.mjs';
-import { fixture, tempDir } from './helpers.mjs';
+import { FRAME_BLOCKS, pageVerify } from '../lib/check.mjs';
+import { PLAY_FRAME_ALLOW, PLAY_FRAME_SANDBOX } from '../lib/play-policy.mjs';
+import { fixture, ROOT, tempDir } from './helpers.mjs';
 
 const browser = findChrome() ?? ((await playwrightChromium()).installed ? true : null);
 const skip = browser ? false : 'no Chrome, Edge or Chromium here';
@@ -20,14 +22,15 @@ test("playwright-core's command line, which downloads Chromium where there is no
 });
 
 test(
-  'a static game passes: it fits the hosting, starts clean at both sizes, stays inside its origins',
+  "a static game passes: it fits the hosting, starts clean at both sizes and inside the play page's frame, stays inside its origins",
   { skip, timeout: 180_000 },
   async t => {
     const tmp = await tempDir();
     t.after(tmp.cleanup);
     const dir = await fixture(tmp, 'static');
     await adopt(dir);
-    const r = await pageVerify(dir, { out: path.join(tmp.dir, 'out') });
+    const out = path.join(tmp.dir, 'out');
+    const r = await pageVerify(dir, { out });
     assert.equal(r.kind, 'brought-page');
     assert.equal(r.pass, true, JSON.stringify(r.checks));
     assert.deepEqual(
@@ -39,6 +42,107 @@ test(
         [4, true],
       ],
     );
+    const three = r.checks.find(c => c.n === 3);
+    assert.match(
+      three.detail,
+      /at 393x660 and 1280x800 and inside the play page's frame \(as players meet it\) at 393x660/,
+    );
+    assert.match(three.detail, /\?from=check/);
+    for (const shot of ['phone.png', 'desktop.png', 'framed.png']) assert.ok(existsSync(path.join(out, shot)), shot);
+  },
+);
+
+// ---- inside the play page's frame ----------------------------------------------------------------------------------
+
+/** The static fixture, adopted, with `script` run as its page loads. → its folder */
+async function pageWith(tmp, script, html = '') {
+  const dir = await fixture(tmp, 'static');
+  const index = path.join(dir, 'index.html');
+  await writeFile(
+    index,
+    (await readFile(index, 'utf8')).replace('</body>', `${html}<script>${script}</script></body>`),
+  );
+  await adopt(dir);
+  return dir;
+}
+const FRAMED = "inside the play page's frame (as players meet it)";
+
+test('the play frame the check builds is the one README.md names', () => {
+  const row = readFileSync(path.join(ROOT, 'README.md'), 'utf8')
+    .split('\n')
+    .find(l => l.includes('**Inside the play page**'));
+  assert.ok(row.includes(`sandbox="${PLAY_FRAME_SANDBOX}"`), row);
+  assert.ok(row.includes(`allow="${PLAY_FRAME_ALLOW}"`), row);
+});
+
+test(
+  "a page that opens a pop-up as it loads fails only inside the play page's frame, which blocks pop-ups",
+  { skip, timeout: 180_000 },
+  async t => {
+    const tmp = await tempDir();
+    t.after(tmp.cleanup);
+    const dir = await pageWith(tmp, "window.open('about:blank');");
+    const r = await pageVerify(dir, { out: path.join(tmp.dir, 'out') });
+    const three = r.checks.find(c => c.n === 3);
+    assert.equal(three.ok, false, JSON.stringify(r.checks));
+    assert.equal(three.detail, `${FRAMED}: ${FRAME_BLOCKS.popup}`);
+    assert.match(three.detail, /README\.md.*"Inside the play page"/);
+    assert.equal(r.checks.find(c => c.n === 4).ok, true, JSON.stringify(r.checks));
+  },
+);
+
+test(
+  "a page that submits a form as it loads fails: the play page's frame blocks form submits",
+  { skip, timeout: 180_000 },
+  async t => {
+    const tmp = await tempDir();
+    t.after(tmp.cleanup);
+    const dir = await pageWith(
+      tmp,
+      "document.getElementById('f').submit();",
+      '<form id="f" action="./"><input name="q" value="1"></form>',
+    );
+    const r = await pageVerify(dir, { out: path.join(tmp.dir, 'out') });
+    assert.equal(r.pass, false);
+    const three = r.checks.find(c => c.n === 3);
+    assert.equal(three.ok, false, JSON.stringify(r.checks));
+    assert.ok(three.detail.includes(`${FRAMED}: ${FRAME_BLOCKS.form}`), three.detail);
+  },
+);
+
+test(
+  "a page that navigates the top window fails inside the play page's frame, caught or not, and is not counted as thrown",
+  { skip, timeout: 180_000 },
+  async t => {
+    const tmp = await tempDir();
+    t.after(tmp.cleanup);
+    // only where it is framed: at the top of its own tab, top.location is the page itself
+    const dir = await pageWith(
+      tmp,
+      "if (window !== top) { try { top.location.href = './'; } catch {} setTimeout(() => { top.location = './'; }); }",
+    );
+    const r = await pageVerify(dir, { out: path.join(tmp.dir, 'out') });
+    const three = r.checks.find(c => c.n === 3);
+    assert.equal(three.detail, `${FRAMED}: ${FRAME_BLOCKS.top}`, JSON.stringify(r.checks));
+  },
+);
+
+test(
+  "a page that breaks when its link carries a query string fails inside the play page's frame: what the frame throws and logs is caught",
+  { skip, timeout: 180_000 },
+  async t => {
+    const tmp = await tempDir();
+    t.after(tmp.cleanup);
+    const dir = await pageWith(
+      tmp,
+      "if (location.search) { console.error('logged in the frame: ' + location.search); throw new Error('x'); }",
+    );
+    const r = await pageVerify(dir, { out: path.join(tmp.dir, 'out') });
+    const three = r.checks.find(c => c.n === 3);
+    assert.equal(three.ok, false, JSON.stringify(r.checks));
+    assert.ok(three.detail.includes(`${FRAMED}: thrown: x`), three.detail);
+    assert.ok(three.detail.includes(`${FRAMED}: console: logged in the frame: ?from=check`), three.detail);
+    assert.doesNotMatch(three.detail, /phone|desktop/);
   },
 );
 

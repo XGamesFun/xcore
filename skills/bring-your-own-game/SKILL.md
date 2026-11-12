@@ -99,9 +99,10 @@ no full screen for a page (`how: 'none'`): there the button can hide, or say "Ad
 xcore check <folder>            # with the kit's tools: gamesfun_verify {"dir": "<folder>"}
 ```
 
-Four checks: it builds, it fits the hosting, the page starts (phone and desktop, under the play host's page policy, no
-console errors, nothing missing, nothing from the root, something on screen), it stays inside its origins. Open the two
-screenshots in `evidence/verify-N/` and look at them. Its report also says whether the game has a preview picture
+Four checks: it builds, it fits the hosting, the page starts (phone and desktop, and phone inside the play page's
+sandboxed frame opened with a query string, under the play host's page policy, no console errors, nothing missing,
+nothing from the root, something on screen, no pop-up, form submit or top-level navigation in the frame), it stays
+inside its origins. Open the three screenshots in `evidence/verify-N/` and look at them. Its report also says whether the game has a preview picture
 (§7): a warning, never a failure. A failing check 4 names the origin and why: declare it in
 `backend.json` if the game really calls it, or remove the call. The page check does not say the game plays well:
 that is the person's own game; ask them what to try, and try it with `xcore dev <folder>` (the game as xgames.fun
