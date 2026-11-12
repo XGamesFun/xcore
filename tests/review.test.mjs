@@ -1,6 +1,7 @@
 // `xcore review`: the security review. Two sample servers (a bounded one, where the page says what it found and the
-// server only times it, and a decided one, where the server runs the reef from a seed it keeps), each static finding
-// firing and not firing, the live probe against a stand-in game on this machine, the economy's own review through a
+// server only times it, and a decided one, where the server runs the reef from a seed it keeps); the server's two
+// analyses, the payout ledger (its ceiling arithmetic, and each payout-* finding firing and not firing) and key custody
+// (each place a key is, firing and not), the live probe against a stand-in game on this machine, the economy's own review through a
 // stand-in @xgamesfun/solana, `xcore loot review`, and the line publish says when the review is out of date.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -15,11 +16,15 @@ import {
   apiRoutes,
   liveReview,
   NO_REVIEW,
+  payoutCeiling,
+  payoutFindings,
+  payoutLedger,
   paysFromRequest,
   readVouchers,
   reviewGame,
   reviewNudge,
   withoutComments,
+  counts,
 } from '../lib/review.mjs';
 import { seedAddress } from '../lib/add.mjs';
 import { ROOT, run, tempDir } from './helpers.mjs';
@@ -36,9 +41,15 @@ async function sample(tmp, name, as = name) {
   return dir;
 }
 const review = (dir, o = {}) => reviewGame(dir, { env: INSTALLED, ...o });
-// xcore's own findings (the server, live); the economy's come from @xgamesfun/solana's review (`all` has them too)
-const ids = r => r.findings.filter(f => f.source !== 'economy').map(f => `${f.severity} ${f.id}`);
-const all = r => r.findings.map(f => `${f.severity} ${f.id}`);
+// xcore's own findings (the server, live); the economy's come from @xgamesfun/solana's review (`all` has them too). The
+// design ↔ code pass's (source design: tests/design-code.test.mjs) are left out of both: a sample whose check keeps
+// state asks about its server bound (bound-undeclared), which is that pass's to test.
+const ids = r =>
+  r.findings.filter(f => f.source !== 'economy' && f.source !== 'design').map(f => `${f.severity} ${f.id}`);
+const all = r => r.findings.filter(f => f.source !== 'design').map(f => `${f.severity} ${f.id}`);
+// a server finding's cases (the ledger's reasons under one code)
+const one = (r, id) => r.findings.find(f => f.id === id);
+const cases = (r, id) => r.findings.filter(f => f.id === id).flatMap(f => f.cases ?? [f.place]);
 const edit = async (file, change) => writeFile(file, change(await readFile(file, 'utf8')));
 const editJson = (file, change) =>
   edit(file, t => {
@@ -56,11 +67,17 @@ test('the two sample servers: no server finding in either; the economy review of
   const d = await review(decided);
   assert.deepEqual(ids(b), []);
   assert.deepEqual(ids(d), []);
-  // @xgamesfun/solana (0.28.6 here) has `xsolana review`: the economy is read too. A "bounds" grant with no total is the
+  // the installed @xgamesfun/solana has `xsolana review`: the economy is read too. A "bounds" grant with no total is the
   // trade-off the review names (medium); a "decides" one isn't.
   assert.equal(b.economy.available, true);
-  assert.deepEqual(all(b), ['medium R-CLAIM-UNCAPPED', 'info R-VOUCHER-KEY', 'info R-AUTHORITY']);
-  assert.deepEqual(all(d), ['info R-VOUCHER-KEY', 'info R-AUTHORITY']);
+  // (the economy's findings are the installed package's to word; what this package owes is to carry them, severity
+  // and all: the "bounds" grant's uncapped claim is named, the "decides" one's isn't, and nothing in either is high)
+  assert.ok(all(b).includes('medium R-CLAIM-UNCAPPED'), all(b).join(', '));
+  assert.ok(!all(d).includes('medium R-CLAIM-UNCAPPED'), all(d).join(', '));
+  for (const r of [b, d]) {
+    assert.ok(all(r).includes('info R-VOUCHER-KEY') && all(r).includes('info R-AUTHORITY'), all(r).join(', '));
+    assert.ok(!all(r).some(f => f.startsWith('high ')), all(r).join(', '));
+  }
   assert.equal(b.ok, true, 'no high finding');
   assert.equal(b.outDir, path.join(bounded, 'evidence', 'review-1'));
   assert.deepEqual(
@@ -72,8 +89,50 @@ test('the two sample servers: no server finding in either; the economy review of
     ['server/reef.js', 'game.js'],
     'from the server code and the page both',
   );
+  // the ledger: one record a paid route, the facts every payout-* finding is read off
+  const [rb] = b.ledger;
+  assert.equal(b.ledger.length, 1);
+  assert.deepEqual(
+    {
+      route: rb.route,
+      signer: rb.signer,
+      where: rb.where,
+      source: rb.source,
+      amount: rb.amount,
+      recipient: rb.recipient,
+      identity: rb.identity,
+      limits: rb.limits,
+    },
+    {
+      route: 'grant:found-whale',
+      signer: 'server',
+      where: 'server/vouchers.js',
+      source: 'env',
+      amount: 'grant',
+      recipient: 'proven',
+      identity: 'x',
+      limits: { perPerson: 1, perWallet: 1, perDay: 100 },
+    },
+  );
+  assert.deepEqual(rb.trust, {
+    declared: 'bounds',
+    valid: true,
+    economy: 'bounds',
+    observed: 'state',
+    level: 'bounds',
+    matches: true,
+  });
+  assert.equal(rb.ceiling.bounded, true);
+  assert.equal(rb.ceiling.by, 'person');
+  assert.equal(d.ledger[0].trust.level, 'decides');
+  // custody: the live key, at xgames.fun only (no .dev.vars in the samples)
+  assert.deepEqual(
+    b.custody.map(k => [k.key, k.places.map(p => p.kind)]),
+    [['live', ['holder']]],
+  );
   assert.equal(b.tradeoffs[0].trust, 'bounds');
-  assert.match(b.tradeoffs[0].cheater, /every claim without playing.*100 a day in all/);
+  assert.match(b.tradeoffs[0].cheater, /every claim without playing.*bounded per person: 1 claim an X account/);
+  assert.match(b.tradeoffs[0].cheater, /100 claims a day for every player together$/);
   assert.match(b.tradeoffs[0].stronger, /^replaying it/);
   assert.equal(d.tradeoffs[0].trust, 'decides');
   assert.match(d.tradeoffs[0].cheater, /a bot that plays well/);
@@ -83,27 +142,41 @@ test('the two sample servers: no server finding in either; the economy review of
     '## Findings',
     '## Economy',
     '## Server',
+    '### Payouts: the ledger',
+    '### Keys: where each one is',
     '## Live',
     '## For the person',
   ])
     assert.ok(md.includes(h), h);
   assert.ok(md.trimEnd().endsWith('trust-and-cheating.md.'), 'it ends with the guide');
-  assert.deepEqual(JSON.parse(await readFile(path.join(b.outDir, 'review.json'), 'utf8')).counts, {
-    high: 0,
-    medium: 1,
-    low: 0,
-    info: 2,
-  });
+  assert.match(
+    md,
+    /\| `grant:found-whale` \| server \(server\/vouchers\.js\) \| state the server keeps \| the grant's own \| a proven wallet \| X account \(payOnly 'x'\) \| perPerson 1, perWallet 1, perDay 100 \| bounds \/ reads state \| bounded per person/,
+  );
+  assert.match(md, /\| the live voucher key \| not known here .* \| xgames\.fun \| its holder: xgames\.fun only/);
+  assert.match(md, /- \*\*Its record\*\*: signed by the server's own key .* counted by an X account\./);
+  const json = JSON.parse(await readFile(path.join(b.outDir, 'review.json'), 'utf8'));
+  assert.deepEqual(json.counts, counts(b.findings), 'review.json counts what was found');
+  assert.equal(json.counts.high, 0);
+  assert.deepEqual(json.ledger, b.ledger, 'the ledger in review.json');
+  assert.deepEqual(json.custody, b.custody, 'the custody list in review.json');
   // the next review is the next folder; the command says it all and exits 0
   const c = run(['review', bounded], { env: { GAMESFUN_SOLANA: '' } });
   assert.equal(c.status, 0, c.stderr);
   assert.match(c.stdout, /^review: PASS 0 high/);
   assert.match(c.stdout, /evidence .*review-2/);
-  assert.match(c.stdout, /^paid route grant:found-whale: bounds$/m);
-  assert.match(c.stdout, /economy: xsolana\.json, \d+ routes? reviewed by @xgamesfun\/solana 0\.28\.6/);
+  assert.match(c.stdout, /^paid route grant:found-whale: bounds; bounded$/m);
+  assert.match(c.stdout, /^server: 1 paid routes in the ledger, 1 keys in custody; 5 api\/ routes named/m);
+  const kit = JSON.parse(
+    await readFile(new URL('../node_modules/@xgamesfun/solana/package.json', import.meta.url), 'utf8'),
+  ).version;
+  assert.match(
+    c.stdout,
+    new RegExp(`economy: xsolana\\.json, \\d+ routes? reviewed by @xgamesfun/solana ${kit.replace(/\./g, '\\.')}`),
+  );
 });
 
-test('PAY.check: the template pays nothing; one that pays from the request alone is high, and the command exits 1', async t => {
+test('PAY.check in the ledger: the template pays nothing (payout-signer); the request deciding is payout-input (high with the body read), and its declared trust a payout-trust mismatch; the command exits 1', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await sample(tmp, 'bounded');
@@ -116,7 +189,9 @@ test('PAY.check: the template pays nothing; one that pays from the request alone
     ),
   );
   let r = await review(dir);
-  assert.deepEqual(ids(r), ['info pay-unwritten']);
+  assert.deepEqual(ids(r), ['info payout-signer']);
+  assert.deepEqual(cases(r, 'payout-signer'), ['template']);
+  assert.equal(r.ledger[0].source, 'template');
   assert.equal(r.server.facts.pay, 'template');
   // the page says what it found, and the server pays it
   await writeFile(
@@ -127,8 +202,21 @@ test('PAY.check: the template pays nothing; one that pays from the request alone
     ),
   );
   r = await review(dir);
-  assert.deepEqual(ids(r), ['high pay-from-request']);
-  assert.match(r.findings[0].message, /declare trust "bounds", which this check does not do/);
+  assert.deepEqual(ids(r), ['high payout-input', 'medium payout-trust']);
+  assert.deepEqual(
+    [r.ledger[0].source, r.ledger[0].decides, r.ledger[0].trust.observed],
+    ['request', 'body', 'request'],
+  );
+  assert.equal(r.ledger[0].trust.matches, false);
+  // the message names the grant and the record's facts
+  assert.match(
+    one(r, 'payout-input').message,
+    /^"found-whale": the page's request decides it: .*Its record: signed by the server's own key .* decided by the request alone \(its body\)/,
+  );
+  assert.match(one(r, 'payout-trust').message, /declares trust "bounds", but its check reads only the request/);
+  assert.equal(one(r, 'payout-input').route, 'grant:found-whale');
+  assert.equal(r.tradeoffs[0].observed, 'request');
+  assert.match(r.tradeoffs[0].cheater, /^every claim, at once, by a script that sends the request/);
   assert.equal(r.ok, false);
   // a gift to every signed-in player who asks (no body read): nothing they did is checked, but nothing they say decides
   await writeFile(
@@ -138,16 +226,36 @@ test('PAY.check: the template pays nothing; one that pays from the request alone
       "async check({ player }) {\n    return { grant: 'found-whale', round: `${player.sub}:${new Date().toISOString().slice(0, 10)}`, amount: 'grant' };\n  },",
     ),
   );
-  assert.deepEqual(ids(await review(dir)), ['medium pay-from-request']);
-  await edit(vouchers, t =>
-    t.replace(
-      /async check\(\{ player \}\) \{[\s\S]*?\n {2}\},/,
+  r = await review(dir);
+  assert.deepEqual(ids(r), ['medium payout-input', 'medium payout-trust']);
+  assert.deepEqual(cases(r, 'payout-input'), ['sign-in-decides']);
+  // a check of state the server keeps, but the wallet paid comes from the request: high
+  await writeFile(
+    vouchers,
+    written.replace(
+      "return { grant: 'found-whale', round: `${player.sub}:whale`, amount: 'grant' };",
+      "return { grant: 'found-whale', round: `${player.sub}:whale`, amount: 'grant', wallet: body.wallet };",
+    ),
+  );
+  r = await review(dir);
+  assert.deepEqual(ids(r), ['high payout-input']);
+  assert.deepEqual(cases(r, 'payout-input'), ['request-names-wallet']);
+  assert.equal(r.ledger[0].recipient, 'request');
+  // and the amount the page says (state decides whether, the page how much): medium
+  await writeFile(vouchers, written.replace("amount: 'grant' };", 'amount: body.amount };'));
+  r = await review(dir);
+  assert.deepEqual(ids(r), ['medium payout-input']);
+  assert.deepEqual(cases(r, 'payout-input'), ['request-amount']);
+  await writeFile(
+    vouchers,
+    written.replace(
+      /async check\(\{ body, player, env \}\) \{[\s\S]*?\n {2}\},/,
       "async check({ body }) {\n    return { grant: body.grant, round: body.runId, amount: 'grant' };\n  },",
     ),
   );
   const c = run(['review', dir, '--json'], { env: { GAMESFUN_SOLANA: '' } });
   assert.equal(c.status, 1);
-  assert.equal(JSON.parse(c.stdout).findings[0].id, 'pay-from-request');
+  assert.equal(JSON.parse(c.stdout).findings[0].id, 'payout-input');
 });
 
 test("a server that checks players' tokens itself must name the game's audience", async t => {
@@ -482,6 +590,13 @@ export const VOUCHERS = { payOnly: 'any' /* 'x' later */ };`;
     ),
     true,
   );
+  // "this" in a why's words is no read of state
+  assert.equal(
+    paysFromRequest({
+      body: "{ if (!body.ok) return { why: 'Not a run this server started.' }; return { grant: 'g' }; }",
+    }),
+    true,
+  );
   // a check that asks a backend of its own is not flagged
   assert.equal(
     paysFromRequest({ body: "{ const ok = await fetch('https://b.example/verify'); return { grant: 'g' }; }" }),
@@ -511,96 +626,228 @@ const other = '/api/rooms/join';`;
   ]);
 });
 
-test('payOnly, the voucher key and the grants, trust: each finding fires, and not otherwise', async t => {
+test('the ledger against the grants: payOnly and perPerson (payout-signer, payout-ceiling), the signer, trust; each fires, and not otherwise', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await sample(tmp, 'bounded');
   const vouchers = path.join(dir, 'server', 'vouchers.js');
   const economy = path.join(dir, 'xsolana.json');
-  // payOnly 'any' while the grant counts people: those claims fail
+  // payOnly 'any' while the grant counts people: wallet-only players are signed nothing, so their claims fail
   await edit(vouchers, t => t.replace("payOnly: 'x'", "payOnly: 'any'"));
-  assert.deepEqual(ids(await review(dir)), ['medium payonly-any-perperson']);
-  // and with no perPerson: farmable, capped by its perDay; then with no total at all
+  let r = await review(dir);
+  assert.deepEqual(ids(r), ['medium payout-signer']);
+  assert.deepEqual(cases(r, 'payout-signer'), ['identity']);
+  assert.equal(r.ledger[0].identity, 'wallet');
+  assert.equal(r.ledger[0].ceiling.by, 'person', 'those who are paid are still counted per person');
+  // and with no perPerson: a wallet is free, so only the day's total bounds it; then with no total at all
   await editJson(economy, s => delete s.grants[0].limits.perPerson);
-  assert.deepEqual(ids(await review(dir)), ['medium payonly-any-farmable']);
+  r = await review(dir);
+  assert.deepEqual(ids(r), ['medium payout-ceiling']);
+  assert.deepEqual(cases(r, 'payout-ceiling'), ['shared-day']);
+  assert.match(
+    one(r, 'payout-ceiling').message,
+    /^"found-whale": what one person can take is bounded only by the day's total \(100 claims a day\)/,
+  );
+  assert.match(
+    one(r, 'payout-ceiling').message,
+    /Its record: identity paid: a wallet, which is free, by VOUCHERS\.payOnly 'any'; limits: perWallet 1, perDay 100\.$/,
+  );
   await editJson(economy, s => delete s.grants[0].limits.perDay);
-  const r = await review(dir);
-  assert.deepEqual(ids(r), ['high payonly-any-farmable']);
-  assert.equal(r.findings[0].route, 'grant:found-whale');
-  assert.match(r.tradeoffs[0].cheater, /capped at 1 a wallet \(a wallet is free\)$/);
-  // trust: not declared (0.25.0 refuses the field: info), not one of the three
+  r = await review(dir);
+  assert.deepEqual(ids(r), ['high payout-ceiling']);
+  assert.equal(one(r, 'payout-ceiling').route, 'grant:found-whale');
+  assert.deepEqual(cases(r, 'payout-ceiling'), ['unbounded']);
+  assert.equal(r.ledger[0].ceiling.bounded, false);
+  assert.match(
+    r.tradeoffs[0].cheater,
+    /the most one person takes is unbounded: 1 claim a wallet \(perWallet\) × as many wallets/,
+  );
+  // payOnly 'x' with no perPerson: one X account links wallet after wallet, so the wallet still binds
   await edit(vouchers, t => t.replace("payOnly: 'any'", "payOnly: 'x'"));
+  r = await review(dir);
+  assert.deepEqual(ids(r), ['high payout-ceiling']);
+  assert.match(r.ledger[0].ceiling.words, /payOnly lets only an X account be paid, but the grant counts no person/);
+  // trust: not declared (the installed @xgamesfun/solana says it itself), not one of the three
   await editJson(economy, s => {
     s.grants[0].limits = { perWallet: 1, perPerson: 1, perDay: 100 };
     delete s.grants[0].trust;
   });
   const u = await review(dir);
-  // the installed @xgamesfun/solana (0.28.6) says it itself (R-TRUST-UNSAID), so this package's own line stays out
+  // the installed @xgamesfun/solana says it itself (R-TRUST-UNSAID), so this package's own line stays out
   assert.deepEqual(ids(u), []);
   assert.ok(
     all(u).some(i => i.endsWith(' R-TRUST-UNSAID')),
     all(u).join(', '),
   );
+  assert.equal(u.ledger[0].trust.declared, null);
   assert.equal(u.tradeoffs[0].trust, null);
   assert.match(u.tradeoffs[0].cheater, /^it rests on what PAY\.check checks/);
   await editJson(economy, s => (s.grants[0].trust = 'mostly'));
-  assert.deepEqual(ids(await review(dir)), ['medium trust-unknown']);
-  // a server key no grant names; grants that name a key nothing here signs
+  r = await review(dir);
+  assert.deepEqual(ids(r), ['medium payout-trust']);
+  assert.deepEqual(cases(r, 'payout-trust'), ['unknown']);
+  // a server key no grant names: what it signs can't be claimed
   await editJson(economy, s => {
     s.grants[0].trust = 'bounds';
     delete s.grants[0].vouchers;
   });
-  assert.deepEqual(ids(await review(dir)), ['medium vouchers-unnamed']);
+  r = await review(dir);
+  assert.deepEqual(ids(r), ['medium payout-signer']);
+  assert.deepEqual(cases(r, 'payout-signer'), ['unclaimable']);
+  assert.deepEqual(
+    r.ledger.map(x => [x.route, x.claimable]),
+    [['server/vouchers.js', false]],
+  );
+  assert.deepEqual(r.tradeoffs, []);
+  // grants that name a key nothing here signs
   await editJson(economy, s => (s.grants[0].vouchers = ['2LW2C9sZbxoizKZ9eXYrsiF8xLP8GajJpnjAyNYKTrh1']));
   await rm(vouchers);
   await edit(path.join(dir, 'server', 'index.js'), t => t.replace(/.*vouchers.*\n/g, ''));
-  assert.deepEqual(ids(await review(dir)), ['medium vouchers-no-signer']);
-  // the keeper signs: no finding
+  r = await review(dir);
+  assert.deepEqual(ids(r), ['medium payout-signer']);
+  assert.deepEqual(cases(r, 'payout-signer'), ['no-signer']);
+  assert.equal(r.ledger[0].signer, 'none');
+  // the keeper signs: no finding, and the ledger says who
   await writeFile(
     path.join(dir, 'server', 'room.js'),
     'export const win = (env, w) => env.GF.loot.report({ winners: w });\n',
   );
-  assert.deepEqual(ids(await review(dir)), []);
+  r = await review(dir);
+  assert.deepEqual(ids(r), []);
+  assert.deepEqual([r.ledger[0].signer, r.ledger[0].where, r.ledger[0].identity], ['keeper', 'server/room.js', 'x']);
+  // a route that reports the winners the page names: the request decides who is paid
+  await writeFile(
+    path.join(dir, 'server', 'room.js'),
+    'export async function report(request, env) {\n  const body = await request.json();\n  return env.GF.loot.report({ round: body.round, endedAt: 1, winners: body.winners });\n}\n',
+  );
+  r = await review(dir);
+  assert.deepEqual(ids(r), ['high payout-input', 'medium payout-trust']);
+  assert.deepEqual(cases(r, 'payout-input'), ['request-decides', 'request-names-wallet']);
+  // a key the game's own code holds (signVoucher), reading a run it keeps
+  await writeFile(
+    path.join(dir, 'server', 'room.js'),
+    "import { signVoucher } from './gf-loot/results/index.js';\nexport async function pay(env, run) {\n  const kept = await env.RUNS.get(run.id);\n  return signVoucher({ seed: env.VOUCHER_SEED, wallet: kept.wallet, amount: kept.score });\n}\n",
+  );
+  r = await review(dir);
+  assert.deepEqual(ids(r), []);
+  assert.deepEqual([r.ledger[0].signer, r.ledger[0].source, r.ledger[0].recipient], ['other', 'env', 'check']);
 });
 
-test(".dev.vars: tracked by git, not ignored, in the published folder; a seed or the test key's seed in the page; the test key in a grant", async t => {
+test('the ceiling arithmetic: identities × limit per identity × time', () => {
+  // payOnly 'any', no perPerson, no perDay: a wallet is free, and nothing else bounds it
+  let c = payoutCeiling({ perWallet: 1 }, 'wallet');
+  assert.deepEqual([c.bounded, c.by, c.identities, c.perIdentity, c.severity], [false, null, 'unbounded', 1, 'high']);
+  assert.match(
+    c.words,
+    /^unbounded: 1 claim a wallet \(perWallet\) × as many wallets as one person makes \(a wallet is free\), with no perDay or total$/,
+  );
+  // with a perDay: bounded by the day's total, which one person can take
+  c = payoutCeiling({ perWallet: 1, perDay: 50 }, 'wallet');
+  assert.deepEqual([c.bounded, c.by, c.severity], [true, 'day', 'medium']);
+  assert.match(
+    c.words,
+    /^bounded only by the day's total \(50 claims a day\), which every player shares and one person can take/,
+  );
+  c = payoutCeiling({ total: 500 }, 'wallet');
+  assert.deepEqual([c.bounded, c.by, c.severity], [true, 'total', 'medium']);
+  // payOnly 'x' and perPerson: bounded per person (an X account), whatever the totals
+  c = payoutCeiling({ perPerson: 2, perDay: 50 }, 'x');
+  assert.deepEqual([c.bounded, c.by, c.unit, c.perIdentity, c.severity], [true, 'person', 'x', 2, null]);
+  assert.match(
+    c.words,
+    /^bounded per person: 2 claims an X account \(perPerson\) × the X accounts one person holds; 50 claims a day/,
+  );
+  // 'account' (or 'any') with perPerson: counted per X or Google account
+  assert.equal(payoutCeiling({ perPerson: 1 }, 'account').unit, 'account');
+  // the keeper's own rate is a total too: shared, so medium
+  c = payoutCeiling({}, 'wallet', { keeper: true });
+  assert.deepEqual([c.bounded, c.by, c.severity], [true, 'keeper', 'medium']);
+  assert.match(c.words, /120 reports an hour, 16 winners each/);
+
+  // the same through the ledger, from the grant and VOUCHERS.payOnly
+  const spec = limits => ({ grants: [{ key: 'g', vouchers: ['K'], trust: 'bounds', limits }] });
+  const site = payOnly => ({
+    signer: 'server',
+    where: 'server/vouchers.js',
+    payOnly,
+    source: 'env',
+    decides: null,
+    amount: 'grant',
+    recipient: 'proven',
+  });
+  const ledgerOf = (payOnly, limits) => payoutLedger(spec(limits), { sites: [site(payOnly)] });
+  const sevs = l => payoutFindings(l).map(f => `${f.severity} ${f.id}`);
+  assert.deepEqual(sevs(ledgerOf('any', { perWallet: 1 })), ['high payout-ceiling']);
+  assert.deepEqual(sevs(ledgerOf('any', { perWallet: 1, perDay: 10 })), ['medium payout-ceiling']);
+  assert.deepEqual(sevs(ledgerOf('x', { perPerson: 1 })), []);
+  assert.equal(ledgerOf('x', { perPerson: 1 })[0].ceiling.by, 'person');
+  // payOnly 'any' with perPerson: bounded, but the identity paid and the one counted differ
+  assert.deepEqual(
+    payoutFindings(ledgerOf('any', { perPerson: 1 })).map(f => [f.id, f.cases]),
+    [['payout-signer', ['identity']]],
+  );
+});
+
+test(".dev.vars and every key's places (key-custody): tracked by git, not ignored, in the served folder; a seed or the test key's seed in the page; the test key in a grant, raised on mainnet", async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await sample(tmp, 'bounded');
   await writeFile(path.join(dir, '.dev.vars'), `VOUCHER_SEED=${SEED}\n`);
+  const test = await seedAddress(SEED);
+  const places = r => r.custody.find(k => k.key === 'test').places.map(p => p.kind);
   const git = (...a) =>
     spawnSync('git', ['-C', dir, '-c', 'user.email=t@example.com', '-c', 'user.name=t', ...a], { encoding: 'utf8' });
   if (git('init', '-q').status === 0) {
-    assert.deepEqual(ids(await review(dir)), ['low dev-vars-not-ignored']);
+    let r = await review(dir);
+    assert.deepEqual(ids(r), ['low key-custody']);
+    assert.deepEqual(places(r), ['holder', 'unignored']);
     git('add', '.dev.vars');
-    assert.deepEqual(ids(await review(dir)), ['high dev-vars-tracked']);
+    r = await review(dir);
+    assert.deepEqual(ids(r), ['high key-custody']);
+    assert.deepEqual(places(r), ['holder', 'git']);
+    assert.match(one(r, 'key-custody').message, new RegExp(`^the test voucher key \\(${test}\\) is in git history`));
     git('rm', '-q', '--cached', '.dev.vars');
     await writeFile(path.join(dir, '.gitignore'), '.dev.vars\n');
-    assert.deepEqual(ids(await review(dir)), []);
+    r = await review(dir);
+    assert.deepEqual(ids(r), []);
+    assert.deepEqual(places(r), ['holder']);
   }
-  // the test key's seed in the page; a seed by its name
+  // the test key's seed in the page; a seed by its name (a key of its own)
   await writeFile(path.join(dir, 'debug.js'), `export const k = '${SEED}';\n`);
   let r = await review(dir);
-  assert.deepEqual(ids(r), ['high secret-in-page']);
-  assert.match(r.findings[0].message, /debug\.js holds the test voucher key's seed/);
+  assert.deepEqual(ids(r), ['high key-custody']);
+  assert.deepEqual(places(r), ['holder', 'page']);
+  assert.match(
+    one(r, 'key-custody').message,
+    /^the test voucher key .* is in debug\.js: in the page's files, which are public/,
+  );
   await writeFile(path.join(dir, 'debug.js'), `export const cfg = { seed: '${'c4'.repeat(32)}' };\n`);
   r = await review(dir);
-  assert.deepEqual(ids(r), ['high secret-in-page']);
-  assert.match(r.findings[0].message, /debug\.js:1 holds a seed \(64 hex characters\)/);
+  assert.deepEqual(ids(r), ['high key-custody']);
+  assert.match(one(r, 'key-custody').message, /^a seed \(64 hex characters\) is in debug\.js:1: in the page's files/);
+  assert.ok(r.custody.some(k => k.key === 'page:debug.js:a seed (64 hex characters)'));
   await rm(path.join(dir, 'debug.js'));
-  // the test key named in the grant
-  const test = await seedAddress(SEED);
+  // the test key named in the grant: anyone with the folder signs for it
   await editJson(path.join(dir, 'xsolana.json'), s => s.grants[0].vouchers.push(test));
   r = await review(dir);
-  assert.deepEqual(ids(r), ['medium test-key-in-grant']);
+  assert.deepEqual(ids(r), ['medium key-custody']);
+  assert.equal(one(r, 'key-custody').route, 'grant:found-whale');
+  assert.deepEqual(r.custody.find(k => k.key === 'test').signs, ['found-whale']);
   assert.equal(r.server.facts.testKey, test);
-  // on mainnet the same grant signs real-money claims with a key whose seed sits in .dev.vars: high
+  // on mainnet the same grant signs real-money claims with a key whose seed sits in .dev.vars: raised to high
   await editJson(path.join(dir, 'xsolana.json'), s => {
     s.network = 'mainnet';
   });
   r = await review(dir);
-  assert.ok(ids(r).includes('high test-key-in-grant'), ids(r).join(', '));
-  assert.ok(r.findings.find(f => f.id === 'test-key-in-grant').fix.startsWith('The economy is on mainnet'));
+  assert.ok(ids(r).includes('high key-custody'), ids(r).join(', '));
+  assert.ok(r.findings.find(f => f.id === 'key-custody').fix.startsWith('The economy is on mainnet'));
+  const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
+  assert.match(
+    md,
+    new RegExp(
+      `\\| the test voucher key \\(\`${test}\`\\) \\| grant:found-whale on mainnet \\| grant:found-whale \\| named by the grant: .* \\| high \\|`,
+    ),
+  );
   await editJson(path.join(dir, 'xsolana.json'), s => {
     delete s.network;
   });
@@ -614,8 +861,15 @@ test(".dev.vars: tracked by git, not ignored, in the published folder; a seed or
   await rename(path.join(brought, 'xsolana.json'), path.join(brought, 'public', 'xsolana.json'));
   await writeFile(path.join(brought, 'public', '.dev.vars'), 'NOTHING=1\n');
   r = await review(brought);
-  assert.deepEqual(ids(r), ['medium dev-vars-published-folder']);
+  assert.deepEqual(ids(r), ['medium key-custody']);
+  assert.deepEqual(cases(r, 'key-custody'), ['served']);
+  assert.ok(r.custody.some(k => k.key === 'dev-vars:public/.dev.vars'));
   assert.equal(r.server.facts.economy, 'public/xsolana.json', 'its economy found where loot add puts it');
+  // the test key's own seed in the served copy: a place of the test key
+  await writeFile(path.join(brought, '.dev.vars'), `VOUCHER_SEED=${SEED}\n`);
+  await writeFile(path.join(brought, 'public', '.dev.vars'), `VOUCHER_SEED=${SEED}\n`);
+  r = await review(brought);
+  assert.deepEqual(places(r), ['holder', 'served']);
 });
 
 /** A stand-in published game: routes that are open, half-open and closed, its voucher key and its economy file. */
@@ -781,8 +1035,10 @@ test("the economy's own review: its routes, findings and trade-offs in the recor
   const r = await reviewGame(dir, { env });
   assert.equal(r.economy.available, true);
   assert.equal(r.economy.version, '0.26.0');
-  // its trust says nothing about the undeclared field, so this package's own line stays, at medium now
-  assert.deepEqual(all(r), ['high bounded-feeds-farm', 'medium trust-undeclared']);
+  // its findings say nothing about trust, so this package's own line stays (payout-trust, undeclared), at medium now
+  assert.deepEqual(all(r), ['high bounded-feeds-farm', 'medium payout-trust']);
+  assert.deepEqual(cases(r, 'payout-trust'), ['undeclared']);
+  assert.equal(r.ledger[0].trust.economy, 'bounds');
   assert.equal(r.findings[0].source, 'economy');
   assert.equal(r.tradeoffs[0].trust, 'bounds', 'the level from its route when the grant does not say');
   assert.equal(r.tradeoffs[0].ceiling, '100 whales a day');
@@ -859,4 +1115,164 @@ test('publish says to run the review when a game that pays through vouchers chan
   const c = run(['publish', dir, '--check'], { env: { GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config') } });
   assert.match(c.stderr, /review has not run since its economy or server\/ changed/);
   assert.doesNotMatch(run(['publish', plain, '--check']).stderr, /review has not run/);
+});
+
+// ---- For the person: "Ask the person" and "Tell the person, as written" -------------------------------------------
+
+const FROM = ['economy', 'server', 'design', 'custody', 'plan'];
+/** Each line is {text, from}: a sentence, and one of the four sources. */
+function assertLines(list, name) {
+  assert.ok(Array.isArray(list), `${name} is a list`);
+  for (const x of list) {
+    assert.deepEqual(Object.keys(x).sort(), ['from', 'text'], `${name}: ${JSON.stringify(x)}`);
+    assert.ok(typeof x.text === 'string' && x.text.trim().length > 10, `${name}: ${x.text}`);
+    assert.ok(FROM.includes(x.from), `${name} from: ${x.from}`);
+  }
+}
+
+test('the sample bounded server: a Tell line names its ceiling and what a leaked key still allows; review.md and review.json carry ask and tell', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded');
+  const r = await review(dir);
+  assertLines(r.ask, 'ask');
+  assertLines(r.tell, 'tell');
+  const own = r.tell.filter(x => x.from === 'server');
+  assert.equal(own.length, 1, 'one line for its one paid route');
+  assert.match(own[0].text, /^“Found a Whale”: the server only bounds the result/);
+  assert.match(own[0].text, /a cheater gets every claim without playing/);
+  assert.match(
+    own[0].text,
+    /The most one person takes: at most 1 claim for each X account they hold, and 100 claims a day/,
+  );
+  assert.match(
+    own[0].text,
+    /The server holds the limit on each run .*if the server's key leaks, the chain still allows up to 100 claims a day\./,
+  );
+  // the live key is at its one holder: nothing to tell of it
+  assert.ok(!r.tell.some(x => x.from === 'custody'));
+  // what stops with the server: its claims and its own routes (no timer here, so no question from the plan)
+  const plan = r.tell.filter(x => x.from === 'plan');
+  assert.equal(plan.length, 1);
+  assert.match(
+    plan[0].text,
+    /^If the game's plan cap is reached, its server stops until the month ends: claims \(voucher signing\)/,
+  );
+  assert.match(plan[0].text, /api\/tide\/start/);
+  assert.match(plan[0].text, /pages keep loading/);
+  assert.ok(!r.ask.some(x => x.from === 'plan'));
+
+  const json = JSON.parse(await readFile(path.join(r.outDir, 'review.json'), 'utf8'));
+  assert.deepEqual(json.ask, r.ask);
+  assert.deepEqual(json.tell, r.tell);
+  const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
+  const at = h => md.indexOf(h);
+  assert.ok(at('## Ask the person') > at('**PASS**'), 'after the summary');
+  assert.ok(at('## Tell the person, as written') > at('## Ask the person'));
+  assert.ok(at('## Findings') > at('## Tell the person, as written'), 'before the findings');
+  const block = (from, to) => md.slice(at(from), at(to));
+  for (const x of r.ask)
+    assert.ok(block('## Ask the person', '## Tell the person').includes(`\n? ${x.text}\n`), x.text);
+  for (const x of r.tell) assert.ok(block('## Tell the person', '## Findings').includes(`\n> ${x.text}\n`), x.text);
+
+  // the command: the counts, and to pass them on as written
+  const c = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
+  assert.match(
+    c.stdout,
+    new RegExp(
+      `^ask the person: ${r.ask.length} questions? \\(\\d+ from the economy\\); tell the person: ${r.tell.length} sentences? `,
+      'm',
+    ),
+  );
+  assert.match(c.stdout, /^Pass them on as written: review\.md's "Tell the person, as written" lines/m);
+});
+
+test('a server whose alarm draws: the plan-cap line names the timer, and asks who sends the draw when the server is off', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded');
+  await writeFile(
+    path.join(dir, 'server', 'draw.js'),
+    `import { DurableObject } from 'cloudflare:workers';
+export class DrawClock extends DurableObject {
+  async open() {
+    await this.ctx.storage.setAlarm(Date.now() + 86_400_000); // alarm() below: the day's draw
+  }
+  async alarm() {
+    const entries = (await this.ctx.storage.get('entries')) ?? [];
+    await this.ctx.storage.put('winner', entries[0] ?? null);
+  }
+}
+`,
+  );
+  await writeFile(path.join(dir, 'gamesfun.json'), JSON.stringify({ plan: 'free' }));
+  const r = await review(dir);
+  assert.deepEqual(r.server.work.alarms, [
+    { where: 'server/draw.js', owner: 'DrawClock', what: 'the draw', timer: 'the draw timer', critical: true },
+  ]);
+  const [cap] = r.tell.filter(x => x.from === 'plan');
+  assert.match(cap.text, /^If the game's plan \(Free\) reaches its cap, its server stops until the month ends: /);
+  assert.match(cap.text, /claims \(voucher signing\), the draw timer \(DrawClock's alarm, server\/draw\.js\)/);
+  const asks = r.ask.filter(x => x.from === 'plan');
+  assert.equal(asks.length, 1);
+  assert.match(asks[0].text, /^Who sends the draw \(DrawClock's alarm in server\/draw\.js\) if the server is off/);
+
+  // an alarm that only tidies up is named, and asks nothing; a cron handler that reports is asked about
+  await writeFile(
+    path.join(dir, 'server', 'draw.js'),
+    `export class Tidy { async alarm() { await this.ctx.storage.deleteAll(); } }
+export default { async scheduled(controller, env) { await env.GF.loot.report({ round: 'x', winners: [] }); } };
+`,
+  );
+  const q = await review(dir);
+  assert.equal(q.server.work.alarms[0].critical, false);
+  assert.equal(q.server.work.scheduled.length, 1);
+  assert.match(
+    q.tell.find(x => x.from === 'plan').text,
+    /a timer \(Tidy's alarm, server\/draw\.js\), the report timer \(a cron handler/,
+  );
+  assert.deepEqual(
+    q.ask.filter(x => x.from === 'plan').map(x => x.text.replace(/ \(.*/, '')),
+    ['Who sends the results it reports'],
+  );
+});
+
+test("the economy's own ask and tell lines: carried from its check with from economy; a kit without them leaves the review whole", async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded');
+  const r = await review(dir);
+  if (r.told.economy) {
+    // the installed kit has its check: its lines, in its words (not pinned here), each marked as the economy's
+    assert.equal(r.told.economy, 'xsolana check');
+    const ask = r.ask.filter(x => x.from === 'economy');
+    const tell = r.tell.filter(x => x.from === 'economy');
+    assert.ok(tell.length > 0, 'its tell lines');
+    assert.ok(ask.length > 0, 'its questions');
+    for (const x of [...ask, ...tell]) assert.doesNotMatch(x.text, /^[?>] /, 'the marks are taken off');
+    assert.ok(ask.every(x => x.text.endsWith('?')));
+    // the economy's come first, then this package's own
+    assert.equal(r.tell[0].from, 'economy');
+  } else assert.ok(r.told.why, 'it says why there are none');
+  // a kit whose check is missing or says nothing: no economy line, the rest of the review as before
+  const theirs = { ok: true, routes: [], findings: [], tradeoffs: '' };
+  const env = { ...process.env, GAMESFUN_SOLANA: await standInSolana(tmp, 'nocheck', theirs) };
+  const w = await reviewGame(dir, { env });
+  assert.equal(w.economy.available, true);
+  assert.equal(w.told.economy, null);
+  assert.match(w.told.why, /no check/);
+  assert.ok(!w.ask.some(x => x.from === 'economy') && !w.tell.some(x => x.from === 'economy'));
+  assert.ok(w.tell.some(x => x.from === 'server'));
+  assertLines(w.ask, 'ask');
+  assertLines(w.tell, 'tell');
+  // and one that has a check which answers no JSON
+  const broken = await standInSolana(tmp, 'brokencheck', theirs);
+  await edit(
+    path.join(broken, 'bin', 'xsolana.mjs'),
+    s => `// 'check'\nif (process.argv[2] === 'check') { console.log('not json'); process.exit(0); }\n${s}`,
+  );
+  const b = await reviewGame(dir, { env: { ...process.env, GAMESFUN_SOLANA: broken } });
+  assert.equal(b.told.economy, null);
+  assert.match(b.told.why, /xsolana check gave no JSON/);
+  assert.equal(b.economy.available, true);
 });

@@ -6,15 +6,21 @@ import { resolveGame, shown } from '../lib/games.mjs';
 import { readLinks } from '../lib/publish/index.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
 import { CMD } from '../lib/command.mjs';
+import { designCodeLine } from '../lib/design-code.mjs';
 
 const usage = `Usage: xcore review [game] [--live [origin]] [--out <dir>] [--json]
 
 The security review of a game, read as a cheater would: what a script gets without playing, and what to fix first.
   the economy  @xgamesfun/solana's own review of the economy file (each route that pays: what it trusts, its ceiling,
                its findings, the trade-offs in words), when the installed one has it
-  the server   PAY.check written or still the template, or paying from the request alone; VOUCHERS.payOnly against
-               the grants; the voucher key and the grants that name it; "trust" on every grant a voucher pays;
-               .dev.vars in git or in the published folder; a seed or key in the page's files; every api/ route
+  the server   two analyses. The payout ledger: each route that pays, who signs it, what decides it (the request
+               or state the server keeps), who is paid, the identity its limits count, its trust declared and
+               observed, and its ceiling (identities one person makes × the limit for each × time). Key custody:
+               each key (the test key in .dev.vars, the live key, any in the page's files), every place its bytes
+               are and who can read it. Also a server that works before checking a token, and every api/ route
+  design/code  what the economy declares the server does off chain ("offchain", a grant's "serverLimit")
+               against what server/ does: conversions it doesn't declare, declarations no code does, bounds
+               kept only in code; drafts for each, and the economy check run on a copy of the spec with them
   --live       the published game asked as a stranger: each api/ route with no sign-in and with a forged one (GET
                and POST; a route that pays gets an empty body, so nothing it sends can spend or sign);
                api/vouchers/key against the grants' keys; the published economy's "live" against this folder's.
@@ -22,9 +28,12 @@ The security review of a game, read as a cheater would: what a script gets witho
                (--live http://127.0.0.1:<port>/game/).
   --out <dir>  where the record goes (default: <game>/evidence/review-N/: review.md and review.json)
   --json       the record as JSON
-review.md ends with the trade-offs for the person: for each route that pays, how the server checks it (decides,
-replays or bounds), what a cheater gets, and what the stronger level would cost. Any high finding exits 1.
-docs/SERVER.md, "How much your server can check", is the guide.`;
+review.md opens with two blocks for the person: "Ask the person" (questions whose answers change the design) and
+"Tell the person, as written" (final sentences: the economy check's own, each paid route's ceiling, keys out of place,
+and what stops when the plan caps the server); review.json has them as ask and tell, each with its from. It ends with
+the trade-offs: for each route that pays, how the server checks it (decides, replays or bounds), what a cheater gets,
+and what the stronger level would cost. Any high finding exits 1.
+docs/SERVER.md, "What a payout rests on", is the guide.`;
 
 /** --live takes an origin or nothing: `--live`, `--live <http…>`, `--live=<http…>`. → {args without it, live} */
 export function liveFlag(args) {
@@ -91,16 +100,27 @@ function summary(r, where) {
         ? `economy: ${r.economy.file}, ${r.economy.routes.length} routes reviewed by @xgamesfun/solana ${r.economy.version}`
         : `economy: ${r.economy.file} not reviewed: ${r.economy.why}`
       : `economy: ${where} has none`,
-    `server: ${r.server.routes.length} api/ routes named${r.server.facts.vouchers ? `; PAY.check ${r.server.facts.pay === 'template' ? 'is still the template' : r.server.facts.pay}, payOnly ${r.server.facts.payOnly ?? '?'}` : ''}`,
+    `server: ${r.ledger.length} paid routes in the ledger, ${r.custody.length} keys in custody; ${r.server.routes.length} api/ routes named${r.server.facts.vouchers ? `; PAY.check ${r.server.facts.pay === 'template' ? 'is still the template' : r.server.facts.pay}, payOnly ${r.server.facts.payOnly ?? '?'}` : ''}`,
+    designCodeLine(r.designCode),
     r.live ? `live: ${r.live.base}, ${r.live.probes.length} requests` : `live: ${r.liveWhy}`,
   );
   for (const t of r.tradeoffs)
     lines.push(
-      `paid route ${t.route}: ${t.trust ? `${t.trust}${t.declared ? '' : ' (read so by the economy review; not declared)'}` : 'trust not declared'}`,
+      `paid route ${t.route}: ${t.trust ? `${t.trust}${t.declared ? '' : ' (read so by the economy review; not declared)'}` : 'trust not declared'}${t.observed === 'request' ? ', observed: the request alone' : ''}; ${t.bounded ? 'bounded' : 'unbounded'}`,
     );
   if (r.tradeoffs.length)
     lines.push(
       `For the person: ${shown(r.outDir)}/review.md ends with each paid route's level, what a cheater gets and what the stronger level costs. Tell them, and let them choose.`,
+    );
+  const ask = r.ask ?? [],
+    tell = r.tell ?? [];
+  const fromEconomy = list => list.filter(x => x.from === 'economy').length;
+  lines.push(
+    `ask the person: ${ask.length} question${ask.length === 1 ? '' : 's'} (${fromEconomy(ask)} from the economy); tell the person: ${tell.length} sentence${tell.length === 1 ? '' : 's'} (${fromEconomy(tell)} from the economy)${r.told?.why ? `; the economy's own: none (${r.told.why})` : ''}`,
+  );
+  if (ask.length || tell.length)
+    lines.push(
+      `Pass them on as written: review.md's "Tell the person, as written" lines ("> ") said as they are, its "Ask the person" questions ("? ") asked before building on the answers; neither kept in private notes.`,
     );
   return lines.join('\n');
 }

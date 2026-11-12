@@ -684,3 +684,13 @@ test("an engine's project is read as one: its web export is the page, or adopt s
   await writeFile(path.join(lacking, 'index.html'), page('<script src="./dist/game.js"></script>'));
   assert.ok((await adopt(lacking)).fix.some(f => /loads dist\/game\.js, which is not in the folder/.test(f.what)));
 });
+
+test("xcore's own sign-in client naming the host's api/ paths is not the page calling its own api/", async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = path.join(tmp.dir, 'pop');
+  await cp(path.join(FIXTURES, 'static'), dir, { recursive: true });
+  await cp(new URL('../lib/client/gamesfun.js', import.meta.url), path.join(dir, 'gamesfun.js'));
+  const r = await adopt(dir);
+  assert.equal(r.fix.filter(f => /calls api\//.test(f.what)).length, 0, r.fix.map(f => f.what).join('\n'));
+});
