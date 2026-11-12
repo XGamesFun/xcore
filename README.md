@@ -42,7 +42,7 @@ xcore domain add play.mygame.com ./my-game       # Creator or Scale: it plays at
 or newer, and Chrome, Edge or Chromium for the check (else it downloads Playwright's Chromium once). With an agent,
 the skill in `skills/bring-your-own-game/` walks the same steps, and `xcore loot connect` adds the economy's tools.
 Before an economy, a draw or anything a player pays for, read [docs/BEFORE-YOU-BUILD.md](docs/BEFORE-YOU-BUILD.md): one
-method (challenge before you build, then five lenses) that finds what a design gets wrong.
+method (challenge before you build, then six lenses) that finds what a design gets wrong.
 
 **Making a game from an idea** is the kit's (`@xgamesfun/kit`): base worlds, the build loop, the studio page, its six
 gates. The kit brings this package, and `xcore` hands the kit every command it does not have itself (`create`,
@@ -1056,7 +1056,7 @@ without one needs none: the D1 database, `xcore db` and `xcore files` are new.
 ## Documentation
 
 - [docs/SERVER.md](docs/SERVER.md): a game's own server code (`server/`, the `gf-server-v1` contract)
-- [docs/BEFORE-YOU-BUILD.md](docs/BEFORE-YOU-BUILD.md): challenge before you build, and the five lenses that
+- [docs/BEFORE-YOU-BUILD.md](docs/BEFORE-YOU-BUILD.md): challenge before you build, and the six lenses that
   find what a design gets wrong
 - [skills/bring-your-own-game/SKILL.md](skills/bring-your-own-game/SKILL.md): the same steps, for a coding agent
 - [CHANGELOG.md](https://github.com/XGamesFun/xcore/blob/main/CHANGELOG.md), [CONTRIBUTING.md](https://github.com/XGamesFun/xcore/blob/main/CONTRIBUTING.md), [SECURITY.md](https://github.com/XGamesFun/xcore/blob/main/SECURITY.md)
