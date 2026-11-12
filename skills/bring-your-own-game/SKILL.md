@@ -245,7 +245,9 @@ xcore loot review               # the economy's part alone (@xgamesfun/solana's 
   that times a run the page simulated is `bounds`, whatever it is called.
 - **Pass on what it says for the person, as written.** `review.md` opens with two blocks: say its "Tell the person,
   as written" lines (`> `) to the person as they are, in your own answer; ask its "Ask the person" questions (`? `)
-  before building on the answers. Keep neither in private notes. Never call a bounded result safe.
+  before building on the answers. Keep neither in private notes. Never call a bounded result safe. Where a paid route
+  rests on a weaker level, put the choice to the person with your pick: a smaller prize and tighter caps, or the
+  stronger level and what it costs to build (review.md ends with both for each route).
 
 After publishing, `xcore review <folder> --live` asks the published game as a stranger (no sign-in, a forged one;
 nothing it sends can spend or sign) and checks its voucher key and economy against the folder. Under `xcore dev`,
