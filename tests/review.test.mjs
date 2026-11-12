@@ -1250,10 +1250,7 @@ test("the economy's own ask and tell lines: carried from its check with from eco
     assert.ok(tell.length > 0, 'its tell lines');
     assert.ok(ask.length > 0, 'its questions');
     for (const x of [...ask, ...tell]) assert.doesNotMatch(x.text, /^[?>] /, 'the marks are taken off');
-    assert.ok(
-      ask.every(x => x.text.includes('?')),
-      'each asks something',
-    );
+    assert.ok(ask.every(x => x.text.endsWith('?')));
     // the economy's come first, then this package's own
     assert.equal(r.tell[0].from, 'economy');
   } else assert.ok(r.told.why, 'it says why there are none');
