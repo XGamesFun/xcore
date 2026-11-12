@@ -176,6 +176,18 @@ test('the two sample servers: no server finding in either; the economy review of
   );
 });
 
+test('a PAY.check review cannot read (commented out, or PAY gone) is a high finding, never a quiet pass', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded');
+  const vouchers = path.join(dir, 'server', 'vouchers.js');
+  await edit(vouchers, t => t.replace(/export const PAY = \{[\s\S]*?\n\};/, m => `/*\n${m}\n*/`));
+  const r = await review(dir);
+  assert.equal(r.server.facts.pay, 'unreadable');
+  assert.equal(one(r, 'pay-unreadable')?.severity, 'high');
+  assert.match(one(r, 'pay-unreadable').fix, /export const PAY = \{ … \}/);
+});
+
 test('PAY.check in the ledger: the template pays nothing (payout-signer); the request deciding is payout-input (high with the body read), and its declared trust a payout-trust mismatch; the command exits 1', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
