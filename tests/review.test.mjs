@@ -1113,3 +1113,163 @@ test('publish says to run the review when a game that pays through vouchers chan
   assert.match(c.stderr, /review has not run since its economy or server\/ changed/);
   assert.doesNotMatch(run(['publish', plain, '--check']).stderr, /review has not run/);
 });
+
+// ---- For the person: "Ask the person" and "Tell the person, as written" -------------------------------------------
+
+const FROM = ['economy', 'server', 'custody', 'plan'];
+/** Each line is {text, from}: a sentence, and one of the four sources. */
+function assertLines(list, name) {
+  assert.ok(Array.isArray(list), `${name} is a list`);
+  for (const x of list) {
+    assert.deepEqual(Object.keys(x).sort(), ['from', 'text'], `${name}: ${JSON.stringify(x)}`);
+    assert.ok(typeof x.text === 'string' && x.text.trim().length > 10, `${name}: ${x.text}`);
+    assert.ok(FROM.includes(x.from), `${name} from: ${x.from}`);
+  }
+}
+
+test('the sample bounded server: a Tell line names its ceiling and what a leaked key still allows; review.md and review.json carry ask and tell', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded');
+  const r = await review(dir);
+  assertLines(r.ask, 'ask');
+  assertLines(r.tell, 'tell');
+  const own = r.tell.filter(x => x.from === 'server');
+  assert.equal(own.length, 1, 'one line for its one paid route');
+  assert.match(own[0].text, /^“Found a Whale”: the server only bounds the result/);
+  assert.match(own[0].text, /a cheater gets every claim without playing/);
+  assert.match(
+    own[0].text,
+    /The most one person takes: at most 1 claim for each X account they hold, and 100 claims a day/,
+  );
+  assert.match(
+    own[0].text,
+    /The server holds the limit on each run .*if the server's key leaks, the chain still allows up to 100 claims a day\./,
+  );
+  // the live key is at its one holder: nothing to tell of it
+  assert.ok(!r.tell.some(x => x.from === 'custody'));
+  // what stops with the server: its claims and its own routes (no timer here, so no question from the plan)
+  const plan = r.tell.filter(x => x.from === 'plan');
+  assert.equal(plan.length, 1);
+  assert.match(
+    plan[0].text,
+    /^If the game's plan cap is reached, its server stops until the month ends: claims \(voucher signing\)/,
+  );
+  assert.match(plan[0].text, /api\/tide\/start/);
+  assert.match(plan[0].text, /pages keep loading/);
+  assert.ok(!r.ask.some(x => x.from === 'plan'));
+
+  const json = JSON.parse(await readFile(path.join(r.outDir, 'review.json'), 'utf8'));
+  assert.deepEqual(json.ask, r.ask);
+  assert.deepEqual(json.tell, r.tell);
+  const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
+  const at = h => md.indexOf(h);
+  assert.ok(at('## Ask the person') > at('**PASS**'), 'after the summary');
+  assert.ok(at('## Tell the person, as written') > at('## Ask the person'));
+  assert.ok(at('## Findings') > at('## Tell the person, as written'), 'before the findings');
+  const block = (from, to) => md.slice(at(from), at(to));
+  for (const x of r.ask)
+    assert.ok(block('## Ask the person', '## Tell the person').includes(`\n? ${x.text}\n`), x.text);
+  for (const x of r.tell) assert.ok(block('## Tell the person', '## Findings').includes(`\n> ${x.text}\n`), x.text);
+
+  // the command: the counts, and to pass them on as written
+  const c = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
+  assert.match(
+    c.stdout,
+    new RegExp(
+      `^ask the person: ${r.ask.length} questions? \\(\\d+ from the economy\\); tell the person: ${r.tell.length} sentences? `,
+      'm',
+    ),
+  );
+  assert.match(c.stdout, /^Pass them on as written: review\.md's "Tell the person, as written" lines/m);
+});
+
+test('a server whose alarm draws: the plan-cap line names the timer, and asks who sends the draw when the server is off', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded');
+  await writeFile(
+    path.join(dir, 'server', 'draw.js'),
+    `import { DurableObject } from 'cloudflare:workers';
+export class DrawClock extends DurableObject {
+  async open() {
+    await this.ctx.storage.setAlarm(Date.now() + 86_400_000); // alarm() below: the day's draw
+  }
+  async alarm() {
+    const entries = (await this.ctx.storage.get('entries')) ?? [];
+    await this.ctx.storage.put('winner', entries[0] ?? null);
+  }
+}
+`,
+  );
+  await writeFile(path.join(dir, 'gamesfun.json'), JSON.stringify({ plan: 'free' }));
+  const r = await review(dir);
+  assert.deepEqual(r.server.work.alarms, [
+    { where: 'server/draw.js', owner: 'DrawClock', what: 'the draw', timer: 'the draw timer', critical: true },
+  ]);
+  const [cap] = r.tell.filter(x => x.from === 'plan');
+  assert.match(cap.text, /^If the game's plan \(Free\) reaches its cap, its server stops until the month ends: /);
+  assert.match(cap.text, /claims \(voucher signing\), the draw timer \(DrawClock's alarm, server\/draw\.js\)/);
+  const asks = r.ask.filter(x => x.from === 'plan');
+  assert.equal(asks.length, 1);
+  assert.match(asks[0].text, /^Who sends the draw \(DrawClock's alarm in server\/draw\.js\) if the server is off/);
+
+  // an alarm that only tidies up is named, and asks nothing; a cron handler that reports is asked about
+  await writeFile(
+    path.join(dir, 'server', 'draw.js'),
+    `export class Tidy { async alarm() { await this.ctx.storage.deleteAll(); } }
+export default { async scheduled(controller, env) { await env.GF.loot.report({ round: 'x', winners: [] }); } };
+`,
+  );
+  const q = await review(dir);
+  assert.equal(q.server.work.alarms[0].critical, false);
+  assert.equal(q.server.work.scheduled.length, 1);
+  assert.match(
+    q.tell.find(x => x.from === 'plan').text,
+    /a timer \(Tidy's alarm, server\/draw\.js\), the report timer \(a cron handler/,
+  );
+  assert.deepEqual(
+    q.ask.filter(x => x.from === 'plan').map(x => x.text.replace(/ \(.*/, '')),
+    ['Who sends the results it reports'],
+  );
+});
+
+test("the economy's own ask and tell lines: carried from its check with from economy; a kit without them leaves the review whole", async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded');
+  const r = await review(dir);
+  if (r.told.economy) {
+    // the installed kit has its check: its lines, in its words (not pinned here), each marked as the economy's
+    assert.equal(r.told.economy, 'xsolana check');
+    const ask = r.ask.filter(x => x.from === 'economy');
+    const tell = r.tell.filter(x => x.from === 'economy');
+    assert.ok(tell.length > 0, 'its tell lines');
+    assert.ok(ask.length > 0, 'its questions');
+    for (const x of [...ask, ...tell]) assert.doesNotMatch(x.text, /^[?>] /, 'the marks are taken off');
+    assert.ok(ask.every(x => x.text.endsWith('?')));
+    // the economy's come first, then this package's own
+    assert.equal(r.tell[0].from, 'economy');
+  } else assert.ok(r.told.why, 'it says why there are none');
+  // a kit whose check is missing or says nothing: no economy line, the rest of the review as before
+  const theirs = { ok: true, routes: [], findings: [], tradeoffs: '' };
+  const env = { ...process.env, GAMESFUN_SOLANA: await standInSolana(tmp, 'nocheck', theirs) };
+  const w = await reviewGame(dir, { env });
+  assert.equal(w.economy.available, true);
+  assert.equal(w.told.economy, null);
+  assert.match(w.told.why, /no check/);
+  assert.ok(!w.ask.some(x => x.from === 'economy') && !w.tell.some(x => x.from === 'economy'));
+  assert.ok(w.tell.some(x => x.from === 'server'));
+  assertLines(w.ask, 'ask');
+  assertLines(w.tell, 'tell');
+  // and one that has a check which answers no JSON
+  const broken = await standInSolana(tmp, 'brokencheck', theirs);
+  await edit(
+    path.join(broken, 'bin', 'xsolana.mjs'),
+    s => `// 'check'\nif (process.argv[2] === 'check') { console.log('not json'); process.exit(0); }\n${s}`,
+  );
+  const b = await reviewGame(dir, { env: { ...process.env, GAMESFUN_SOLANA: broken } });
+  assert.equal(b.told.economy, null);
+  assert.match(b.told.why, /xsolana check gave no JSON/);
+  assert.equal(b.economy.available, true);
+});

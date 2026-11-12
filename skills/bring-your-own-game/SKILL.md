@@ -243,11 +243,11 @@ xcore loot review               # the economy's part alone (@xgamesfun/solana's 
   only inputs), `"replays"` (the server runs the page's inputs again) or `"bounds"` (the page plays and reports; the
   server checks its clock, order and caps). It is what `PAY.check` really does, not what you hope it does: a server
   that times a run the page simulated is `bounds`, whatever it is called.
-- **Tell the person**, in plain words, from the end of `review.md`: for each paid route, the level it uses, what a
-  cheater gets (a bounded result pays a script that waits and reports, without playing; a decided one pays what a bot
-  that plays well wins), and what the stronger level would cost to build (replaying: a deterministic step and about
-  3 ms of CPU a second played; deciding: the rules moved to the server, a request each step). Let them choose: a
-  smaller prize and tighter caps, or the stronger level. Never call a bounded result safe.
+- **Pass on what it says for the person, as written.** `review.md` opens with two blocks: say its "Tell the person,
+  as written" lines (`> `) to the person as they are, in your own answer; ask its "Ask the person" questions (`? `)
+  before building on the answers. Keep neither in private notes. Never call a bounded result safe. Where a paid route
+  rests on a weaker level, put the choice to the person with your pick: a smaller prize and tighter caps, or the
+  stronger level and what it costs to build (review.md ends with both for each route).
 
 After publishing, `xcore review <folder> --live` asks the published game as a stranger (no sign-in, a forged one;
 nothing it sends can spend or sign) and checks its voucher key and economy against the folder. Under `xcore dev`,
