@@ -917,7 +917,7 @@ game's server is switched off the same way. Paid slots are $15 for
 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans; no automatic renewal, 7 days' grace after the period
 ends; when they end, their games go back to free slots and nothing is taken down).
 Usage credit, bought the same way, lets Creator games go past what their slots include, at twice what xgames.fun pays,
-instead of slowing down. A paid slot moves between your games at any time
+instead of being capped. A paid slot moves between your games at any time
 (`xcore plan deactivate <one>`, `xcore plan activate <another>`) without changing the bill. `xcore plan [folder]`
 shows a game's plan, its limits and this month's use; `--all` your free and paid slots and every game. A game's server sees a 429
 with `scope` (`"player"` or `"game"`) and `plan` when it goes past a rate.

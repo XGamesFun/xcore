@@ -11,7 +11,8 @@ const usage = `Usage: xcore plan [dir] [--json]
 
 What a game's backend may use on xgames.fun (its server, saves and scores), and what it used this month.
   Free       every game, by default: a small server (50 ms of CPU a request, 600 requests a minute) and $1 of use a
-             month; past that its server is capped (slow) until the month ends
+             month; past that the game is capped until the month ends: its server is switched off (every api/
+             request answers 451), its pages keep loading, and saves and scores slow down
   Creator    a game in one of your paid slots: 200 ms a request, 6,000 requests a minute, 1 GB of saves, and
              $10 of use a month per paid slot, shared by your Creator games
   Scale      granted by xgames.fun for a game that needs more
@@ -20,7 +21,7 @@ it on domains of your own (1 and 5: ${CMD} domain).
 Every game sits in a slot. Everyone gets 2 free slots, whose games run on Free; any more games need a paid slot,
 $15 for 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans; no automatic renewal), whose game runs on
 Creator. A paid slot moves between your games at any time without changing the bill. Usage credit, bought the same way,
-lets Creator games go past what their slots include (at twice what xgames.fun pays) instead of slowing down.
+lets Creator games go past what their slots include (at twice what xgames.fun pays) instead of being capped.
   activate     move this folder's game to a paid slot (its free slot opens for another game)
   deactivate   move it back to a free slot (one must be open; its paid slot opens for another game)
   --all        your free and paid slots and every game's plan`;

@@ -25,6 +25,10 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 commented out or gone is a high finding (`pay-unreadable`): before, review said "PAY.check: not found in the file" and
 passed, while every claim failed.
 
+**`xcore plan --help` says what a cap does.** It said a capped Free game's server is "capped (slow)"; it is switched
+off until the month ends (every `api/` request answers 451), as the README, docs/SERVER.md and review say. Pages keep
+loading and saves and scores slow down.
+
 **`xcore connect`** gives Claude Code and Codex the bring-your-own-game skill (copied into each agent's skills folder,
 the one `xcore loot connect` uses for the solana kit's) and everything `xcore loot connect` does, then prints a few
 lines a person may paste into a project's AGENTS.md or CLAUDE.md. It writes nothing into the project. `--dry-run`
