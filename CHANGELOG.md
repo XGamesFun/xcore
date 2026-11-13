@@ -38,6 +38,12 @@ another, went unseen, and the doubling was never asked to be declared. The condi
 function's locals, the fields that hold it (`x.f = …`, `{ f: … }`, `{ f }`, `storage.get/put('f')`) in any server
 file, and the functions that call their setters, a few steps deep: here, "turns a code into ×2 of what it pays".
 
+**`xcore review` matches the new `offchain` shape, and finds a boost by any name.** A rule written in plain words
+giving more of a grant (`{ "takes": "a code", "gives": "grant:pops", "rate": 2 }`) now covers the code, streak or count
+it describes, so a builder that declared it isn't told it is undeclared. A factor chosen by a condition that reads a
+wallet's holdings, a code or a stake (`const count = golden ? 2 : 1`, written by a query) is found whatever it is
+named; a value computed into a cap (`const dayCap = …`) is no payout; an added bonus reads "a bonus of 50", not "×50".
+
 **`xcore review` flags a paid read that fails open (`paid-read-open`, medium).** A `winPaid` whose failure answers
 "not paid" (`.catch(() => false)`, or a `try` whose `catch` returns false) lets a server sign a win again when the
 chain can't be read, for another wallet or as a new voucher, and pay it twice. The fix is to sign nothing until the

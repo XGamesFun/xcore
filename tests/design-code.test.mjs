@@ -637,3 +637,40 @@ test('(j) a streak bonus beside a declared hint paid in the same token: still co
   // the hint is named in the server's code: not "unbuilt"
   assert.deepEqual(of(r, 'design-unbuilt'), []);
 });
+
+// (k) a factor chosen by a condition that reads a wallet's holdings, written into the harvest by any means
+// (`const count = golden ? 2 : 1`, then a database write): a boost by any name; a plain `x ? 3 : 1` is not
+const HARVEST = `// The farm: a golden tool in the player's wallet doubles each harvest.
+import { collectiblesOf } from './gf-loot/results/index.js';
+
+async function goldenOf(env, wallet) {
+  const held = await collectiblesOf({ rpc: env.RPC, spec: {}, wallet });
+  return held.some(c => c.item === 'card');
+}
+
+export async function harvest(env, sub, wallet, crop) {
+  const golden = await goldenOf(env, wallet);
+  const count = golden ? 2 : 1; // a golden tool doubles the harvest
+  await env.DB.prepare('UPDATE basket SET n = n + ? WHERE player = ? AND crop = ?').bind(count, sub, crop).run();
+  return { harvested: count };
+}
+
+export async function retry(env, failed) {
+  const tries = failed ? 3 : 1;
+  return { tries };
+}
+`;
+
+test('(k) a factor chosen by a holdings condition and written by a query: code-undeclared; an ordinary x ? 3 : 1 is not', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await game(tmp, 'golden', spec({ grants: [raid({ trust: 'bounds' })] }), {
+    'vouchers.js': HOURLY_PAY,
+    'harvest.js': HARVEST,
+  });
+  const r = await review(dir);
+  const found = of(r, 'code-undeclared');
+  assert.deepEqual(found.map(f => f.where), [`server/harvest.js:${lineOf(HARVEST, 'golden ? 2 : 1')}`]);
+  assert.match(found[0].message, /into ×2 of what it pays/);
+  assert.match(found[0].message, /it reads what a wallet holds at server\/harvest\.js:\d+/);
+});
