@@ -31,6 +31,11 @@ functions (`return gated(…, await PAY.decide(…))`) was read as its one line:
 functions it calls, a few deep, so it gets the same findings as the same code written inline (here, high
 `payout-input`).
 
+**`xcore review` names what a server rule reads.** An undeclared conversion that reads state the server keeps was
+called "a token balance into a bonus", and a streak's multiplier was dismissed as a misread for it: it now says "a
+balance or count the server keeps for the player", and "a streak (what the player did in a row)" when the multiplier
+is named for one.
+
 **`xcore review` finds a cap kept in a helper of `vouchers.js`.** Design and code read only PAY's block of
 server/vouchers.js, so a cap in a function of the same file that PAY calls (`takeSlot`, holding claims to so many a
 day) went unseen, and a declared `serverLimit` was reported "unbuilt". Those functions are read now, a few calls deep;
