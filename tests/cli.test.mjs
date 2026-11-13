@@ -28,7 +28,15 @@ test('help lists its own commands; a kit command with no kit says how to get the
   assert.match(connect.stderr, /@xgamesfun\/kit[\s\S]*Usage: xcore backend use custom/);
   const create = run(['create', 'x'], { cwd: away.dir });
   assert.equal(create.status, 1);
-  assert.match(create.stderr, /"create" is not an xgames\.fun command[\s\S]*@xgamesfun\/kit/);
+  assert.match(create.stderr, /"create" is the kit's command[\s\S]*@xgamesfun\/kit/);
+  // a typo is told the nearest command of ours, and is not blamed on the kit
+  const typo = run(['pubish', '.'], { cwd: away.dir });
+  assert.equal(typo.status, 1);
+  assert.match(typo.stderr, /"pubish" is not an xcore command\. Did you mean "publish"\?/);
+  assert.doesNotMatch(typo.stderr, /not released/);
+  const unknown = run(['frobnicate'], { cwd: away.dir });
+  assert.match(unknown.stderr, /"frobnicate" is not an xcore command\.\n/);
+  assert.doesNotMatch(unknown.stderr, /Did you mean|not released/);
   assert.equal(
     run(['--version'], { cwd: away.dir }).stdout.trim(),
     JSON.parse(await (await import('node:fs/promises')).readFile(new URL('../package.json', import.meta.url), 'utf8'))
@@ -57,6 +65,8 @@ test('with a kit: its commands, publish and check of a game it made, and its bac
     run(['backend', 'connect', 'supabase'], { cwd: tmp.dir, env }).stdout.trim(),
     'kit:["backend","connect","supabase"]',
   );
+  // connect: the kit's own where there is a kit (this package's where there is none: tests/connect.test.mjs)
+  assert.equal(run(['connect', '--dry-run'], { cwd: tmp.dir, env }).stdout.trim(), 'kit:["connect","--dry-run"]');
   const made = path.join(tmp.dir, 'made');
   await mkdir(made);
   await writeFile(path.join(made, 'gf-three.json'), '{}');

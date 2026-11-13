@@ -252,7 +252,18 @@ test("xsolana's words as xcore's", () => {
     say('`xsolana check` then xsolana_simulate; xsolana_save stays'),
     '`xcore loot check` then xcore loot simulate; xsolana_save stays',
   );
-  assert.equal(say('npx -y --package=@xgamesfun/solana@0.20.1 xsolana mcp'), 'xcore loot mcp');
+  // the MCP server's command is what connect registers in an agent: said as it is, so a dry run shows the real thing
+  assert.equal(
+    say(
+      'claude mcp add --transport stdio --scope user xsolana -- npx -y --package=@xgamesfun/solana@0.20.1 xsolana mcp',
+    ),
+    'claude mcp add --transport stdio --scope user xsolana -- npx -y --package=@xgamesfun/solana@0.20.1 xsolana mcp',
+  );
+  assert.equal(
+    say('cmd /c npx -y --package=@xgamesfun/solana@0.20.1 xsolana mcp'),
+    'cmd /c npx -y --package=@xgamesfun/solana@0.20.1 xsolana mcp',
+  );
+  assert.equal(say('npx -y --package=@xgamesfun/solana@0.20.1 xsolana check'), 'xcore loot check');
   assert.equal(say('xsolana: the tools for loot'), 'xsolana: the tools for loot');
   assert.equal(say('  xsolana guide [part]            what'), '  xcore loot guide [part]         what');
 });

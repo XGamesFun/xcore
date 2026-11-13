@@ -2,6 +2,160 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.10.0 — 2026-11-12
+
+**Consent gates match the code.** A change that can't be undone now prints first and goes on only with
+`--yes <code>`, as `xcore loot approve` and `xcore coin launch` already did:
+
+- `xcore db query --write --live`, `db import --live` and `db restore --live` print exactly what they would change
+  (the game; the statement and its params, the file's name, size and SHA-256, or the time and what it goes back to)
+  with an 8-hex code over that change, and change nothing. Run again with `--yes <code>` they go on; a code printed for
+  another change is refused. At a terminal, typing the word (write, import, restore) still works. **Breaking:** a bare
+  `--yes` is a usage error now, and the refusal no longer tells a script to add it; with `--json` the printout is
+  `{planned: true, code, plan, next}`.
+- `xcore secret delete <NAME>`, and `secret set <NAME>` when the live server has that name already, print what they
+  replace or remove (never a value) with a code, and act only with `--yes <code>`; a new name is set at once.
+  `--new-key` over a voucher key says the old key is gone for good and what that breaks until the grant names the new
+  address.
+- publish, domains, embeds and `plan activate`/`deactivate` stay as they are: each can be undone (publishing makes a
+  new version, or a private draft when checks fail; a domain or an embed is removed again, an embed within a minute; a
+  plan change moves a slot and no money).
+
+**`xcore review` no longer passes a payout check it cannot read.** A `server/vouchers.js` whose `PAY.check` is
+commented out or gone is a high finding (`pay-unreadable`): before, review said "PAY.check: not found in the file" and
+passed, while every claim failed.
+
+**`xcore review` reads a check that hands its work on.** A `PAY.check` that only calls another of the file's
+functions (`return gated(…, await PAY.decide(…))`) was read as its one line: a wallet taken from the request in
+`decide` passed as "a wallet the player proved", with no finding. The check is now read through the file's own
+functions it calls, a few deep, so it gets the same findings as the same code written inline (here, high
+`payout-input`).
+
+**`xcore review` follows a multiplier's condition through what the server stores.** A boost applied under a flag
+(`r.boosted ? n * BOOST : n`, or `const factor = boosted ? BOOST : 1`) was read only in its own function, where the
+flag reads nothing a player did: a printed code that turns a boost on in one file, stored, and copied into a round in
+another, went unseen, and the doubling was never asked to be declared. The condition is now followed through the
+function's locals, the fields that hold it (`x.f = …`, `{ f: … }`, `{ f }`, `storage.get/put('f')`) in any server
+file, and the functions that call their setters, a few steps deep: here, "turns a code into ×2 of what it pays".
+
+**`xcore review` follows a server that banks first and pays later.** A boost applied inside a product
+(`n * (boosted ? BOOST : 1)`) in a store that banks pops for a later claim was missed: the scan saw only a multiplier
+next to its `*`, read only functions that "pay" or "earn", and followed a condition's helper (`boostedAt(p, now)`)
+through its calls but not the fields it reads. Now such a ternary is a multiplier, banking (`banked`, `credited`) is
+earning, a small helper's fields are followed to where a code sets them, and a function that adds to a field a claim
+then takes from (`p.banked += …`, `p.banked -= amount`) feeds that claim's grant, so the draft is complete:
+`{ "takes": "a code", "gives": "grant:pops", "rate": 2 }` (a bonus of N tokens drafts as that token at rate N; its
+question says "a bonus of N", not "N times"). A grant's cap is read through what PAY.check calls up to three deep
+(`PAY.check → payCheck → stub.takeClaim`), so a declared `serverLimit` held there is no longer called unbuilt. One rule
+on one line is reported once, by its factor.
+
+**`xcore review` reads a cap a ranking holds.** A prize paid only to a player found in a ranking's top N (an ordered
+query's `LIMIT`, or a sorted list's first N, then `top.some(t => t.farmer === player.sub)` in the check) holds at most
+N claims a window; review looked only for a comparison against a cap, and called a `serverLimit` declared for it
+"unbuilt" (design-unbuilt, a false medium). The ranking is now read as that bound: N claims for everyone, a month when
+the ranking says one.
+
+**`xcore review` matches the new `offchain` shape, and finds a boost by any name.** A rule written in plain words
+giving more of a grant (`{ "takes": "a code", "gives": "grant:pops", "rate": 2 }`) now covers the code, streak or count
+it describes, so a builder that declared it isn't told it is undeclared. A factor chosen by a condition that reads a
+wallet's holdings, a code or a stake (`const count = golden ? 2 : 1`, written by a query) is found whatever it is
+named; a value computed into a cap (`const dayCap = …`) is no payout; an added bonus reads "a bonus of 50", not "×50".
+
+**`xcore review` flags a paid read that fails open (`paid-read-open`, medium).** A `winPaid` whose failure answers
+"not paid" (`.catch(() => false)`, or a `try` whose `catch` returns false) lets a server sign a win again when the
+chain can't be read, for another wallet or as a new voucher, and pay it twice. The fix is to sign nothing until the
+answer is known.
+
+**`xcore review` drafts what is on no chain.** With @xgamesfun/solana 0.28.26 an `offchain` rule may take plain words
+and give more of a grant (`{ "takes": "a code", "gives": "grant:pops", "rate": 2 }`). The draft for an undeclared code,
+streak or server-kept count now fills `takes` in those words, `gives` with the grant it feeds when there is one (and
+`rate` with the times), and lists the spec's grants when it can't tell; the finding shows the shape, and a complete
+draft adds a question for the person: is it a rule they want, and how are players told where they earn.
+
+**`xcore review` keeps one declaration from covering another rule.** A streak's bonus (QUIZ for answers in a row)
+was taken as declared by an unrelated `offchain` entry that takes and gives the same token (a hint paid in QUIZ), or by
+that entry's name anywhere in the file. A declaration now matches a rule by its key or name in the lines around it, or
+by what it takes and gives when those differ; a QUIZ-for-QUIZ entry matches by name only. An entry is "unbuilt" only
+when no distinctive word of its key or name is in the server's code. The streak wording wins over an inferred token,
+and the finding says that "offchain" is for every server rule on what a player is paid (a code, a streak, a count),
+not only tokens held on chain: two eval builders dismissed a correct code-boost finding as "not something the economy
+file can describe".
+
+**`xcore review` finds a stored multiplier, and one in a rules file outside `server/`.** A boost kept in a field
+(`const got = farm.multiplier ?? 1; … + got`) or chosen in a branch (`const times = boosted(me) ? BOOST_TIMES : 1`)
+is read where the local is applied; the field is followed to where any server file sets it and who calls that, and a
+condition's own function calls (`(await goldenOf(…)).items.length ? 2 : 1`) are followed into the game's functions.
+The game's own modules that `server/` imports from outside it (`../farm-rules.js`) are read too, named without
+`server/`. A wallet read through an object (`deps.collectiblesOf(…)`) counts as what a wallet holds, and what a player
+did or holds leads the "it reads" list. On eight earlier eval games: one false "unbuilt" gone, three real undeclared
+doublings found, nothing else changed.
+
+**`xcore review` names what a server rule reads.** An undeclared conversion that reads state the server keeps was
+called "a token balance into a bonus", and a streak's multiplier was dismissed as a misread for it: it now says "a
+balance or count the server keeps for the player", and "a streak (what the player did in a row)" when the multiplier
+is named for one.
+
+**`xcore review` finds a cap kept in a helper of `vouchers.js`.** Design and code read only PAY's block of
+server/vouchers.js, so a cap in a function of the same file that PAY calls (`takeSlot`, holding claims to so many a
+day) went unseen, and a declared `serverLimit` was reported "unbuilt". Those functions are read now, a few calls deep;
+a name such as `CLAIMS_A_DAY` reads as a cap a day, a counted voucher as claims, and the person it counts is read
+from the call (`takeSlot(env, player.sub)`). A cap called after an earlier branch has returned another grant is filed
+under the grant the code after the call pays.
+
+**`xcore review` files a server cap under the grant it caps.** When PAY.check pays two grants from two branches and
+one branch calls a function of the game's own that keeps a cap, "What the server bounds" listed that cap under both;
+it now names the grant of the branch that calls it (the innermost block around the call that names a grant).
+
+**`xcore review` prints its questions.** The summary listed only "ask the person: N questions"; it now prints each
+question ("? …") under that line, so an agent that reads only the summary still asks them. review.md keeps both lists.
+
+**`xcore plan --help` says what a cap does.** It said a capped Free game's server is "capped (slow)"; it is switched
+off until the month ends (every `api/` request answers 451), as the README, docs/SERVER.md and review say. Pages keep
+loading and saves and scores slow down.
+
+**`xcore connect`** gives Claude Code and Codex the bring-your-own-game skill (copied into each agent's skills folder,
+the one `xcore loot connect` uses for the solana kit's) and everything `xcore loot connect` does, then prints a few
+lines a person may paste into a project's AGENTS.md or CLAUDE.md. It writes nothing into the project. `--dry-run`
+says what it would do; with a checkout of the game kit here, `connect` stays the kit's.
+
+**The skill, trimmed to its method.** `skills/bring-your-own-game/SKILL.md` goes from 31,832 to about 12,400
+characters: the method and four invariants first (it said "three" and listed four), the consent invariant as the
+code now enforces it, and the order of commands, with per-case detail in `references/` (sign-in, saves and rooms; a
+server and paying results; the economy in the page). The fix table and the restatements of what `check` and
+`plan --help` print are gone, as are the unreleased kit's `gamesfun_*` tools, the key-file and economy-loop detail
+the xsolana-economy skill owns, and the never-list: each rule now says its reason. "As written" is kept for legal and
+trust facts; the legal warning comes once at the first chance-prize flag and again at mainnet, as in the solana kit.
+`npm test` holds it there: the skill's size, every `xcore` command, subcommand and flag it and its references name,
+counts against their lists, links, and no `gamesfun_*` names.
+
+**Errors name the next step.** `xcore plan --json` refusals carry `code` (`not-published`, `no-plans`, a slot's
+code) and `next`. adopt's fixes that declare a backend name the game's folder (`backend use custom <folder> --url …`),
+so run from a parent folder they write backend.json into the game. `xcore loot … --json` hands back the kit's JSON
+untouched. An unknown command is told the nearest of xcore's commands, and only a command of the unreleased game kit
+is told it is the kit's. `xcore loot connect --dry-run` shows the MCP command it really registers
+(`npx -y --package=@xgamesfun/solana@… xsolana mcp`), not `xcore loot mcp`.
+
+Since 0.9.1, also:
+
+- **docs/BEFORE-YOU-BUILD.md**: one method for anything that touches money, a token, a flow a player taps through or
+  can't be undone. Challenge before you build (the simplest version that gets most of the outcome, with its trade),
+  then six lenses in every state as a player, the owner and a cheater, ranked by how it plays, then clean, then
+  secure. The skill opens with it.
+- **`xcore check` tests the page where players meet it**: inside the play page's sandboxed frame, with a query string,
+  failing a pop-up, a form submit or top-level navigation. It walks a first session as a new player on a phone (up to
+  6 taps in about 45 s, or the path in `gamesfun.json` → `journey`) and reports taps, sign-in, wallet and SOL needs,
+  waits and what to tell the person.
+- **`xcore review` reads payouts by lens**: a payout ledger (each paying route: who signs, what decides it, its
+  ceiling) and key custody replace thirteen per-case findings. review.md opens with "Ask the person" and "Tell the
+  person, as written" (from the economy, the server, custody and the plan's caps), and "Design and code" compares
+  what the economy declares the server does (`offchain`, `serverLimit`) with `server/`, drafts the missing
+  declarations and checks the economy again with them.
+- adopt no longer reads `gamesfun.js`'s own `api/` paths as the page calling its own `api/`.
+- `@xgamesfun/solana` 0.28.20 (from 0.28.6): the one-approval buy, the deep checker (flows, lenses, Tell and Ask
+  lines), `xsolana_design`, `serverLimit`, ranked endings and fund runway; from 0.28.18 a short first guide call and a
+  short skill, a burned payment a cancel can't give back raised with a question, who sends what each ending owes, and
+  every grant cap checked in claims against an honest player's pace.
+
 ## 0.9.1 — 2026-11-11
 
 **A coin's creator keeps at least 90% of its fees.** xgames.fun takes at most 10% of a coin's creator fees (its

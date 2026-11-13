@@ -3,16 +3,17 @@
 import { createInterface } from 'node:readline/promises';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
-import { dbExport, dbImport, dbInfo, dbQuery, dbRestore, importOf, queryProblem } from '../lib/db.mjs';
+import { dbExport, dbImport, dbInfo, dbQuery, dbRestore, importOf, liveChange, queryProblem } from '../lib/db.mjs';
+import { codeMatches, sameCommand, wrongCode } from '../lib/consent.mjs';
 import { economyFile } from '../lib/economy.mjs';
 import { pageRoots } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore db info [dir] [--live] [--json]
-       xcore db query "<sql>" [dir] [--params '<json list>'] [--write] [--live [--yes]] [--json]
+       xcore db query "<sql>" [dir] [--params '<json list>'] [--write] [--live [--yes <code>]] [--json]
        xcore db export [dir] [--out <file>] [--live] [--json]
-       xcore db import <file.sql> [dir] [--live [--yes]] [--json]
-       xcore db restore <time> [dir] --live [--yes] [--json]
+       xcore db import <file.sql> [dir] [--live [--yes <code>]] [--json]
+       xcore db restore <time> [dir] --live [--yes <code>] [--json]
 
 The game's own database (${CMD} add database: gamesfun.json → database, one D1 database a game). Without --live,
 the one on this machine that ${CMD} dev runs (kept in .gamesfun/dev/d1/, its migrations applied first); with --live,
@@ -25,12 +26,14 @@ the game's database on xgames.fun, which keeps every call in the game's audit lo
   import <file.sql>  run a file of SQL statements, all of it or none; at most 5 MB (live, 4.5 MB as sent). A dump
                      from export (here, live or D1's) goes in over what is there, or into an empty database:
                      tables kept, each row updated by its key where it is (none deleted)
-A change to the live database (query --write --live, import --live, restore) goes on only with --yes or when you
-type its word (write, import, restore); where there is no terminal to ask in, it needs --yes.
   restore <time>     live only: the database as it was at <time> (a date such as 2026-11-08T12:00:00Z, or unix
-                     seconds; up to 30 days back). It says what it would go back to first, and goes on only with
-                     --yes or when you type "restore". A game with an economy: what happened on chain (loot
-                     balances, payouts) stays as it is, so the database and the chain can disagree after it.`;
+                     seconds; up to 30 days back). A game with an economy: what happened on chain (loot balances,
+                     payouts) stays as it is, so the database and the chain can disagree after it.
+A change to the live database (query --write --live, import --live, restore) first prints exactly what it would
+change (the game, and the statement and its params; the file's name, size and SHA-256; or the time and what it goes
+back to) with a code, and changes nothing. It goes on when run again with --yes <code>, or, at a terminal, when you
+type its word (write, import, restore). A code printed for another change is refused. With --json, the printout is
+{planned: true, code, plan, next}.`;
 
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const kb = n => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1024).toFixed(1)} KB`);
@@ -55,19 +58,40 @@ function table(rows) {
 }
 
 /**
- * A change to the live database goes on only with --yes, or when the person types `word` at the terminal; with no
- * terminal to ask in (a script, CI), it is refused. → true to go on
+ * A change to the live database (../lib/consent.mjs): with --yes <code>, it goes on when the code is this change's and
+ * is refused when it is another's. Without it, the printout (`lines`) and its code; at a terminal the person may type
+ * `word` to go on, and elsewhere (a script, an agent) nothing changes. → true to go on, or the exit code to stop with
  */
-async function confirmed(question, word, nothing) {
-  if (!process.stdin.isTTY)
-    throw new UsageError(`${nothing}: add --yes to go on (this is not a terminal to ask in)\n\n${usage}`);
+async function consented({ change, lines, word, nothing, values, args }) {
+  if (values.yes !== undefined) {
+    if (!codeMatches(values.yes, change.code)) throw wrongCode();
+    return true;
+  }
+  const next = `${sameCommand('db', args)} --yes ${change.code}`;
+  if (values.json) {
+    printJson({ ok: true, planned: true, code: change.code, plan: change.plan, next });
+    return 0;
+  }
+  console.log(lines.join('\n'));
+  if (!process.stdin.isTTY) {
+    console.log(`${nothing}. To go on, run this again with the code:\n  ${next}`);
+    return 0;
+  }
   const rl = createInterface({ input: process.stdin, output: process.stderr });
   try {
-    return (await rl.question(question)).trim().toLowerCase() === word;
+    const typed = (
+      await rl.question(`Type ${word} to go on (or run it again with --yes ${change.code}), anything else to stop: `)
+    )
+      .trim()
+      .toLowerCase();
+    if (typed === word) return true;
   } finally {
     rl.close();
   }
+  console.log(`${nothing}.`);
+  return 1;
 }
+const onGame = c => `(game ${c.plan.game} on ${c.plan.origin})`;
 
 export default {
   name: 'db',
@@ -82,7 +106,7 @@ export default {
           write: { type: 'boolean' },
           params: { type: 'string' },
           out: { type: 'string' },
-          yes: { type: 'boolean' },
+          yes: { type: 'string' },
         },
         usage,
       );
@@ -123,17 +147,25 @@ export default {
             throw new UsageError(`--params is a JSON list, such as '["moon", 3]'\n\n${usage}`);
           }
         }
-        if (live && values.write && !values.yes) {
+        if (live && values.write) {
           // what would be refused anyway is refused before anyone is asked
           const why = queryProblem(arg, { write: true });
           if (why) throw Object.assign(new Error(why), { code: 'bad-sql' });
-          console.error(
-            `This changes ${where}, which your players use: ${arg.length > 200 ? `${arg.slice(0, 199)}…` : arg}. Only ${CMD} db restore --live puts it back.`,
-          );
-          if (!(await confirmed('Type write to go on, anything else to stop: ', 'write', 'nothing was written'))) {
-            console.log('Nothing was written.');
-            return 1;
-          }
+          const change = await liveChange(dir, 'write', { sql: arg, params });
+          const go = await consented({
+            change,
+            lines: [
+              `This writes to ${where} ${onGame(change)}, which your players use:`,
+              `  statement  ${arg}`,
+              ...(params.length ? [`  params     ${JSON.stringify(params)}`] : []),
+              `Only ${CMD} db restore --live puts it back.`,
+            ],
+            word: 'write',
+            nothing: 'Nothing was written',
+            values,
+            args,
+          });
+          if (go !== true) return go;
         }
         const r = await dbQuery(dir, arg, { live, params, write: !!values.write, log });
         if (values.json) return printJson(r);
@@ -153,16 +185,24 @@ export default {
         return 0;
       }
       if (verb === 'import') {
-        if (live && !values.yes) {
+        if (live) {
           // what would be refused anyway (not there, too big to send) is refused before anyone is asked
           await importOf(arg, { live });
-          console.error(
-            `This runs ${arg} on ${where}, which your players use: rows can change or go, and while it runs the database answers nothing else. ${CMD} db export --live keeps a copy first; ${CMD} db restore --live puts it back.`,
-          );
-          if (!(await confirmed('Type import to go on, anything else to stop: ', 'import', 'nothing was imported'))) {
-            console.log('Nothing was imported.');
-            return 1;
-          }
+          const change = await liveChange(dir, 'import', { file: arg });
+          const go = await consented({
+            change,
+            lines: [
+              `This runs a file of SQL on ${where} ${onGame(change)}, which your players use:`,
+              `  file    ${change.plan.file} (${kb(change.plan.bytes)})`,
+              `  sha256  ${change.plan.sha256}`,
+              `Rows can change or go, and while it runs the database answers nothing else. ${CMD} db export --live keeps a copy first; ${CMD} db restore --live puts it back.`,
+            ],
+            word: 'import',
+            nothing: 'Nothing was imported',
+            values,
+            args,
+          });
+          if (go !== true) return go;
         }
         const r = await dbImport(dir, arg, { live, log });
         if (values.json) return printJson(r);
@@ -184,24 +224,30 @@ export default {
       const warning = economy
         ? 'This game has an economy: what happened on chain since then stays as it is. Loot balances, items and payouts are not rolled back, so a player can keep what they won while the database forgets it (or the other way round).'
         : null;
-      if (!values.yes) {
-        if (values.json)
-          return printJson({ ...p, economy, restored: null, next: `${CMD} db restore ${arg} --live --yes` });
-        console.log(
-          `${where} would go back to how it was at ${at}${p.preview?.bookmark ? ` (bookmark ${p.preview.bookmark})` : ''}. Everything written after that is lost; ${CMD} db export --live keeps a copy first.`,
-        );
-        const undone = p.preview?.migrations ?? [];
-        if (undone.length)
-          console.log(
-            `It rolls back ${plural(undone.length, 'migration')} applied after that time: ${undone.map(m => `${m.name}${m.at ? ` (${m.at})` : ''}`).join(', ')}.`,
-          );
-        if (p.preview?.warning) console.log(`Warning: ${p.preview.warning}`);
-        if (warning) console.log(`Warning: ${warning}`);
-        if (!(await confirmed('Type restore to go on, anything else to stop: ', 'restore', 'nothing was restored'))) {
-          console.log('Nothing was restored.');
-          return 1;
-        }
-      } else if (warning && !values.json) console.error(`Warning: ${warning}`);
+      const change = await liveChange(dir, 'restore', { timestamp: arg, preview: p.preview });
+      if (values.json && values.yes === undefined)
+        // the printout as JSON: what xgames.fun said it goes back to, and the chain's warning
+        change.plan = { ...change.plan, preview: p.preview ?? null, economy, warning };
+      const undone = p.preview?.migrations ?? [];
+      const go = await consented({
+        change,
+        lines: [
+          `${where} ${onGame(change)} would go back to how it was at ${at}${p.preview?.bookmark ? ` (bookmark ${p.preview.bookmark})` : ''}. Everything written after that is lost; ${CMD} db export --live keeps a copy first.`,
+          ...(undone.length
+            ? [
+                `It rolls back ${plural(undone.length, 'migration')} applied after that time: ${undone.map(m => `${m.name}${m.at ? ` (${m.at})` : ''}`).join(', ')}.`,
+              ]
+            : []),
+          ...(p.preview?.warning ? [`Warning: ${p.preview.warning}`] : []),
+          ...(warning ? [`Warning: ${warning}`] : []),
+        ],
+        word: 'restore',
+        nothing: 'Nothing was restored',
+        values,
+        args,
+      });
+      if (go !== true) return go;
+      if (values.yes !== undefined && warning && !values.json) console.error(`Warning: ${warning}`);
       // the moment before the restore: going back to it undoes the restore (D1 Time Travel keeps that point too)
       const before = new Date().toISOString();
       const r = await dbRestore(dir, arg, { live, confirm: true, log });

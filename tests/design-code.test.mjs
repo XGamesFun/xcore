@@ -376,3 +376,446 @@ test(
     t.diagnostic(md.slice(md.indexOf('### The economy check, with the drafts'), md.indexOf('## Live')));
   },
 );
+
+// (f) two grants in one PAY.check, each in its own branch: a cap a function of the game's own keeps, called from one
+// branch, bounds that branch's grant only
+const TWO_LEDGER = `// The popping reward's ledger: one person's claims a day.
+const PER_DAY = 3; // claims one person may make a day
+
+export async function plan(env, person) {
+  const today = Number((await env.CLAIMS.get(\`\${person}:\${new Date().toISOString().slice(0, 10)}\`)) ?? 0);
+  if (today >= PER_DAY) return { ok: false };
+  return { ok: true, round: \`pops:\${person}:\${today + 1}\` };
+}
+`;
+const TWO_PAY = `// Two grants: a free entry for signing in, and the popping reward, which the ledger caps a day.
+import { plan } from './ledger.js';
+
+export const PAY = {
+  async check({ body, player, env }) {
+    if (body?.kind === 'free') {
+      return { grant: 'free-entry', round: \`free:\${player.sub}\`, amount: 'grant' };
+    }
+    if (body?.kind === 'pops') {
+      const p = await plan(env, player.sub);
+      if (!p.ok) return { why: 'That is all for today.' };
+      return { grant: 'raid-prize', round: p.round, amount: 100 };
+    }
+    return { why: 'Ask for "free" or "pops".' };
+  },
+};
+
+export const VOUCHERS = { payOnly: 'x', perMinute: 20 };
+`;
+
+test('(f) two grants in one check: a cap called from one branch is filed under that branch’s grant only', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const free = {
+    key: 'free-entry',
+    name: 'Free entry',
+    prize: { gives: 'tokens', amount: 1, from: 'mint', currency: 'gold' },
+    vouchers: [KEY],
+    limits: { perPerson: 1, perDay: 50 },
+    trust: 'decides',
+  };
+  const dir = await game(tmp, 'two', spec({ grants: [raid({ trust: 'bounds' }), free] }), {
+    'vouchers.js': TWO_PAY,
+    'ledger.js': TWO_LEDGER,
+  });
+  const r = await review(dir);
+  const line = lineOf(TWO_LEDGER, 'today >= PER_DAY');
+  assert.deepEqual(
+    r.designCode.bounds.map(b => `${b.grant} ${b.where}:${b.line}`),
+    [`raid-prize server/ledger.js:${line}`],
+  );
+});
+
+// (g) the cap in a function of vouchers.js outside PAY that PAY calls, named "a day": read, and filed under the grant
+// the code after the call pays (not the one an earlier branch returned)
+const SLOT_PAY = `// Two grants; the popping reward's claims are held to so many a day by takeSlot, below PAY.
+export const PAY = {
+  async check({ body, player, env }) {
+    if (body?.kind === 'free') return { grant: 'free-entry', round: \`free:\${player.sub}\`, amount: 'grant' };
+    const wait = await takeSlot(env, player.sub);
+    if (wait) return { why: wait };
+    return { grant: 'raid-prize', round: \`raid:\${player.sub}:\${Date.now()}\`, amount: 100 };
+  },
+};
+
+export const VOUCHERS = { payOnly: 'x', perMinute: 20 };
+
+const CLAIMS_A_DAY = 3;
+
+async function takeSlot(env, sub) {
+  const day = new Date().toISOString().slice(0, 10);
+  const today = Number((await env.CLAIMS.get(\`\${sub}:\${day}\`)) ?? 0);
+  if (today >= CLAIMS_A_DAY) return 'That is all for today.';
+  await env.CLAIMS.put(\`\${sub}:\${day}\`, String(today + 1));
+  return null;
+}
+`;
+
+test('(g) a cap a day in a vouchers.js function PAY calls: read, under the grant the code after the call pays', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const free = {
+    key: 'free-entry',
+    name: 'Free entry',
+    prize: { gives: 'tokens', amount: 1, from: 'mint', currency: 'gold' },
+    vouchers: [KEY],
+    limits: { perPerson: 1, perDay: 50 },
+    trust: 'decides',
+  };
+  const declared = { per: 'person', amount: 300, claims: 3, every: '1d' };
+  const dir = await game(
+    tmp,
+    'slot',
+    spec({ grants: [raid({ trust: 'bounds', [SERVER_LIMIT.field]: declared }), free] }),
+    { 'vouchers.js': SLOT_PAY },
+  );
+  const r = await review(dir);
+  const line = lineOf(SLOT_PAY, 'today >= CLAIMS_A_DAY');
+  assert.deepEqual(
+    r.designCode.bounds.map(b => `${b.grant} ${b.where}:${b.line} ${b.value} ${b.unit} ${b.every} ${b.per}`),
+    [`raid-prize server/vouchers.js:${line} 3 claims 1d person`],
+  );
+  assert.deepEqual(of(r, 'design-unbuilt'), []);
+});
+
+// (h) a multiplier applied under a condition the server stores: a code redeemed in one file turns a stored flag on,
+// a round started later copies it, and the round's pay is doubled under it. Read through the fields, across files.
+const BANK = `// One player's bank: rounds, the boost a code turned on, and what each round earned.
+const RULES = { boostTimes: 2, boostMs: 86_400_000 };
+
+export class Bank {
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+  async state() {
+    return (await this.ctx.storage.get('s')) ?? { balance: 0, boostUntil: 0, round: null };
+  }
+  async boost() {
+    const s = await this.state();
+    s.boostUntil = Date.now() + RULES.boostMs;
+    await this.ctx.storage.put('s', s);
+  }
+  async startRound(id) {
+    const s = await this.state();
+    s.round = { id, boosted: s.boostUntil > Date.now() };
+    await this.ctx.storage.put('s', s);
+  }
+  async finishRound(n) {
+    const s = await this.state();
+    const r = s.round;
+    const earned = r.boosted ? n * RULES.boostTimes : n;
+    s.balance += earned;
+    await this.ctx.storage.put('s', s);
+    return earned;
+  }
+}
+`;
+const ROUTES = `// The routes: a printed code turns a boost on.
+import CODES from './codes.json';
+
+export async function redeem(env, bank, code) {
+  const hash = await sha256(String(code));
+  if (!CODES[hash]) return { why: 'That code is not one of ours.' };
+  await bank.boost();
+  return { ok: true };
+}
+
+async function sha256(s) {
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].join('');
+}
+`;
+
+test('(h) a code turns a stored flag on, a later round doubles its pay under it: code-undeclared, read across files', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await game(tmp, 'boosted', spec({ grants: [raid({ trust: 'bounds' })] }), {
+    'vouchers.js': HOURLY_PAY,
+    'bank.js': BANK,
+    'routes.js': ROUTES,
+    'codes.json': '{}',
+  });
+  const r = await review(dir);
+  const line = lineOf(BANK, 'r.boosted ? n * RULES.boostTimes');
+  const [f, ...rest] = of(r, 'code-undeclared');
+  assert.deepEqual(rest, []);
+  assert.equal(f.where, `server/bank.js:${line}`);
+  assert.match(f.message, /appears to turn a code into ×2 /);
+  assert.match(f.message, /a code lookup at server\/routes\.js:\d+/);
+});
+
+// (i) a stored multiplier read into a local and added, in a rules file outside server/ that server/ imports; the
+// server sets it from what a wallet holds (through an object: deps.collectiblesOf)
+const RULES_FILE = `// The farm's rules, shared by the page and the server.
+export function harvest(farm, plot) {
+  const got = farm.multiplier ?? 1; // the server sets it: 2 with a Golden Sickle
+  farm.basket = (farm.basket ?? 0) + got;
+  return { ok: true, got, points: plot.points };
+}
+`;
+const FARM = `// The farm: runs the shared rules on the server's own clock.
+import { harvest } from '../rules.js';
+import { collectiblesOf } from './gf-loot/results/index.js';
+const deps = { collectiblesOf };
+
+export async function setGolden(farm, held) {
+  farm.multiplier = held ? 2 : 1;
+}
+
+export async function lookForGolden(env, farm, wallet) {
+  const sickles = (await deps.collectiblesOf({ rpc: env.RPC, spec: {}, wallet })).filter(c => c.item === 'card');
+  await setGolden(farm, sickles.length > 0);
+}
+
+export async function tap(farm, plot) {
+  return harvest(farm, plot);
+}
+`;
+
+test('(i) a stored multiplier in an imported rules file, set from a wallet read in another: built when declared, drafted when not', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const golden = { key: 'golden', name: 'Golden Sickle doubles harvests', takes: 'item:card', gives: 'gold', rate: 2 };
+  const dir = await game(tmp, 'farm', spec({ grants: [raid({ trust: 'bounds' })], offchain: [golden] }), {
+    'vouchers.js': HOURLY_PAY,
+    'farm.js': FARM,
+  });
+  await writeFile(path.join(dir, 'rules.js'), RULES_FILE);
+  let r = await review(dir);
+  assert.deepEqual(of(r, 'design-unbuilt'), []);
+  const c = r.designCode.conversions.find(x => x.where === 'server/rules.js'.replace('server/', ''));
+  assert.ok(c, JSON.stringify(r.designCode.conversions.map(x => x.where)));
+  assert.equal(c.reads[0].kind, 'holds');
+  // the same game with nothing declared: the doubling is code-undeclared, at the rules file's line
+  await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify(spec({ grants: [raid({ trust: 'bounds' })] })));
+  r = await review(dir);
+  const [f] = of(r, 'code-undeclared');
+  assert.equal(f.where, `rules.js:${lineOf(RULES_FILE, 'farm.multiplier ?? 1')}`);
+  assert.match(f.message, /appears to turn a Raid Card into /); // the item the wallet read names
+  assert.match(f.message, /it reads what a wallet holds at server\/farm\.js:\d+/);
+});
+
+// (j) a streak's bonus beside an unrelated rule that takes and gives the same token (a hint paid in GOLD): the hint's
+// declaration does not cover the streak
+const QUIZ = `// A learner's answers: a streak of right answers pays double; a hint costs GOLD.
+const RULES = { reward: 10, streakAfter: 5, streakMultiplier: 2, hintCost: 20 };
+
+export async function answer(env, sub, correct) {
+  const s = (await env.S.get(sub)) ?? { streak: 0, balance: 0 };
+  if (correct) {
+    const full = s.streak >= RULES.streakAfter ? RULES.reward * RULES.streakMultiplier : RULES.reward;
+    s.balance += full;
+    s.streak += 1;
+  } else s.streak = 0;
+  await env.S.put(sub, s);
+  return { earned: s.balance };
+}
+
+export async function hint(env, sub) {
+  const s = (await env.S.get(sub)) ?? { streak: 0, balance: 0 };
+  if (s.balance < RULES.hintCost) return { why: 'Not enough GOLD for a hint.' };
+  s.balance -= RULES.hintCost;
+  await env.S.put(sub, s);
+  return { ok: true };
+}
+`;
+
+test('(j) a streak bonus beside a declared hint paid in the same token: still code-undeclared, named a streak', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const hintRule = { key: 'hint', name: 'A hint', takes: 'gold', gives: 'gold', rate: 1 };
+  const dir = await game(tmp, 'quiz', spec({ grants: [raid({ trust: 'bounds' })], offchain: [hintRule] }), {
+    'vouchers.js': HOURLY_PAY,
+    'quiz.js': QUIZ,
+  });
+  const r = await review(dir);
+  const [f, ...rest] = of(r, 'code-undeclared');
+  assert.deepEqual(rest, []);
+  assert.equal(f.where, `server/quiz.js:${lineOf(QUIZ, 'RULES.reward * RULES.streakMultiplier')}`);
+  assert.match(f.message, /appears to turn a streak \(what the player did in a row\) into /);
+  // the hint is named in the server's code: not "unbuilt"
+  assert.deepEqual(of(r, 'design-unbuilt'), []);
+});
+
+// (k) a factor chosen by a condition that reads a wallet's holdings, written into the harvest by any means
+// (`const count = golden ? 2 : 1`, then a database write): a boost by any name; a plain `x ? 3 : 1` is not
+const HARVEST = `// The farm: a golden tool in the player's wallet doubles each harvest.
+import { collectiblesOf } from './gf-loot/results/index.js';
+
+async function goldenOf(env, wallet) {
+  const held = await collectiblesOf({ rpc: env.RPC, spec: {}, wallet });
+  return held.some(c => c.item === 'card');
+}
+
+export async function harvest(env, sub, wallet, crop) {
+  const golden = await goldenOf(env, wallet);
+  const count = golden ? 2 : 1; // a golden tool doubles the harvest
+  await env.DB.prepare('UPDATE basket SET n = n + ? WHERE player = ? AND crop = ?').bind(count, sub, crop).run();
+  return { harvested: count };
+}
+
+export async function retry(env, failed) {
+  const tries = failed ? 3 : 1;
+  return { tries };
+}
+`;
+
+test('(k) a factor chosen by a holdings condition and written by a query: code-undeclared; an ordinary x ? 3 : 1 is not', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await game(tmp, 'golden', spec({ grants: [raid({ trust: 'bounds' })] }), {
+    'vouchers.js': HOURLY_PAY,
+    'harvest.js': HARVEST,
+  });
+  const r = await review(dir);
+  const found = of(r, 'code-undeclared');
+  assert.deepEqual(
+    found.map(f => f.where),
+    [`server/harvest.js:${lineOf(HARVEST, 'golden ? 2 : 1')}`],
+  );
+  assert.match(found[0].message, /into ×2 of what it pays/);
+  assert.match(found[0].message, /it reads what a wallet holds at server\/harvest\.js:\d+/);
+});
+
+// (l) a cap held by a ranking: the check pays only a player in the month's top 10 (an ordered query's LIMIT, its size
+// a parameter's default), once each a month: a bound of 10 claims a month for everyone, so a declared serverLimit is
+// built
+const RANK_PAY = `// The monthly prize: the top ten of a month that is over, once each.
+import { topOf } from './board.js';
+
+export const PAY = {
+  async check({ body, player, env }) {
+    const month = String(body.month ?? '');
+    const top = await topOf(env, month);
+    if (!top.some(t => t.farmer === player.sub)) return { why: 'Not in that month’s top ten.' };
+    return { grant: 'raid-prize', round: \`champion:\${month}:\${player.sub}\`, amount: 'grant' };
+  },
+};
+
+export const VOUCHERS = { payOnly: 'x', perMinute: 20 };
+`;
+const BOARD = `// The monthly board.
+export const TOP = 10;
+
+export async function topOf(env, month, limit = TOP) {
+  const { results } = await env.DB.prepare('SELECT farmer, crops FROM monthly WHERE month = ? ORDER BY crops DESC LIMIT ?')
+    .bind(month, limit)
+    .all();
+  return results;
+}
+
+export async function rowOf(env, farmer) {
+  return env.DB.prepare('SELECT * FROM farmers WHERE id = ? LIMIT 1').bind(farmer).first();
+}
+`;
+
+test('(l) a prize paid only to a ranking’s top N: a bound of N claims a month, so the declared serverLimit is built', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const declared = { per: 'all', amount: 1000, claims: 10, every: '30d' };
+  const dir = await game(tmp, 'ranked', spec({ grants: [raid({ trust: 'bounds', [SERVER_LIMIT.field]: declared })] }), {
+    'vouchers.js': RANK_PAY,
+    'board.js': BOARD,
+  });
+  const r = await review(dir);
+  const line = lineOf(RANK_PAY, 'await topOf(env, month)');
+  assert.deepEqual(
+    r.designCode.bounds.map(
+      b => `${b.grant} ${b.where}:${b.line} ${b.value} ${b.unit} ${b.every} ${b.per} ${b.amount}`,
+    ),
+    [`raid-prize server/vouchers.js:${line} 10 claims 30d all 1000`],
+  );
+  assert.deepEqual(of(r, 'design-unbuilt'), []);
+});
+
+// (m) a server that banks first and pays later: a code redeemed sets a boost's end, a run banks its pops under it
+// (`n * (boostedAt(p, now) ? RULES.BOOST : 1)`, a ternary inside the product), and PAY.check hands the claim to a
+// helper that hands it to the store, where the claims a day are counted and the bank is read. The boost is read as ×2
+// of the grant the bank feeds, and the claims a day as its bound, three calls deep
+const BANK_PAY = `// Pops are banked by runs, then claimed.
+import { payCheck } from './bank.js';
+
+export const PAY = {
+  async check({ body, player, env }) {
+    return payCheck({ body, player, env });
+  },
+};
+
+export const VOUCHERS = { payOnly: 'x', perMinute: 20 };
+`;
+const BANK_STORE = `// One player's bank, in a store of the server's own.
+export const RULES = { BOOST: 2, CLAIMS_A_DAY: 3 };
+const dayOf = ms => new Date(ms).toISOString().slice(0, 10);
+const boostedAt = (p, ms) => ms < (p.boostUntil ?? 0);
+
+export class Bank {
+  async load(sub) {
+    return (await this.ctx.storage.get(\`p:\${sub}\`)) ?? { banked: 0, claims: 0, day: '', boostUntil: 0 };
+  }
+  async finish(sub, popped) {
+    const p = await this.load(sub);
+    const n = Math.floor(Number(popped));
+    const credited = Math.max(0, n * (boostedAt(p, Date.now()) ? RULES.BOOST : 1));
+    p.banked += credited;
+    await this.ctx.storage.put(\`p:\${sub}\`, p);
+    return { credited };
+  }
+  async redeem(sub, code) {
+    const p = await this.load(sub);
+    const used = await this.ctx.storage.get(\`code:\${code}\`);
+    if (used) return { why: 'That code is used.' };
+    p.boostUntil = Date.now() + 86_400_000;
+    await this.ctx.storage.put(\`p:\${sub}\`, p);
+    return { ok: true };
+  }
+  async takeClaim(sub) {
+    const p = await this.load(sub);
+    const day = dayOf(Date.now());
+    if (p.day !== day) [p.day, p.claims] = [day, 0];
+    if (p.claims >= RULES.CLAIMS_A_DAY) return { why: 'That is all for today.' };
+    const amount = Math.min(p.banked, 1000);
+    p.banked -= amount;
+    p.claims += 1;
+    await this.ctx.storage.put(\`p:\${sub}\`, p);
+    return { ok: true, amount };
+  }
+}
+
+export async function payCheck({ body, player, env }) {
+  if (body?.grant === 'raid-prize') {
+    const stub = env.BANK.get(env.BANK.idFromName('main'));
+    const c = await stub.takeClaim(player.sub);
+    if (!c.ok) return { why: c.why };
+    return { grant: 'raid-prize', round: \`raid:\${player.sub}:\${Date.now()}\`, amount: String(c.amount) };
+  }
+  return { why: 'Name the reward.' };
+}
+`;
+
+test('(m) banked under a code’s boost, claimed three calls deep: ×2 of the grant the bank feeds, and its claims a day', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const declared = { per: 'person', amount: 3000, claims: 3, every: '1d' };
+  const dir = await game(tmp, 'bank', spec({ grants: [raid({ trust: 'bounds', [SERVER_LIMIT.field]: declared })] }), {
+    'vouchers.js': BANK_PAY,
+    'bank.js': BANK_STORE,
+  });
+  const r = await review(dir);
+  const found = of(r, 'code-undeclared');
+  assert.deepEqual(
+    found.map(f => f.where),
+    [`server/bank.js:${lineOf(BANK_STORE, 'RULES.BOOST : 1')}`],
+  );
+  assert.match(found[0].message, /a code into ×2/);
+  const { declaration } = r.designCode.drafts.offchain[0];
+  assert.deepEqual([declaration.takes, declaration.gives, declaration.rate], ['a code', 'grant:raid-prize', 2]);
+  assert.deepEqual(
+    r.designCode.bounds.map(b => `${b.grant} ${b.where}:${b.line} ${b.value} ${b.unit} ${b.every} ${b.per}`),
+    [`raid-prize server/bank.js:${lineOf(BANK_STORE, 'p.claims >= RULES.CLAIMS_A_DAY')} 3 claims 1d person`],
+  );
+  assert.deepEqual(of(r, 'design-unbuilt'), []);
+});

@@ -973,7 +973,7 @@ test('publish: a database needs "d1" in server.features; with it, the migrations
   assert.deepEqual(publishField({ sha256: 'a', bytes: 1, objects: [], compatibilityFlags: [] }).database, undefined);
 });
 
-test('xcore db --live goes through the owner routes; restore shows its preview and the economy warning, and needs --yes', async t => {
+test('xcore db --live goes through the owner routes; a live change prints itself with a code and needs --yes <code>', async t => {
   const tmp = await tempDir(),
     g = await standIn();
   t.after(async () => {
@@ -1046,14 +1046,57 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
   assert.equal(r.status, 1);
   assert.match(r.stderr, /a query may only read: SELECT, EXPLAIN.*Add --write/);
   assert.equal(seen.length, sent);
-  // a write live needs --yes (or the word typed): with no terminal to ask in, refused before anything is sent
-  r = await xc(['query', 'DELETE FROM players', '--live', '--write']);
-  assert.equal(r.status, 2);
-  assert.match(r.stderr, /This changes .*database on xgames\.fun.*DELETE FROM players/);
-  assert.match(r.stderr, /nothing was written: add --yes/);
+  // a write live prints exactly what it changes, with a code, and sends nothing (no terminal to type the word in)
+  r = await xc(['query', 'DELETE FROM players WHERE id = ?', '--params', '["p1"]', '--live', '--write']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /This writes to .*database on xgames\.fun \(game g1 on http/);
+  assert.match(r.stdout, /statement {2}DELETE FROM players WHERE id = \?\n {2}params {5}\["p1"\]/);
+  assert.match(
+    r.stdout,
+    /Nothing was written\. To go on, run this again with the code:\n {2}.*db query 'DELETE FROM players WHERE id = \?' --params '\["p1"\]' --live --write --yes [0-9a-f]{8}$/m,
+  );
+  assert.doesNotMatch(r.stdout + r.stderr, /add --yes/);
+  const code = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
   assert.equal(seen.length, sent);
-  r = await xc(['query', 'DELETE FROM players', '--live', '--write', '--yes', '--json']);
-  assert.equal(JSON.parse(r.stdout).ok, true);
+  // --json: the printout as data, with the command that goes on
+  r = await xc(['query', 'DELETE FROM players WHERE id = ?', '--params', '["p1"]', '--live', '--write', '--json']);
+  let planned = JSON.parse(r.stdout);
+  assert.equal(planned.planned, true);
+  assert.equal(planned.code, code, 'the same change, the same code');
+  assert.deepEqual(planned.plan, {
+    action: 'write',
+    origin: g.origin,
+    game: 'g1',
+    statement: 'DELETE FROM players WHERE id = ?',
+    params: ['p1'],
+  });
+  assert.match(planned.next, new RegExp(`--yes ${code}$`));
+  // another statement or other params: another change, so the code is refused and nothing is sent
+  for (const other of [
+    ['query', 'DELETE FROM players', '--live', '--write', '--yes', code],
+    ['query', 'DELETE FROM players WHERE id = ?', '--params', '["p2"]', '--live', '--write', '--yes', code],
+  ]) {
+    r = await xc(other);
+    assert.equal(r.status, 1, other.join(' '));
+    assert.match(r.stderr, /That code is not for this change: the change differs from the one that was printed/);
+  }
+  assert.equal(seen.length, sent);
+  // a bare --yes is no longer a way past the printout
+  r = await xc(['query', 'DELETE FROM players', '--live', '--write', '--yes']);
+  assert.equal(r.status, 2);
+  assert.equal(seen.length, sent);
+  r = await xc([
+    'query',
+    'DELETE FROM players WHERE id = ?',
+    '--params',
+    '["p1"]',
+    '--live',
+    '--write',
+    '--yes',
+    code,
+    '--json',
+  ]);
+  assert.equal(JSON.parse(r.stdout).ok, true, r.stderr);
   assert.equal(seen.at(-1)[2].write, true);
   // a write here (not live) needs no yes
   assert.equal((await xc(['query', 'SELECT 1; SELECT 2', '--live', '--write'])).status, 1, 'refused first, unasked');
@@ -1067,16 +1110,35 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
   assert.equal(await readFile(out.file, 'utf8'), dump.toString());
   await writeFile(path.join(tmp.dir, 'in.sql'), 'INSERT INTO players VALUES (1);');
   const before = seen.length;
+  r = await xc(['import', path.join(tmp.dir, 'in.sql'), '--live', '--json']);
+  assert.equal(r.status, 0, r.stderr);
+  planned = JSON.parse(r.stdout);
+  assert.equal(planned.planned, true);
+  assert.deepEqual(planned.plan, {
+    action: 'import',
+    origin: g.origin,
+    game: 'g1',
+    file: 'in.sql',
+    bytes: 31,
+    sha256: createHash('sha256').update('INSERT INTO players VALUES (1);').digest('hex'),
+  });
   r = await xc(['import', path.join(tmp.dir, 'in.sql'), '--live']);
-  assert.equal(r.status, 2);
-  assert.match(r.stderr, /nothing was imported: add --yes/);
+  assert.match(r.stdout, /file {4}in\.sql \(0\.0 KB\)\n {2}sha256 {2}[0-9a-f]{64}/);
+  assert.match(r.stdout, /Nothing was imported\. To go on/);
   assert.equal(seen.length, before);
-  r = await xc(['import', path.join(tmp.dir, 'in.sql'), '--live', '--yes']);
+  // the file changed after it was printed: its code no longer fits
+  await writeFile(path.join(tmp.dir, 'in.sql'), 'INSERT INTO players VALUES (2);');
+  r = await xc(['import', path.join(tmp.dir, 'in.sql'), '--live', '--yes', planned.code]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /That code is not for this change/);
+  assert.equal(seen.length, before);
+  await writeFile(path.join(tmp.dir, 'in.sql'), 'INSERT INTO players VALUES (1);');
+  r = await xc(['import', path.join(tmp.dir, 'in.sql'), '--live', '--yes', planned.code]);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(seen.at(-1)[2], { sql: 'INSERT INTO players VALUES (1);' });
   // over 4.5 MB as sent: refused here, before it goes (Studio's host takes no more); a bare 413 is said in words
   await writeFile(path.join(tmp.dir, 'big.sql'), `INSERT INTO players VALUES ('${'x'.repeat(4_600_000)}');`);
-  r = await xc(['import', path.join(tmp.dir, 'big.sql'), '--live', '--yes']);
+  r = await xc(['import', path.join(tmp.dir, 'big.sql'), '--live', '--yes', '00000000']);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /this import is 4\.6 MB as sent.*at most 4\.5 MB: split it/);
   assert.equal(seen.at(-1)[2].sql, 'INSERT INTO players VALUES (1);', 'not sent');
@@ -1084,9 +1146,10 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
   r = await xc(['import', path.join(tmp.dir, 'big.sql'), '--live']);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /this import is 4\.6 MB as sent/);
-  assert.doesNotMatch(r.stderr, /add --yes|Type import/);
+  assert.doesNotMatch(r.stdout + r.stderr, /--yes|Type import/);
   await writeFile(path.join(tmp.dir, 'huge.sql'), "INSERT INTO players VALUES ('huge');");
-  r = await xc(['import', path.join(tmp.dir, 'huge.sql'), '--live', '--yes']);
+  const huge = JSON.parse((await xc(['import', path.join(tmp.dir, 'huge.sql'), '--live', '--json'])).stdout).code;
+  r = await xc(['import', path.join(tmp.dir, 'huge.sql'), '--live', '--yes', huge]);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /xgames\.fun answered 413: the request was too big .*Split the SQL/);
   // restore: not on this machine; live, a preview, the warning, and no yes (not a terminal): nothing restored
@@ -1094,17 +1157,32 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
   assert.equal(r.status, 2);
   assert.match(r.stderr, /restore is --live only/);
   r = await xc(['restore', '2026-11-08T10:00:00Z', '--live']);
-  assert.equal(r.status, 2, r.stdout + r.stderr);
-  assert.match(r.stdout, /would go back to how it was at 2026-11-08T10:00:00Z \(bookmark bm1\)/);
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.match(r.stdout, /\(game g1 on http.*\) would go back to how it was at 2026-11-08T10:00:00Z \(bookmark bm1\)/);
   assert.match(
     r.stdout,
     /It rolls back 1 migration applied after that time: 0002_guilds\.sql \(2026-11-08T11:00:00\.000Z\)/,
   );
   assert.match(r.stdout, /Warning: This restore rolls back migration 0002_guilds\.sql/);
   assert.match(r.stdout, /Warning: This game has an economy: .*Loot balances, items and payouts are not rolled back/);
-  assert.match(r.stderr, /nothing was restored: add --yes/);
+  assert.match(
+    r.stdout,
+    /Nothing was restored\. To go on, run this again with the code:\n.*db restore 2026-11-08T10:00:00Z --live --yes [0-9a-f]{8}/,
+  );
+  const restore = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
+  r = await xc(['restore', '2026-11-08T10:00:00Z', '--live', '--json']);
+  planned = JSON.parse(r.stdout);
+  assert.equal(planned.code, restore);
+  assert.equal(planned.plan.at, '2026-11-08T10:00:00.000Z');
+  assert.equal(planned.plan.bookmark, 'bm1');
+  assert.deepEqual(planned.plan.migrations, ['0002_guilds.sql']);
+  assert.match(planned.plan.warning, /not rolled back/);
+  // another time is another change
+  r = await xc(['restore', '2026-11-08T09:00:00Z', '--live', '--yes', restore]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /That code is not for this change/);
   assert.ok(!seen.some(s => s[2]?.confirm), 'never confirmed');
-  r = await xc(['restore', '2026-11-08T10:00:00Z', '--live', '--yes']);
+  r = await xc(['restore', '2026-11-08T10:00:00Z', '--live', '--yes', restore]);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Restored .* to 2026-11-08T10:00:00Z \(bookmark bm1\)/);
   assert.match(
@@ -1114,10 +1192,11 @@ test('xcore db --live goes through the owner routes; restore shows its preview a
   assert.match(r.stderr, /not rolled back/);
   assert.deepEqual(seen.at(-1)[2], { timestamp: '2026-11-08T10:00:00.000Z', confirm: true });
   // unix seconds go up as the same ISO time: xgames.fun reads a bare number as milliseconds
-  r = await xc(['restore', '1794132000', '--live', '--yes']);
+  // unix seconds name the same time, so the same change and the same code
+  r = await xc(['restore', '1794132000', '--live', '--yes', restore]);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(seen.at(-1)[2], { timestamp: '2026-11-08T10:00:00.000Z', confirm: true });
-  r = await xc(['restore', 'yesterday', '--live', '--yes']);
+  r = await xc(['restore', 'yesterday', '--live', '--yes', restore]);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /restore needs a time/);
 });
