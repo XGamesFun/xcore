@@ -31,6 +31,13 @@ functions (`return gated(…, await PAY.decide(…))`) was read as its one line:
 functions it calls, a few deep, so it gets the same findings as the same code written inline (here, high
 `payout-input`).
 
+**`xcore review` finds a cap kept in a helper of `vouchers.js`.** Design and code read only PAY's block of
+server/vouchers.js, so a cap in a function of the same file that PAY calls (`takeSlot`, holding claims to so many a
+day) went unseen, and a declared `serverLimit` was reported "unbuilt". Those functions are read now, a few calls deep;
+a name such as `CLAIMS_A_DAY` reads as a cap a day, a counted voucher as claims, and the person it counts is read
+from the call (`takeSlot(env, player.sub)`). A cap called after an earlier branch has returned another grant is filed
+under the grant the code after the call pays.
+
 **`xcore review` files a server cap under the grant it caps.** When PAY.check pays two grants from two branches and
 one branch calls a function of the game's own that keeps a cap, "What the server bounds" listed that cap under both;
 it now names the grant of the branch that calls it (the innermost block around the call that names a grant).

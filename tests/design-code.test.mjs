@@ -427,3 +427,55 @@ test('(f) two grants in one check: a cap called from one branch is filed under t
     [`raid-prize server/ledger.js:${line}`],
   );
 });
+
+// (g) the cap in a function of vouchers.js outside PAY that PAY calls, named "a day": read, and filed under the grant
+// the code after the call pays (not the one an earlier branch returned)
+const SLOT_PAY = `// Two grants; the popping reward's claims are held to so many a day by takeSlot, below PAY.
+export const PAY = {
+  async check({ body, player, env }) {
+    if (body?.kind === 'free') return { grant: 'free-entry', round: \`free:\${player.sub}\`, amount: 'grant' };
+    const wait = await takeSlot(env, player.sub);
+    if (wait) return { why: wait };
+    return { grant: 'raid-prize', round: \`raid:\${player.sub}:\${Date.now()}\`, amount: 100 };
+  },
+};
+
+export const VOUCHERS = { payOnly: 'x', perMinute: 20 };
+
+const CLAIMS_A_DAY = 3;
+
+async function takeSlot(env, sub) {
+  const day = new Date().toISOString().slice(0, 10);
+  const today = Number((await env.CLAIMS.get(\`\${sub}:\${day}\`)) ?? 0);
+  if (today >= CLAIMS_A_DAY) return 'That is all for today.';
+  await env.CLAIMS.put(\`\${sub}:\${day}\`, String(today + 1));
+  return null;
+}
+`;
+
+test('(g) a cap a day in a vouchers.js function PAY calls: read, under the grant the code after the call pays', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const free = {
+    key: 'free-entry',
+    name: 'Free entry',
+    prize: { gives: 'tokens', amount: 1, from: 'mint', currency: 'gold' },
+    vouchers: [KEY],
+    limits: { perPerson: 1, perDay: 50 },
+    trust: 'decides',
+  };
+  const declared = { per: 'person', amount: 300, claims: 3, every: '1d' };
+  const dir = await game(
+    tmp,
+    'slot',
+    spec({ grants: [raid({ trust: 'bounds', [SERVER_LIMIT.field]: declared }), free] }),
+    { 'vouchers.js': SLOT_PAY },
+  );
+  const r = await review(dir);
+  const line = lineOf(SLOT_PAY, 'today >= CLAIMS_A_DAY');
+  assert.deepEqual(
+    r.designCode.bounds.map(b => `${b.grant} ${b.where}:${b.line} ${b.value} ${b.unit} ${b.every} ${b.per}`),
+    [`raid-prize server/vouchers.js:${line} 3 claims 1d person`],
+  );
+  assert.deepEqual(of(r, 'design-unbuilt'), []);
+});
