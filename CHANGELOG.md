@@ -38,6 +38,15 @@ another, went unseen, and the doubling was never asked to be declared. The condi
 function's locals, the fields that hold it (`x.f = …`, `{ f: … }`, `{ f }`, `storage.get/put('f')`) in any server
 file, and the functions that call their setters, a few steps deep: here, "turns a code into ×2 of what it pays".
 
+**`xcore review` keeps one declaration from covering another rule.** A streak's bonus (QUIZ for answers in a row)
+was taken as declared by an unrelated `offchain` entry that takes and gives the same token (a hint paid in QUIZ), or by
+that entry's name anywhere in the file. A declaration now matches a rule by its key or name in the lines around it, or
+by what it takes and gives when those differ; a QUIZ-for-QUIZ entry matches by name only. An entry is "unbuilt" only
+when no distinctive word of its key or name is in the server's code. The streak wording wins over an inferred token,
+and the finding says that "offchain" is for every server rule on what a player is paid (a code, a streak, a count),
+not only tokens held on chain: two eval builders dismissed a correct code-boost finding as "not something the economy
+file can describe".
+
 **`xcore review` finds a stored multiplier, and one in a rules file outside `server/`.** A boost kept in a field
 (`const got = farm.multiplier ?? 1; … + got`) or chosen in a branch (`const times = boosted(me) ? BOOST_TIMES : 1`)
 is read where the local is applied; the field is followed to where any server file sets it and who calls that, and a

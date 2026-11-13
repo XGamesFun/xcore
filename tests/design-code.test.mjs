@@ -595,3 +595,45 @@ test('(i) a stored multiplier in an imported rules file, set from a wallet read 
   assert.match(f.message, /appears to turn a Raid Card into /); // the item the wallet read names
   assert.match(f.message, /it reads what a wallet holds at server\/farm\.js:\d+/);
 });
+
+// (j) a streak's bonus beside an unrelated rule that takes and gives the same token (a hint paid in GOLD): the hint's
+// declaration does not cover the streak
+const QUIZ = `// A learner's answers: a streak of right answers pays double; a hint costs GOLD.
+const RULES = { reward: 10, streakAfter: 5, streakMultiplier: 2, hintCost: 20 };
+
+export async function answer(env, sub, correct) {
+  const s = (await env.S.get(sub)) ?? { streak: 0, balance: 0 };
+  if (correct) {
+    const full = s.streak >= RULES.streakAfter ? RULES.reward * RULES.streakMultiplier : RULES.reward;
+    s.balance += full;
+    s.streak += 1;
+  } else s.streak = 0;
+  await env.S.put(sub, s);
+  return { earned: s.balance };
+}
+
+export async function hint(env, sub) {
+  const s = (await env.S.get(sub)) ?? { streak: 0, balance: 0 };
+  if (s.balance < RULES.hintCost) return { why: 'Not enough GOLD for a hint.' };
+  s.balance -= RULES.hintCost;
+  await env.S.put(sub, s);
+  return { ok: true };
+}
+`;
+
+test('(j) a streak bonus beside a declared hint paid in the same token: still code-undeclared, named a streak', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const hintRule = { key: 'hint', name: 'A hint', takes: 'gold', gives: 'gold', rate: 1 };
+  const dir = await game(tmp, 'quiz', spec({ grants: [raid({ trust: 'bounds' })], offchain: [hintRule] }), {
+    'vouchers.js': HOURLY_PAY,
+    'quiz.js': QUIZ,
+  });
+  const r = await review(dir);
+  const [f, ...rest] = of(r, 'code-undeclared');
+  assert.deepEqual(rest, []);
+  assert.equal(f.where, `server/quiz.js:${lineOf(QUIZ, 'RULES.reward * RULES.streakMultiplier')}`);
+  assert.match(f.message, /appears to turn a streak \(what the player did in a row\) into /);
+  // the hint is named in the server's code: not "unbuilt"
+  assert.deepEqual(of(r, 'design-unbuilt'), []);
+});
