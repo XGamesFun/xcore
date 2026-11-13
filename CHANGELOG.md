@@ -38,6 +38,12 @@ another, went unseen, and the doubling was never asked to be declared. The condi
 function's locals, the fields that hold it (`x.f = …`, `{ f: … }`, `{ f }`, `storage.get/put('f')`) in any server
 file, and the functions that call their setters, a few steps deep: here, "turns a code into ×2 of what it pays".
 
+**`xcore review` drafts what is on no chain.** With @xgamesfun/solana 0.28.26 an `offchain` rule may take plain words
+and give more of a grant (`{ "takes": "a code", "gives": "grant:pops", "rate": 2 }`). The draft for an undeclared code,
+streak or server-kept count now fills `takes` in those words, `gives` with the grant it feeds when there is one (and
+`rate` with the times), and lists the spec's grants when it can't tell; the finding shows the shape, and a complete
+draft adds a question for the person: is it a rule they want, and how are players told where they earn.
+
 **`xcore review` keeps one declaration from covering another rule.** A streak's bonus (QUIZ for answers in a row)
 was taken as declared by an unrelated `offchain` entry that takes and gives the same token (a hint paid in QUIZ), or by
 that entry's name anywhere in the file. A declaration now matches a rule by its key or name in the lines around it, or
