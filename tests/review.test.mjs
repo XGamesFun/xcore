@@ -1308,3 +1308,28 @@ test("the economy's own ask and tell lines: carried from its check with from eco
   assert.match(b.told.why, /xsolana check gave no JSON/);
   assert.equal(b.economy.available, true);
 });
+
+test('a paid read that answers "not paid" when the chain fails (paid-read-open), and one that stops instead', async () => {
+  const { failOpenPaidReads } = await import('../lib/review.mjs');
+  const open = `async function landed(rpc, wallet, round) {
+  try {
+    return await winPaid({ rpc, game, grant, wallet, round });
+  } catch {
+    return false;
+  }
+}`;
+  const caught = `const paid = await winPaid({ rpc, game, grant, wallet, round }).catch(() => false);`;
+  const closed = `async function landed(rpc, wallet, round) {
+  try {
+    return await winPaid({ rpc, game, grant, wallet, round });
+  } catch {
+    return null; // unknown: the caller signs nothing
+  }
+}`;
+  const thrown = `const paid = await winPaid({ rpc, game, grant, wallet, round });`;
+  const of = code => failOpenPaidReads([{ f: 'vouchers.js', code, text: code }]).map(o => `${o.where}:${o.line}`);
+  assert.deepEqual(of(open), ['server/vouchers.js:3']);
+  assert.deepEqual(of(caught), ['server/vouchers.js:1']);
+  assert.deepEqual(of(closed), []);
+  assert.deepEqual(of(thrown), []);
+});
