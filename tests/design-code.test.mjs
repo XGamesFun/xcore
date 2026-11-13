@@ -479,3 +479,68 @@ test('(g) a cap a day in a vouchers.js function PAY calls: read, under the grant
   );
   assert.deepEqual(of(r, 'design-unbuilt'), []);
 });
+
+// (h) a multiplier applied under a condition the server stores: a code redeemed in one file turns a stored flag on,
+// a round started later copies it, and the round's pay is doubled under it. Read through the fields, across files.
+const BANK = `// One player's bank: rounds, the boost a code turned on, and what each round earned.
+const RULES = { boostTimes: 2, boostMs: 86_400_000 };
+
+export class Bank {
+  constructor(ctx) {
+    this.ctx = ctx;
+  }
+  async state() {
+    return (await this.ctx.storage.get('s')) ?? { balance: 0, boostUntil: 0, round: null };
+  }
+  async boost() {
+    const s = await this.state();
+    s.boostUntil = Date.now() + RULES.boostMs;
+    await this.ctx.storage.put('s', s);
+  }
+  async startRound(id) {
+    const s = await this.state();
+    s.round = { id, boosted: s.boostUntil > Date.now() };
+    await this.ctx.storage.put('s', s);
+  }
+  async finishRound(n) {
+    const s = await this.state();
+    const r = s.round;
+    const earned = r.boosted ? n * RULES.boostTimes : n;
+    s.balance += earned;
+    await this.ctx.storage.put('s', s);
+    return earned;
+  }
+}
+`;
+const ROUTES = `// The routes: a printed code turns a boost on.
+import CODES from './codes.json';
+
+export async function redeem(env, bank, code) {
+  const hash = await sha256(String(code));
+  if (!CODES[hash]) return { why: 'That code is not one of ours.' };
+  await bank.boost();
+  return { ok: true };
+}
+
+async function sha256(s) {
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)))].join('');
+}
+`;
+
+test('(h) a code turns a stored flag on, a later round doubles its pay under it: code-undeclared, read across files', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await game(tmp, 'boosted', spec({ grants: [raid({ trust: 'bounds' })] }), {
+    'vouchers.js': HOURLY_PAY,
+    'bank.js': BANK,
+    'routes.js': ROUTES,
+    'codes.json': '{}',
+  });
+  const r = await review(dir);
+  const line = lineOf(BANK, 'r.boosted ? n * RULES.boostTimes');
+  const [f, ...rest] = of(r, 'code-undeclared');
+  assert.deepEqual(rest, []);
+  assert.equal(f.where, `server/bank.js:${line}`);
+  assert.match(f.message, /appears to turn a code into ×2 /);
+  assert.match(f.message, /a code lookup at server\/routes\.js:\d+/);
+});

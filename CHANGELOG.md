@@ -31,6 +31,13 @@ functions (`return gated(…, await PAY.decide(…))`) was read as its one line:
 functions it calls, a few deep, so it gets the same findings as the same code written inline (here, high
 `payout-input`).
 
+**`xcore review` follows a multiplier's condition through what the server stores.** A boost applied under a flag
+(`r.boosted ? n * BOOST : n`, or `const factor = boosted ? BOOST : 1`) was read only in its own function, where the
+flag reads nothing a player did: a printed code that turns a boost on in one file, stored, and copied into a round in
+another, went unseen, and the doubling was never asked to be declared. The condition is now followed through the
+function's locals, the fields that hold it (`x.f = …`, `{ f: … }`, `{ f }`, `storage.get/put('f')`) in any server
+file, and the functions that call their setters, a few steps deep: here, "turns a code into ×2 of what it pays".
+
 **`xcore review` names what a server rule reads.** An undeclared conversion that reads state the server keeps was
 called "a token balance into a bonus", and a streak's multiplier was dismissed as a misread for it: it now says "a
 balance or count the server keeps for the player", and "a streak (what the player did in a row)" when the multiplier
