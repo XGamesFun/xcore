@@ -63,8 +63,10 @@ Since 0.9.1, also:
   what the economy declares the server does (`offchain`, `serverLimit`) with `server/`, drafts the missing
   declarations and checks the economy again with them.
 - adopt no longer reads `gamesfun.js`'s own `api/` paths as the page calling its own `api/`.
-- `@xgamesfun/solana` 0.28.17 (from 0.28.6): the one-approval buy, the deep checker (flows, lenses, Tell and Ask
-  lines), `xsolana_design`, `serverLimit`, ranked endings and fund runway.
+- `@xgamesfun/solana` 0.28.20 (from 0.28.6): the one-approval buy, the deep checker (flows, lenses, Tell and Ask
+  lines), `xsolana_design`, `serverLimit`, ranked endings and fund runway; from 0.28.18 a short first guide call and a
+  short skill, a burned payment a cancel can't give back raised with a question, who sends what each ending owes, and
+  every grant cap checked in claims against an honest player's pace.
 
 ## 0.9.1 — 2026-11-11
 
