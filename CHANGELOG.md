@@ -25,6 +25,10 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 commented out or gone is a high finding (`pay-unreadable`): before, review said "PAY.check: not found in the file" and
 passed, while every claim failed.
 
+**`xcore review` files a server cap under the grant it caps.** When PAY.check pays two grants from two branches and
+one branch calls a function of the game's own that keeps a cap, "What the server bounds" listed that cap under both;
+it now names the grant of the branch that calls it (the innermost block around the call that names a grant).
+
 **`xcore review` prints its questions.** The summary listed only "ask the person: N questions"; it now prints each
 question ("? …") under that line, so an agent that reads only the summary still asks them. review.md keeps both lists.
 

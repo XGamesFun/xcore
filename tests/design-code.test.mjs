@@ -376,3 +376,54 @@ test(
     t.diagnostic(md.slice(md.indexOf('### The economy check, with the drafts'), md.indexOf('## Live')));
   },
 );
+
+// (f) two grants in one PAY.check, each in its own branch: a cap a function of the game's own keeps, called from one
+// branch, bounds that branch's grant only
+const TWO_LEDGER = `// The popping reward's ledger: one person's claims a day.
+const PER_DAY = 3; // claims one person may make a day
+
+export async function plan(env, person) {
+  const today = Number((await env.CLAIMS.get(\`\${person}:\${new Date().toISOString().slice(0, 10)}\`)) ?? 0);
+  if (today >= PER_DAY) return { ok: false };
+  return { ok: true, round: \`pops:\${person}:\${today + 1}\` };
+}
+`;
+const TWO_PAY = `// Two grants: a free entry for signing in, and the popping reward, which the ledger caps a day.
+import { plan } from './ledger.js';
+
+export const PAY = {
+  async check({ body, player, env }) {
+    if (body?.kind === 'free') {
+      return { grant: 'free-entry', round: \`free:\${player.sub}\`, amount: 'grant' };
+    }
+    if (body?.kind === 'pops') {
+      const p = await plan(env, player.sub);
+      if (!p.ok) return { why: 'That is all for today.' };
+      return { grant: 'raid-prize', round: p.round, amount: 100 };
+    }
+    return { why: 'Ask for "free" or "pops".' };
+  },
+};
+
+export const VOUCHERS = { payOnly: 'x', perMinute: 20 };
+`;
+
+test('(f) two grants in one check: a cap called from one branch is filed under that branch’s grant only', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const free = {
+    key: 'free-entry',
+    name: 'Free entry',
+    prize: { gives: 'tokens', amount: 1, from: 'mint', currency: 'gold' },
+    vouchers: [KEY],
+    limits: { perPerson: 1, perDay: 50 },
+    trust: 'decides',
+  };
+  const dir = await game(tmp, 'two', spec({ grants: [raid({ trust: 'bounds' }), free] }), { 'vouchers.js': TWO_PAY, 'ledger.js': TWO_LEDGER });
+  const r = await review(dir);
+  const line = lineOf(TWO_LEDGER, 'today >= PER_DAY');
+  assert.deepEqual(
+    r.designCode.bounds.map(b => `${b.grant} ${b.where}:${b.line}`),
+    [`raid-prize server/ledger.js:${line}`],
+  );
+});
