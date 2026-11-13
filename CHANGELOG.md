@@ -25,6 +25,12 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 commented out or gone is a high finding (`pay-unreadable`): before, review said "PAY.check: not found in the file" and
 passed, while every claim failed.
 
+**`xcore review` reads a check that hands its work on.** A `PAY.check` that only calls another of the file's
+functions (`return gated(…, await PAY.decide(…))`) was read as its one line: a wallet taken from the request in
+`decide` passed as "a wallet the player proved", with no finding. The check is now read through the file's own
+functions it calls, a few deep, so it gets the same findings as the same code written inline (here, high
+`payout-input`).
+
 **`xcore review` files a server cap under the grant it caps.** When PAY.check pays two grants from two branches and
 one branch calls a function of the game's own that keeps a cap, "What the server bounds" listed that cap under both;
 it now names the grant of the branch that calls it (the innermost block around the call that names a grant).

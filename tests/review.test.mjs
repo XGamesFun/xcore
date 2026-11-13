@@ -253,6 +253,23 @@ test('PAY.check in the ledger: the template pays nothing (payout-signer); the re
   assert.deepEqual(ids(r), ['high payout-input']);
   assert.deepEqual(cases(r, 'payout-input'), ['request-names-wallet']);
   assert.equal(r.ledger[0].recipient, 'request');
+  // the same, with PAY.check handing the work to another method: read through the call, never a quiet pass
+  await writeFile(
+    vouchers,
+    written
+      .replace(
+        "return { grant: 'found-whale', round: `${player.sub}:whale`, amount: 'grant' };",
+        "return { grant: 'found-whale', round: `${player.sub}:whale`, amount: 'grant', wallet: body.wallet };",
+      )
+      .replace(
+        'async check({ body, player, env }) {',
+        'async check(args) {\n    return PAY.decide(args);\n  },\n  async decide({ body, player, env }) {',
+      ),
+  );
+  r = await review(dir);
+  assert.deepEqual(ids(r), ['high payout-input']);
+  assert.deepEqual(cases(r, 'payout-input'), ['request-names-wallet']);
+  assert.equal(r.ledger[0].recipient, 'request');
   // and the amount the page says (state decides whether, the page how much): medium
   await writeFile(vouchers, written.replace("amount: 'grant' };", 'amount: body.amount };'));
   r = await review(dir);
