@@ -38,6 +38,12 @@ another, went unseen, and the doubling was never asked to be declared. The condi
 function's locals, the fields that hold it (`x.f = …`, `{ f: … }`, `{ f }`, `storage.get/put('f')`) in any server
 file, and the functions that call their setters, a few steps deep: here, "turns a code into ×2 of what it pays".
 
+**`xcore review` reads a cap a ranking holds.** A prize paid only to a player found in a ranking's top N (an ordered
+query's `LIMIT`, or a sorted list's first N, then `top.some(t => t.farmer === player.sub)` in the check) holds at most
+N claims a window; review looked only for a comparison against a cap, and called a `serverLimit` declared for it
+"unbuilt" (design-unbuilt, a false medium). The ranking is now read as that bound: N claims for everyone, a month when
+the ranking says one.
+
 **`xcore review` matches the new `offchain` shape, and finds a boost by any name.** A rule written in plain words
 giving more of a grant (`{ "takes": "a code", "gives": "grant:pops", "rate": 2 }`) now covers the code, streak or count
 it describes, so a builder that declared it isn't told it is undeclared. A factor chosen by a condition that reads a

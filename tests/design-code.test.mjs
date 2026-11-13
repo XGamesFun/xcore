@@ -419,7 +419,10 @@ test('(f) two grants in one check: a cap called from one branch is filed under t
     limits: { perPerson: 1, perDay: 50 },
     trust: 'decides',
   };
-  const dir = await game(tmp, 'two', spec({ grants: [raid({ trust: 'bounds' }), free] }), { 'vouchers.js': TWO_PAY, 'ledger.js': TWO_LEDGER });
+  const dir = await game(tmp, 'two', spec({ grants: [raid({ trust: 'bounds' }), free] }), {
+    'vouchers.js': TWO_PAY,
+    'ledger.js': TWO_LEDGER,
+  });
   const r = await review(dir);
   const line = lineOf(TWO_LEDGER, 'today >= PER_DAY');
   assert.deepEqual(
@@ -670,7 +673,61 @@ test('(k) a factor chosen by a holdings condition and written by a query: code-u
   });
   const r = await review(dir);
   const found = of(r, 'code-undeclared');
-  assert.deepEqual(found.map(f => f.where), [`server/harvest.js:${lineOf(HARVEST, 'golden ? 2 : 1')}`]);
+  assert.deepEqual(
+    found.map(f => f.where),
+    [`server/harvest.js:${lineOf(HARVEST, 'golden ? 2 : 1')}`],
+  );
   assert.match(found[0].message, /into ×2 of what it pays/);
   assert.match(found[0].message, /it reads what a wallet holds at server\/harvest\.js:\d+/);
+});
+
+// (l) a cap held by a ranking: the check pays only a player in the month's top 10 (an ordered query's LIMIT, its size
+// a parameter's default), once each a month: a bound of 10 claims a month for everyone, so a declared serverLimit is
+// built
+const RANK_PAY = `// The monthly prize: the top ten of a month that is over, once each.
+import { topOf } from './board.js';
+
+export const PAY = {
+  async check({ body, player, env }) {
+    const month = String(body.month ?? '');
+    const top = await topOf(env, month);
+    if (!top.some(t => t.farmer === player.sub)) return { why: 'Not in that month’s top ten.' };
+    return { grant: 'raid-prize', round: \`champion:\${month}:\${player.sub}\`, amount: 'grant' };
+  },
+};
+
+export const VOUCHERS = { payOnly: 'x', perMinute: 20 };
+`;
+const BOARD = `// The monthly board.
+export const TOP = 10;
+
+export async function topOf(env, month, limit = TOP) {
+  const { results } = await env.DB.prepare('SELECT farmer, crops FROM monthly WHERE month = ? ORDER BY crops DESC LIMIT ?')
+    .bind(month, limit)
+    .all();
+  return results;
+}
+
+export async function rowOf(env, farmer) {
+  return env.DB.prepare('SELECT * FROM farmers WHERE id = ? LIMIT 1').bind(farmer).first();
+}
+`;
+
+test('(l) a prize paid only to a ranking’s top N: a bound of N claims a month, so the declared serverLimit is built', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const declared = { per: 'all', amount: 1000, claims: 10, every: '30d' };
+  const dir = await game(tmp, 'ranked', spec({ grants: [raid({ trust: 'bounds', [SERVER_LIMIT.field]: declared })] }), {
+    'vouchers.js': RANK_PAY,
+    'board.js': BOARD,
+  });
+  const r = await review(dir);
+  const line = lineOf(RANK_PAY, 'await topOf(env, month)');
+  assert.deepEqual(
+    r.designCode.bounds.map(
+      b => `${b.grant} ${b.where}:${b.line} ${b.value} ${b.unit} ${b.every} ${b.per} ${b.amount}`,
+    ),
+    [`raid-prize server/vouchers.js:${line} 10 claims 30d all 1000`],
+  );
+  assert.deepEqual(of(r, 'design-unbuilt'), []);
 });
