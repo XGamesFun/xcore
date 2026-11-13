@@ -1197,6 +1197,9 @@ test('the sample bounded server: a Tell line names its ceiling and what a leaked
     ),
   );
   assert.match(c.stdout, /^Pass them on as written: review\.md's "Tell the person, as written" lines/m);
+  // the questions themselves, on screen: an agent that reads only the summary still sees them
+  assert.ok(r.ask.length > 0);
+  for (const x of r.ask) assert.ok(c.stdout.includes(`\n  ? ${x.text}\n`), x.text);
 });
 
 test('a server whose alarm draws: the plan-cap line names the timer, and asks who sends the draw when the server is off', async t => {

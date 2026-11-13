@@ -25,6 +25,9 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 commented out or gone is a high finding (`pay-unreadable`): before, review said "PAY.check: not found in the file" and
 passed, while every claim failed.
 
+**`xcore review` prints its questions.** The summary listed only "ask the person: N questions"; it now prints each
+question ("? …") under that line, so an agent that reads only the summary still asks them. review.md keeps both lists.
+
 **`xcore plan --help` says what a cap does.** It said a capped Free game's server is "capped (slow)"; it is switched
 off until the month ends (every `api/` request answers 451), as the README, docs/SERVER.md and review say. Pages keep
 loading and saves and scores slow down.
