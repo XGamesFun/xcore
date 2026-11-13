@@ -38,6 +38,17 @@ another, went unseen, and the doubling was never asked to be declared. The condi
 function's locals, the fields that hold it (`x.f = …`, `{ f: … }`, `{ f }`, `storage.get/put('f')`) in any server
 file, and the functions that call their setters, a few steps deep: here, "turns a code into ×2 of what it pays".
 
+**`xcore review` follows a server that banks first and pays later.** A boost applied inside a product
+(`n * (boosted ? BOOST : 1)`) in a store that banks pops for a later claim was missed: the scan saw only a multiplier
+next to its `*`, read only functions that "pay" or "earn", and followed a condition's helper (`boostedAt(p, now)`)
+through its calls but not the fields it reads. Now such a ternary is a multiplier, banking (`banked`, `credited`) is
+earning, a small helper's fields are followed to where a code sets them, and a function that adds to a field a claim
+then takes from (`p.banked += …`, `p.banked -= amount`) feeds that claim's grant, so the draft is complete:
+`{ "takes": "a code", "gives": "grant:pops", "rate": 2 }` (a bonus of N tokens drafts as that token at rate N; its
+question says "a bonus of N", not "N times"). A grant's cap is read through what PAY.check calls up to three deep
+(`PAY.check → payCheck → stub.takeClaim`), so a declared `serverLimit` held there is no longer called unbuilt. One rule
+on one line is reported once, by its factor.
+
 **`xcore review` reads a cap a ranking holds.** A prize paid only to a player found in a ranking's top N (an ordered
 query's `LIMIT`, or a sorted list's first N, then `top.some(t => t.farmer === player.sub)` in the check) holds at most
 N claims a window; review looked only for a comparison against a cap, and called a `serverLimit` declared for it

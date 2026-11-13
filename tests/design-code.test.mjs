@@ -731,3 +731,91 @@ test('(l) a prize paid only to a ranking’s top N: a bound of N claims a month,
   );
   assert.deepEqual(of(r, 'design-unbuilt'), []);
 });
+
+// (m) a server that banks first and pays later: a code redeemed sets a boost's end, a run banks its pops under it
+// (`n * (boostedAt(p, now) ? RULES.BOOST : 1)`, a ternary inside the product), and PAY.check hands the claim to a
+// helper that hands it to the store, where the claims a day are counted and the bank is read. The boost is read as ×2
+// of the grant the bank feeds, and the claims a day as its bound, three calls deep
+const BANK_PAY = `// Pops are banked by runs, then claimed.
+import { payCheck } from './bank.js';
+
+export const PAY = {
+  async check({ body, player, env }) {
+    return payCheck({ body, player, env });
+  },
+};
+
+export const VOUCHERS = { payOnly: 'x', perMinute: 20 };
+`;
+const BANK_STORE = `// One player's bank, in a store of the server's own.
+export const RULES = { BOOST: 2, CLAIMS_A_DAY: 3 };
+const dayOf = ms => new Date(ms).toISOString().slice(0, 10);
+const boostedAt = (p, ms) => ms < (p.boostUntil ?? 0);
+
+export class Bank {
+  async load(sub) {
+    return (await this.ctx.storage.get(\`p:\${sub}\`)) ?? { banked: 0, claims: 0, day: '', boostUntil: 0 };
+  }
+  async finish(sub, popped) {
+    const p = await this.load(sub);
+    const n = Math.floor(Number(popped));
+    const credited = Math.max(0, n * (boostedAt(p, Date.now()) ? RULES.BOOST : 1));
+    p.banked += credited;
+    await this.ctx.storage.put(\`p:\${sub}\`, p);
+    return { credited };
+  }
+  async redeem(sub, code) {
+    const p = await this.load(sub);
+    const used = await this.ctx.storage.get(\`code:\${code}\`);
+    if (used) return { why: 'That code is used.' };
+    p.boostUntil = Date.now() + 86_400_000;
+    await this.ctx.storage.put(\`p:\${sub}\`, p);
+    return { ok: true };
+  }
+  async takeClaim(sub) {
+    const p = await this.load(sub);
+    const day = dayOf(Date.now());
+    if (p.day !== day) [p.day, p.claims] = [day, 0];
+    if (p.claims >= RULES.CLAIMS_A_DAY) return { why: 'That is all for today.' };
+    const amount = Math.min(p.banked, 1000);
+    p.banked -= amount;
+    p.claims += 1;
+    await this.ctx.storage.put(\`p:\${sub}\`, p);
+    return { ok: true, amount };
+  }
+}
+
+export async function payCheck({ body, player, env }) {
+  if (body?.grant === 'raid-prize') {
+    const stub = env.BANK.get(env.BANK.idFromName('main'));
+    const c = await stub.takeClaim(player.sub);
+    if (!c.ok) return { why: c.why };
+    return { grant: 'raid-prize', round: \`raid:\${player.sub}:\${Date.now()}\`, amount: String(c.amount) };
+  }
+  return { why: 'Name the reward.' };
+}
+`;
+
+test('(m) banked under a code’s boost, claimed three calls deep: ×2 of the grant the bank feeds, and its claims a day', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const declared = { per: 'person', amount: 3000, claims: 3, every: '1d' };
+  const dir = await game(tmp, 'bank', spec({ grants: [raid({ trust: 'bounds', [SERVER_LIMIT.field]: declared })] }), {
+    'vouchers.js': BANK_PAY,
+    'bank.js': BANK_STORE,
+  });
+  const r = await review(dir);
+  const found = of(r, 'code-undeclared');
+  assert.deepEqual(
+    found.map(f => f.where),
+    [`server/bank.js:${lineOf(BANK_STORE, 'RULES.BOOST : 1')}`],
+  );
+  assert.match(found[0].message, /a code into ×2/);
+  const { declaration } = r.designCode.drafts.offchain[0];
+  assert.deepEqual([declaration.takes, declaration.gives, declaration.rate], ['a code', 'grant:raid-prize', 2]);
+  assert.deepEqual(
+    r.designCode.bounds.map(b => `${b.grant} ${b.where}:${b.line} ${b.value} ${b.unit} ${b.every} ${b.per}`),
+    [`raid-prize server/bank.js:${lineOf(BANK_STORE, 'p.claims >= RULES.CLAIMS_A_DAY')} 3 claims 1d person`],
+  );
+  assert.deepEqual(of(r, 'design-unbuilt'), []);
+});
