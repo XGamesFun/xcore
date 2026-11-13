@@ -544,3 +544,54 @@ test('(h) a code turns a stored flag on, a later round doubles its pay under it:
   assert.match(f.message, /appears to turn a code into ×2 /);
   assert.match(f.message, /a code lookup at server\/routes\.js:\d+/);
 });
+
+// (i) a stored multiplier read into a local and added, in a rules file outside server/ that server/ imports; the
+// server sets it from what a wallet holds (through an object: deps.collectiblesOf)
+const RULES_FILE = `// The farm's rules, shared by the page and the server.
+export function harvest(farm, plot) {
+  const got = farm.multiplier ?? 1; // the server sets it: 2 with a Golden Sickle
+  farm.basket = (farm.basket ?? 0) + got;
+  return { ok: true, got, points: plot.points };
+}
+`;
+const FARM = `// The farm: runs the shared rules on the server's own clock.
+import { harvest } from '../rules.js';
+import { collectiblesOf } from './gf-loot/results/index.js';
+const deps = { collectiblesOf };
+
+export async function setGolden(farm, held) {
+  farm.multiplier = held ? 2 : 1;
+}
+
+export async function lookForGolden(env, farm, wallet) {
+  const sickles = (await deps.collectiblesOf({ rpc: env.RPC, spec: {}, wallet })).filter(c => c.item === 'card');
+  await setGolden(farm, sickles.length > 0);
+}
+
+export async function tap(farm, plot) {
+  return harvest(farm, plot);
+}
+`;
+
+test('(i) a stored multiplier in an imported rules file, set from a wallet read in another: built when declared, drafted when not', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const golden = { key: 'golden', name: 'Golden Sickle doubles harvests', takes: 'item:card', gives: 'gold', rate: 2 };
+  const dir = await game(tmp, 'farm', spec({ grants: [raid({ trust: 'bounds' })], offchain: [golden] }), {
+    'vouchers.js': HOURLY_PAY,
+    'farm.js': FARM,
+  });
+  await writeFile(path.join(dir, 'rules.js'), RULES_FILE);
+  let r = await review(dir);
+  assert.deepEqual(of(r, 'design-unbuilt'), []);
+  const c = r.designCode.conversions.find(x => x.where === 'server/rules.js'.replace('server/', ''));
+  assert.ok(c, JSON.stringify(r.designCode.conversions.map(x => x.where)));
+  assert.equal(c.reads[0].kind, 'holds');
+  // the same game with nothing declared: the doubling is code-undeclared, at the rules file's line
+  await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify(spec({ grants: [raid({ trust: 'bounds' })] })));
+  r = await review(dir);
+  const [f] = of(r, 'code-undeclared');
+  assert.equal(f.where, `rules.js:${lineOf(RULES_FILE, 'farm.multiplier ?? 1')}`);
+  assert.match(f.message, /appears to turn a Raid Card into /); // the item the wallet read names
+  assert.match(f.message, /it reads what a wallet holds at server\/farm\.js:\d+/);
+});

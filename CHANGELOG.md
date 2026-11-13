@@ -38,6 +38,15 @@ another, went unseen, and the doubling was never asked to be declared. The condi
 function's locals, the fields that hold it (`x.f = …`, `{ f: … }`, `{ f }`, `storage.get/put('f')`) in any server
 file, and the functions that call their setters, a few steps deep: here, "turns a code into ×2 of what it pays".
 
+**`xcore review` finds a stored multiplier, and one in a rules file outside `server/`.** A boost kept in a field
+(`const got = farm.multiplier ?? 1; … + got`) or chosen in a branch (`const times = boosted(me) ? BOOST_TIMES : 1`)
+is read where the local is applied; the field is followed to where any server file sets it and who calls that, and a
+condition's own function calls (`(await goldenOf(…)).items.length ? 2 : 1`) are followed into the game's functions.
+The game's own modules that `server/` imports from outside it (`../farm-rules.js`) are read too, named without
+`server/`. A wallet read through an object (`deps.collectiblesOf(…)`) counts as what a wallet holds, and what a player
+did or holds leads the "it reads" list. On eight earlier eval games: one false "unbuilt" gone, three real undeclared
+doublings found, nothing else changed.
+
 **`xcore review` names what a server rule reads.** An undeclared conversion that reads state the server keeps was
 called "a token balance into a bonus", and a streak's multiplier was dismissed as a misread for it: it now says "a
 balance or count the server keeps for the player", and "a streak (what the player did in a row)" when the multiplier
