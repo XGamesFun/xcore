@@ -109,6 +109,24 @@ it now names the grant of the branch that calls it (the innermost block around t
 **`xcore review` prints its questions.** The summary listed only "ask the person: N questions"; it now prints each
 question ("? …") under that line, so an agent that reads only the summary still asks them. review.md keeps both lists.
 
+**`xcore review` sees three more ways a server pays more than declared.** A holding read by hand (an RPC
+`getProgramAccounts` or a DAS `getAssetsByOwner` / `searchAssets` call) counts as a holding, and reads are followed
+down the game's own helpers until one reads. A code that credits a bonus by calling a function, with no multiplying,
+counts as applied. A cap held as a count compared with the very number a grant's `serverLimit` declares
+(`if (signed.n >= 10) return …`) counts as built, even with no cap-like name.
+
+**`xcore check`'s first session says when it stopped short.** When the walk stops before any wallet prompt, it says it
+did not reach a first reward, and what claiming one asks (a sign-in, a wallet, SOL for its fee) went unseen.
+
+**Lens 6 names the two commonest player-experience problems** (`docs/BEFORE-YOU-BUILD.md`): a sign-in never asked
+for (a game that doesn't sign players in at the front asks when their progress or reward starts to depend on it, and
+brings them back where they were), and something waiting for the player where they aren't looking (point to it with
+a notification, a highlight or motion).
+
+**Windows: a printed command with a quote in it runs when pasted.** The consent printout's re-run line wrapped a
+word like `--params '["p1"]'` in double quotes as it was; a quote inside is now escaped as Windows programs read
+their arguments.
+
 **`xcore plan --help` says what a cap does.** It said a capped Free game's server is "capped (slow)"; it is switched
 off until the month ends (every `api/` request answers 451), as the README, docs/SERVER.md and review say. Pages keep
 loading and saves and scores slow down.

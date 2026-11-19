@@ -51,10 +51,14 @@ cheater.
    balance, a limit) is read from where it is enforced. Prefer the chain when it costs the player nothing; otherwise the
    server, said plainly.
 6. **How the player experiences it.** Walk it as a first-time player on a phone, from the link to the first reward:
-   what they need before they can start (a wallet, devnet SOL, a sign-in), every wait (a cooldown, a draw time, a
-   voucher's life), every prompt and what it says, and what they see when something fails or ends. A problem is a step
-   that surprises them, a wait they don't understand, a prerequisite they can't meet in the place they are (an app's
-   own browser), or an ending they never hear about.
+   what they need and when they are asked for it (a sign-in, a wallet, SOL), every wait (a cooldown, a draw time, a
+   voucher's life), every prompt and what it says, how they find out something is waiting for them, and what they see
+   when something fails or ends. A problem is a step that surprises them, a wait they don't understand, a prerequisite
+   they can't meet in the place they are (an app's own browser), or an ending they never hear about. Two problems are
+   the commonest. The first is a sign-in that is never asked for: when the game doesn't sign players in at the front,
+   it asks at the moment their progress or reward starts to depend on it, and brings them back to where they were. The
+   second is something waiting for the player (a reward, a claim, a next step) that sits where they aren't looking:
+   point them to it with a notification, a highlight or motion.
 
 Bring what you find with a recommendation for each. A deadline goes first.
 
