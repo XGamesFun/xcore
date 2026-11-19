@@ -45,8 +45,10 @@ const VALUE_FLAGS = Object.fromEntries(
   ['out', 'port', 'title', 'url', 'origin'].map(f => [f, { type: 'string', multiple: true }]),
 );
 
-/** Does this command, with these arguments, belong to the kit even though this package has a command by its name? */
+/** Does this command, with these arguments, belong to the kit even though this package has a command by its name?
+ *  (`connect`: the kit's own connect where there is a kit, this package's where there is none.) */
 export function kitsTurn(name, args) {
+  if (name === 'connect') return true;
   const { positionals } = parseArgs({ args, options: VALUE_FLAGS, strict: false, allowPositionals: true });
   if (name === 'backend') return !(positionals[0] === 'use' && positionals[1] === 'custom');
   if (name === 'publish' || name === 'check' || name === 'dev') {
@@ -81,6 +83,60 @@ function runKit(kit, args) {
 const NO_KIT = `That is the kit's (@xgamesfun/kit): it makes games, the studio page, verify and the build loop. The kit is
 not released yet; with a checkout of it, run xcore inside that folder, or set GAMESFUN_KIT=<folder> to use it from anywhere.`;
 
+/** The kit's own commands (@xgamesfun/kit's builder/commands, less those this package has): only these are said to be
+ *  the kit's when there is no kit. */
+export const KIT_COMMANDS = new Set([
+  'art',
+  'build',
+  'catalog',
+  'create',
+  'doctor',
+  'examples',
+  'mcp',
+  'meshy',
+  'play',
+  'promises',
+  'reference',
+  'rig-check',
+  'session',
+  'slots',
+  'tool',
+  'update',
+  'verify',
+  'voice-room',
+]);
+
+/** Edit distance (insertions, deletions, substitutions and swaps of two letters side by side). */
+function distance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++) {
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  return d[a.length][b.length];
+}
+
+/** The command a mistyped name most likely meant: the nearest of `names` within a couple of letters, or null. */
+export function nearest(name, names) {
+  const word = name.toLowerCase();
+  let best = null;
+  for (const n of names) {
+    const dist = distance(word, n);
+    if (dist <= Math.max(1, Math.floor(n.length / 3)) && (!best || dist < best.dist)) best = { n, dist };
+  }
+  return best?.n ?? null;
+}
+
+/** What an unknown command is told: the kit's (only for one of its commands), else the nearest of ours. */
+export function unknownCommand(name, commands) {
+  if (KIT_COMMANDS.has(name)) return `"${name}" is the kit's command. ${NO_KIT}`;
+  const near = nearest(name, [...commands.keys(), 'help']);
+  return `"${name}" is not an xcore command.${near ? ` Did you mean "${near}"? ${CMD} ${near} --help says what it does.` : ''}`;
+}
+
 function help(commands, kit) {
   const lines = ['Usage: xcore <command> [options]', '', 'xgames.fun:'];
   for (const c of commands.values()) lines.push(`  ${c.name.padEnd(10)} ${c.summary}`);
@@ -108,7 +164,9 @@ export async function main([name, ...args]) {
   }
   const own = commands.get(name);
   const wantsHelp = args.includes('--help') || args.includes('-h');
-  if (name === 'help' || !own || kitsTurn(name, args)) {
+  // `connect` with no kit here is this package's own; every other kit's turn without the kit says how to get it
+  const kitTurn = name === 'help' || !own || kitsTurn(name, args);
+  if (kitTurn && (kit || name !== 'connect')) {
     // a game the kit made is checked by the kit's verify (its six gates), the kit's own word for a check
     if (kit)
       return runKit(kit, name === 'help' ? ['help'] : name === 'check' && own ? ['verify', ...args] : [name, ...args]);
@@ -122,9 +180,7 @@ export async function main([name, ...args]) {
       return 0;
     }
     console.error(
-      own
-        ? `${NO_KIT}\n\n${own.usage ?? ''}`
-        : `"${name}" is not an xgames.fun command. ${NO_KIT}\n\n${help(commands, null)}`,
+      own ? `${NO_KIT}\n\n${own.usage ?? ''}` : `${unknownCommand(name, commands)}\n\n${help(commands, null)}`,
     );
     return 1;
   }

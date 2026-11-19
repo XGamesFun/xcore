@@ -118,6 +118,8 @@ function summary(r, where) {
   lines.push(
     `ask the person: ${ask.length} question${ask.length === 1 ? '' : 's'} (${fromEconomy(ask)} from the economy); tell the person: ${tell.length} sentence${tell.length === 1 ? '' : 's'} (${fromEconomy(tell)} from the economy)${r.told?.why ? `; the economy's own: none (${r.told.why})` : ''}`,
   );
+  // the questions themselves, here: an agent that reads only this summary still sees what is the person's to answer
+  for (const a of ask) lines.push(`  ? ${String(a.text ?? a).replace(/^\?\s*/, '')}`);
   if (ask.length || tell.length)
     lines.push(
       `Pass them on as written: review.md's "Tell the person, as written" lines ("> ") said as they are, its "Ask the person" questions ("? ") asked before building on the answers; neither kept in private notes.`,

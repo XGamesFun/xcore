@@ -10,7 +10,7 @@ import { deleteSecret, listSecrets, setSecret } from '../lib/publish/secrets.mjs
 import { secretNameProblem, secretValueProblem, SECRET_LIMITS } from '../lib/server/secrets.mjs';
 import { readDevVars } from '../lib/dev/server.mjs';
 import { newVoucherKey, seedAddress } from '../lib/add.mjs';
-import { run, tempDir } from './helpers.mjs';
+import { run, runAsync, signIn, standIn, tempDir } from './helpers.mjs';
 
 const ORIGIN = 'https://studio.example';
 
@@ -118,4 +118,128 @@ test('set --new-key: a key made here and sent only to xgames.fun, its address sa
   assert.equal(a.address, await seedAddress(a.seed));
   // found: it goes on to xgames.fun, which this folder is not on yet (nothing is written here)
   assert.match(run(['secret', 'set', 'VOUCHER_SEED', tmp.dir, '--new-key'], { env }).stderr, /not on .* yet/);
+});
+
+test('replacing or deleting a live secret prints what changes (never a value) with a code, and acts only with --yes <code>; a new name is set at once', async t => {
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = {
+    GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'),
+    GAMESFUN_CREDENTIALS: 'file',
+    GAMESFUN_STUDIO: g.origin,
+    GAMESFUN_NO_UPDATE_CHECK: '1',
+  };
+  await signIn(g, env);
+  const dir = path.join(tmp.dir, 'game');
+  await mkdir(path.join(dir, '.gamesfun'), { recursive: true });
+  await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>g</title>\n');
+  await writeFile(path.join(dir, '.gamesfun', 'publish.json'), JSON.stringify({ [g.origin]: { projectId: 'g-9' } }));
+  const names = new Map();
+  const changes = [];
+  g.state.handle = (method, url, json, { authed }) => {
+    const m = url.match(/^\/api\/kit\/games\/g-9\/secrets(?:\/([A-Z0-9_]+))?$/);
+    if (!m) return null;
+    if (!authed) return [401, { error: 'Sign in first.' }];
+    if (method === 'PUT') {
+      names.set(m[1], json.value);
+      changes.push(`PUT ${m[1]}`);
+    }
+    let removed;
+    if (method === 'DELETE') {
+      removed = names.delete(m[1]);
+      changes.push(`DELETE ${m[1]}`);
+    }
+    return [
+      200,
+      {
+        ok: true,
+        game: 'g-9',
+        ...(m[1] ? { name: m[1] } : {}),
+        ...(removed === undefined ? {} : { removed }),
+        names: [...names.keys()].sort(),
+      },
+    ];
+  };
+  const xc = args => runAsync(['secret', ...args], { env, cwd: dir });
+  await writeFile(path.join(tmp.dir, 'one.txt'), 'first-value\n');
+  await writeFile(path.join(tmp.dir, 'two.txt'), 'second-value\n');
+
+  // a name the server does not have: set at once
+  let r = await xc(['set', 'API_KEY', '--from-file', path.join(tmp.dir, 'one.txt')]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(changes, ['PUT API_KEY']);
+  assert.equal(names.get('API_KEY'), 'first-value');
+
+  // the same name again: what it replaces and a code, nothing sent, and never the value
+  r = await xc(['set', 'API_KEY', '--from-file', path.join(tmp.dir, 'two.txt')]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /has API_KEY already\. This replaces its value with the file .*two\.txt/);
+  assert.match(r.stdout, /gone for good/);
+  assert.match(
+    r.stdout,
+    /Nothing was replaced\. To go on, run this again with the code:\n.* secret set API_KEY --from-file \S+two\.txt --yes [0-9a-f]{8}$/m,
+  );
+  assert.doesNotMatch(r.stdout + r.stderr, /first-value|second-value/);
+  assert.deepEqual(changes, ['PUT API_KEY']);
+  const code = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
+  // --json: the same printout as data
+  r = await xc(['set', 'API_KEY', '--from-file', path.join(tmp.dir, 'two.txt'), '--json']);
+  const planned = JSON.parse(r.stdout);
+  assert.equal(planned.planned, true);
+  assert.equal(planned.code, code);
+  assert.equal(planned.plan.action, 'replace');
+  assert.equal(planned.plan.name, 'API_KEY');
+  assert.match(planned.next, new RegExp(`--yes ${code}$`));
+  assert.doesNotMatch(r.stdout, /second-value/);
+  // a code for another change (another source) is refused
+  r = await xc(['set', 'API_KEY', '--from-file', path.join(tmp.dir, 'one.txt'), '--yes', code]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /That code is not for this change/);
+  assert.deepEqual(changes, ['PUT API_KEY']);
+  r = await xc(['set', 'API_KEY', '--from-file', path.join(tmp.dir, 'two.txt'), '--yes', code]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(names.get('API_KEY'), 'second-value');
+
+  // a new voucher key over one the server has: says the old key is gone for good and what that breaks
+  names.set('VOUCHER_SEED', 'a'.repeat(64));
+  r = await xc(['set', 'VOUCHER_SEED', '--new-key']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /The key in VOUCHER_SEED now is gone for good/);
+  assert.match(r.stdout, /refused on chain until the grant's "vouchers" in xsolana\.json lists the new address/);
+  assert.match(r.stdout, /vouchers the old key signed that nobody redeemed yet stop paying/);
+  assert.equal(names.get('VOUCHER_SEED'), 'a'.repeat(64), 'nothing replaced');
+  const keyCode = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
+  r = await xc(['set', 'VOUCHER_SEED', '--new-key', '--yes', keyCode, '--json']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(JSON.parse(r.stdout).address, /^[1-9A-HJ-NP-Za-km-z]{32,44}$/);
+  assert.match(names.get('VOUCHER_SEED'), /^[0-9a-f]{64}$/);
+  assert.notEqual(names.get('VOUCHER_SEED'), 'a'.repeat(64));
+
+  // delete: printed with a code first; a name that is not there needs no yes and sends nothing
+  const before = changes.length;
+  r = await xc(['delete', 'API_KEY']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /This deletes API_KEY from .*server on xgames\.fun \(game g-9\)/);
+  assert.equal(changes.length, before);
+  const del = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
+  assert.notEqual(del, code);
+  r = await xc(['delete', 'VOUCHER_SEED', '--yes', del]);
+  assert.equal(r.status, 1, 'the code of another name');
+  assert.equal(changes.length, before);
+  r = await xc(['delete', 'API_KEY', '--yes', del]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Deleted API_KEY/);
+  assert.deepEqual(changes.slice(before), ['DELETE API_KEY']);
+  r = await xc(['delete', 'API_KEY']);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /API_KEY was not set: nothing to delete/);
+  assert.deepEqual(changes.slice(before), ['DELETE API_KEY']);
+  // a bare --yes is a usage error, not a way past the printout
+  r = await xc(['delete', 'VOUCHER_SEED', '--yes']);
+  assert.equal(r.status, 2);
+  assert.ok(names.has('VOUCHER_SEED'));
 });

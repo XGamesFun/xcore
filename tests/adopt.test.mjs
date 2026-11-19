@@ -7,7 +7,8 @@ import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { adopt, packageManager, reportLines } from '../lib/publish/adopt.mjs';
 import { pageRoots, pageTitle } from '../lib/publish/page.mjs';
-import { resolveGame } from '../lib/games.mjs';
+import { resolveGame, shown } from '../lib/games.mjs';
+import { typedPath } from '../lib/command.mjs';
 import { FIXTURES, fixture, run, tempDir } from './helpers.mjs';
 
 test('plain static files are their own published folder', async t => {
@@ -138,6 +139,10 @@ test('a Node server that hands out a static folder: the folder is the page, the 
     /^public\/index\.html:\d+ loads \/socket\.io\/socket\.io\.js, which your Socket\.IO server serves/,
   );
   assert.match(socket.fix, /copy the client/);
+  // the command a fix names carries the game's folder: run from elsewhere, backend.json still lands in the game
+  const folder = typedPath(shown(dir));
+  for (const f of [socket.fix, r.warn.find(w => /is not published/.test(w.what)).fix])
+    assert.ok(f.includes(` backend use custom ${folder} --url https://<your server>`), f);
 });
 
 test('scripts from other sites are found in import maps and module imports, and not repeated as sites to declare', async t => {

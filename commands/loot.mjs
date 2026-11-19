@@ -41,6 +41,8 @@ audited, when its xsolana.json says "network": "mainnet"), with @xgamesfun/solan
                                    for, and run by the person themselves (it serves until the page says it is live)
   xcore loot help                  everything else xsolana does (its help says \`xsolana <command>\`: run each as
                                    \`xcore loot <command>\`)
+A tool's command (guide, examples, check … status, token) takes --json: the kit's whole answer, passed on as it
+gives it. ${CMD} connect adds these tools and xcore's own skill in one go.
 The file is ${ECONOMY_FILE} (loot.json in a game made before it was named so). Its RPC is XSOLANA_RPC_URL (in .env),
 else xgames.fun's shared devnet RPC. Published, the page uses the shared relay, which counts every call toward the game's
 plan, unless the game brings its own RPC: ${CMD} add rpc (docs/SERVER.md, "The economy's own RPC"). Going live
@@ -128,18 +130,21 @@ export default {
         for (const s of r.steps) console.log(`  - ${s}`);
         return 0;
       }, args);
+    // --json goes to the kit as it is, and its answer comes back untouched: the kit's JSON is the contract
+    const json = args.includes('--json');
+    const refuse = (error, code) => {
+      console.error(error);
+      if (json) printJson({ ok: false, error, code });
+      return 1;
+    };
     const xsolana = solanaCommand();
-    if (!xsolana) {
-      console.error(
+    if (!xsolana)
+      return refuse(
         'The economy tools (@xgamesfun/solana) are not installed here: reinstall @xgamesfun/xcore (npm i @xgamesfun/xcore), or set GAMESFUN_SOLANA to a solana-kit checkout.',
+        'no-solana',
       );
-      return 1;
-    }
     // an installed package from before `review`: what to do, instead of its help
-    if (args[0] === 'review' && !solanaHas('review')) {
-      console.error(`xcore: ${NO_REVIEW}.`);
-      return 1;
-    }
+    if (args[0] === 'review' && !solanaHas('review')) return refuse(`xcore: ${NO_REVIEW}.`, 'no-review');
     // a game made before the file was named xsolana.json keeps loot.json: given to the command when it names no file
     // (a key file's name is a flag's value, never the economy file)
     const at = ON_FILE.has(args[0]) ? plainArgs(args).find(i => i > 0 && args[i].endsWith('.json')) : undefined;
@@ -167,7 +172,7 @@ export default {
     // said here as this package's, with the file as it was named
     const say = ownWords({ file, named: file ? path.basename(file) : null });
     const child = spawn(xsolana[0], [xsolana[1], ...rest], { stdio: ['inherit', 'pipe', 'pipe'], env, cwd });
-    const done = [relay(child.stdout, process.stdout, say), relay(child.stderr, process.stderr, say)];
+    const done = [relay(child.stdout, process.stdout, json ? t => t : say), relay(child.stderr, process.stderr, say)];
     return new Promise(resolve =>
       child.on('close', async code => {
         await Promise.all(done);
@@ -185,18 +190,23 @@ const TOOLS = 'guide|examples|check|simulate|cost|explain|review|publish|status|
 
 /**
  * xsolana's text as xcore's: its pinned npx forms and its `xsolana <command>` become `xcore loot <command>`, and the
- * file it was given by its plain name (it runs in that file's folder) is the file as the person named it.
+ * file it was given by its plain name (it runs in that file's folder) is the file as the person named it. The MCP
+ * server's own command (`npx -y --package=@xgamesfun/solana@… xsolana mcp`, what connect registers in an agent) is
+ * said as it is: it is the command the agent runs, so a dry run shows exactly what is registered.
  */
 export function ownWords({ file = null, named = null } = {}) {
   const npx = new RegExp(String.raw`npx -y (?:--package=)?@xgamesfun/solana@[\w.-]+(?: xsolana)? (${COMMANDS})\b`, 'g');
-  const own = new RegExp(String.raw`(^|[\s\`'"(])xsolana (${COMMANDS})\b`, 'gm');
+  const own = new RegExp(String.raw`(^|[\s\`'"(])(?<!@xgamesfun/solana@[\w.-]+ )xsolana (${COMMANDS})\b`, 'gm');
   const tool = new RegExp(String.raw`\bxsolana_(${TOOLS})\b`, 'g');
   const asNamed =
     file && named && file !== named
       ? new RegExp(String.raw`(xcore loot \w+) ${named.replace(/[.]/g, '\\.')}\b`, 'g')
       : null;
   return text => {
-    let t = text.replace(npx, 'xcore loot $1').replace(own, '$1xcore loot $2').replace(tool, 'xcore loot $1');
+    let t = text
+      .replace(npx, (all, command) => (command === 'mcp' ? all : `xcore loot ${command}`))
+      .replace(own, '$1xcore loot $2')
+      .replace(tool, 'xcore loot $1');
     if (asNamed) t = t.replace(asNamed, `$1 ${file}`);
     // its help's columns: the three letters `xcore loot` adds are taken from the gap after
     t = t.replace(/^( {2}xcore loot \S.*?\S)( {5,})/gm, (_, a, gap) => a + gap.slice(3));

@@ -40,7 +40,8 @@ xcore domain add play.mygame.com ./my-game       # Creator or Scale: it plays at
 
 (`xcore` on npm is another package: always run this one as `npx -y @xgamesfun/xcore …`, or install it.) It needs Node 24
 or newer, and Chrome, Edge or Chromium for the check (else it downloads Playwright's Chromium once). With an agent,
-the skill in `skills/bring-your-own-game/` walks the same steps, and `xcore loot connect` adds the economy's tools.
+the skill in `skills/bring-your-own-game/` walks the same steps: `xcore connect` copies it into Claude Code's and Codex's
+skills, adds the economy's tools (what `xcore loot connect` does), and prints a few lines for a project's AGENTS.md.
 Before an economy, a draw or anything a player pays for, read [docs/BEFORE-YOU-BUILD.md](docs/BEFORE-YOU-BUILD.md): one
 method (challenge before you build, then six lenses) that finds what a design gets wrong.
 
@@ -916,7 +917,7 @@ game's server is switched off the same way. Paid slots are $15 for
 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans; no automatic renewal, 7 days' grace after the period
 ends; when they end, their games go back to free slots and nothing is taken down).
 Usage credit, bought the same way, lets Creator games go past what their slots include, at twice what xgames.fun pays,
-instead of slowing down. A paid slot moves between your games at any time
+instead of being capped. A paid slot moves between your games at any time
 (`xcore plan deactivate <one>`, `xcore plan activate <another>`) without changing the bill. `xcore plan [folder]`
 shows a game's plan, its limits and this month's use; `--all` your free and paid slots and every game. A game's server sees a 429
 with `scope` (`"player"` or `"game"`) and `plan` when it goes past a rate.
