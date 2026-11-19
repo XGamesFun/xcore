@@ -173,6 +173,10 @@ Since 0.9.1, also:
   lines), `xsolana_design`, `serverLimit`, ranked endings and fund runway; from 0.28.18 a short first guide call and a
   short skill, a burned payment a cancel can't give back raised with a question, who sends what each ending owes, and
   every grant cap checked in claims against an honest player's pace.
+- `@xgamesfun/solana` 0.28.31 (from 0.28.20): a player's step leaves room for what their wallet adds to it, so
+  Phantom on mainnet no longer warns that the page could be malicious; a project handed to a new owner is theirs to
+  change; `approve --mint-key`; saving a draft counts as building; the person's numbers and caps asked with the design.
+  The kit's Ask lines are its own wording, some a question and some a request, and review carries them as they are.
 
 ## 0.9.1 — 2026-11-11
 
