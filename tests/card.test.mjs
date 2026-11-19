@@ -143,6 +143,10 @@ test('a path in a command to paste is quoted only when the shell needs it, and a
   assert.equal(typedPath("it's", { platform: 'darwin' }), `'it'\\''s'`);
   assert.equal(typedPath('C:\\Users\\me\\dot-catch', { platform: 'win32' }), 'C:\\Users\\me\\dot-catch');
   assert.equal(typedPath('C:\\Users\\me\\my game', { platform: 'win32' }), '"C:\\Users\\me\\my game"');
+  // a quote inside is escaped as Windows programs read their arguments, and backslashes before it doubled
+  assert.equal(typedPath('["p1"]', { platform: 'win32' }), '"[\\"p1\\"]"');
+  assert.equal(typedPath('a\\"b c', { platform: 'win32' }), '"a\\\\\\"b c"');
+  assert.equal(typedPath('C:\\my dir\\', { platform: 'win32' }), '"C:\\my dir\\\\"');
 });
 
 test('what fixes it, for the game’s folder', async t => {

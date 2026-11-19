@@ -16,9 +16,14 @@ import { bundleServer } from '../lib/server/bundle.mjs';
 import { migrationsChanged, publishField, readServerConfig } from '../lib/server/contract.mjs';
 import { splitSql } from '../lib/dev/d1.mjs';
 import { queryProblem, readOnlyProblem, sqlStatements } from '../lib/db.mjs';
+import { typedPath } from '../lib/command.mjs';
+
 import { adopt } from '../lib/publish/adopt.mjs';
 import { publishGame, preflight, checkSummary } from '../lib/publish/index.mjs';
 import { fixture, passing, runAsync, signIn, standIn, tempDir } from './helpers.mjs';
+
+/** A string as a regular expression matches it, exactly. */
+const reEscape = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // database.js imports cloudflare:workers (a Durable Object's base class); here a stand-in
 register(
@@ -1053,7 +1058,10 @@ test('xcore db --live goes through the owner routes; a live change prints itself
   assert.match(r.stdout, /statement {2}DELETE FROM players WHERE id = \?\n {2}params {5}\["p1"\]/);
   assert.match(
     r.stdout,
-    /Nothing was written\. To go on, run this again with the code:\n {2}.*db query 'DELETE FROM players WHERE id = \?' --params '\["p1"\]' --live --write --yes [0-9a-f]{8}$/m,
+    new RegExp(
+      `Nothing was written\\. To go on, run this again with the code:\\n {2}.*db query ${reEscape(typedPath('DELETE FROM players WHERE id = ?'))} --params ${reEscape(typedPath('["p1"]'))} --live --write --yes [0-9a-f]{8}$`,
+      'm',
+    ),
   );
   assert.doesNotMatch(r.stdout + r.stderr, /add --yes/);
   const code = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
