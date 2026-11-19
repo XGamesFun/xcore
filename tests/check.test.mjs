@@ -477,7 +477,7 @@ ${$('start')}.onclick = () => { ${$('said')}.textContent = 'Go!'; ${$('start')}.
     assert.equal(m.stopped, "the declared journey's tap 2 (#claim), which was not on the page");
     assert.ok(
       m.tell.includes(
-        "The walk stopped at the declared journey's tap 2 (#claim), which was not on the page, so what follows it was not seen.",
+        "Before any wallet prompt, the walk stopped at the declared journey's tap 2 (#claim), which was not on the page, so it did not reach a first reward: what claiming one asks (a sign-in, a wallet, SOL for its fee) was not seen.",
       ),
       m.tell.join('\n'),
     );
