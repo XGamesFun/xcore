@@ -111,7 +111,7 @@ test('the two sample servers: no server finding in either; the economy review of
       amount: 'grant',
       recipient: 'proven',
       identity: 'x',
-      limits: { perPerson: 1, perWallet: 1, perDay: 100 },
+      limits: { perPerson: 1, perDay: 100 },
     },
   );
   assert.deepEqual(rb.trust, {
@@ -151,7 +151,7 @@ test('the two sample servers: no server finding in either; the economy review of
   assert.ok(md.trimEnd().endsWith('trust-and-cheating.md.'), 'it ends with the guide');
   assert.match(
     md,
-    /\| `grant:found-whale` \| server \(server\/vouchers\.js\) \| state the server keeps \| the grant's own \| a proven wallet \| X account \(payOnly 'x'\) \| perPerson 1, perWallet 1, perDay 100 \| bounds \/ reads state \| bounded per person/,
+    /\| `grant:found-whale` \| server \(server\/vouchers\.js\) \| state the server keeps \| the grant's own \| a proven wallet \| X account \(payOnly 'x'\) \| perPerson 1, perDay 100 \| bounds \/ reads state \| bounded per person/,
   );
   assert.match(md, /\| the live voucher key \| not known here .* \| xgames\.fun \| its holder: xgames\.fun only/);
   assert.match(md, /- \*\*Its record\*\*: signed by the server's own key .* counted by an X account\./);
@@ -668,8 +668,8 @@ test('the ledger against the grants: payOnly and perPerson (payout-signer, payou
   assert.deepEqual(cases(r, 'payout-signer'), ['identity']);
   assert.equal(r.ledger[0].identity, 'wallet');
   assert.equal(r.ledger[0].ceiling.by, 'person', 'those who are paid are still counted per person');
-  // and with no perPerson: a wallet is free, so only the day's total bounds it; then with no total at all
-  await editJson(economy, s => delete s.grants[0].limits.perPerson);
+  // and counted per wallet, not per person: a wallet is free, so only the day's total bounds it; then with no total at all
+  await editJson(economy, s => (s.grants[0].limits = { perWallet: 1, perDay: 100 }));
   r = await review(dir);
   assert.deepEqual(ids(r), ['medium payout-ceiling']);
   assert.deepEqual(cases(r, 'payout-ceiling'), ['shared-day']);
@@ -698,7 +698,7 @@ test('the ledger against the grants: payOnly and perPerson (payout-signer, payou
   assert.match(r.ledger[0].ceiling.words, /payOnly lets only an X account be paid, but the grant counts no person/);
   // trust: not declared (the installed @xgamesfun/solana says it itself), not one of the three
   await editJson(economy, s => {
-    s.grants[0].limits = { perWallet: 1, perPerson: 1, perDay: 100 };
+    s.grants[0].limits = { perPerson: 1, perDay: 100 };
     delete s.grants[0].trust;
   });
   const u = await review(dir);
@@ -762,6 +762,30 @@ test('the ledger against the grants: payOnly and perPerson (payout-signer, payou
   assert.deepEqual([r.ledger[0].signer, r.ledger[0].source, r.ledger[0].recipient], ['other', 'env', 'check']);
 });
 
+test('a grant that counts people, whose vouchers a key other than the issuer signs: every claim refused (payout-signer issuer)', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded');
+  const economy = path.join(dir, 'xsolana.json');
+  // the sample's issuer is its voucher key: nothing to say
+  let r = await review(dir);
+  assert.deepEqual(cases(r, 'payout-signer'), []);
+  // another key is the issuer: loot counts the voucher's person only when the issuer signed it, so NotLinked
+  await editJson(economy, s => (s.keys = { issuer: '24sDWzHodVNPzTuAt5wNqtrHzxNuaxQiCHLaUcDLrkUF' }));
+  r = await review(dir);
+  assert.deepEqual(cases(r, 'payout-signer'), ['issuer']);
+  assert.match(one(r, 'payout-signer').message, /NotLinked/);
+  // counted per wallet: the issuer doesn't matter
+  await editJson(economy, s => (s.grants[0].limits = { perWallet: 1, perDay: 100 }));
+  r = await review(dir);
+  assert.deepEqual(cases(r, 'payout-signer'), []);
+  // the leaked key's reach names the grant's token cap
+  await editJson(economy, s => (s.grants[0].limits = { perPerson: 1, perDay: 100, tokens: 5000 }));
+  await editJson(economy, s => (s.keys = { issuer: s.grants[0].vouchers[0] }));
+  r = await review(dir);
+  assert.deepEqual(r.ledger[0].limits, { perPerson: 1, perDay: 100, tokens: 5000 });
+});
+
 test('the ceiling arithmetic: identities × limit per identity × time', () => {
   // payOnly 'any', no perPerson, no perDay: a wallet is free, and nothing else bounds it
   let c = payoutCeiling({ perWallet: 1 }, 'wallet');
@@ -788,6 +812,10 @@ test('the ceiling arithmetic: identities × limit per identity × time', () => {
   );
   // 'account' (or 'any') with perPerson: counted per X or Google account
   assert.equal(payoutCeiling({ perPerson: 1 }, 'account').unit, 'account');
+  // perPersonEach (loot 0.29, a daily bonus): a person in each window
+  c = payoutCeiling({ perPersonEach: { count: 1, every: '1d' }, perDay: 50 }, 'x');
+  assert.deepEqual([c.bounded, c.by, c.per, c.severity], [true, 'person', '1 claim each 1d', null]);
+  assert.match(c.words, /^bounded per person: 1 claim each 1d an X account \(perPersonEach\)/);
   // the keeper's own rate is a total too: shared, so medium
   c = payoutCeiling({}, 'wallet', { keeper: true });
   assert.deepEqual([c.bounded, c.by, c.severity], [true, 'keeper', 'medium']);

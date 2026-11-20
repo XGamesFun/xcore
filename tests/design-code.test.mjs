@@ -51,6 +51,7 @@ const spec = (more = {}) => ({
   ],
   items: [{ key: 'card', name: 'Raid Card', id: 1 }],
   grants: [raid()],
+  keys: { issuer: KEY }, // the voucher key says who is who: its voucher's person is the one the grant counts
   ...more,
 });
 
@@ -252,6 +253,7 @@ const guild = (more = {}) => ({
     },
   ],
   grants: [raid({ trust: 'bounds' })],
+  keys: { issuer: KEY },
   ...more,
 });
 const FORGE = `// The forge: embers a player holds (the guild hall's yield) buy a boost on the raid prize.

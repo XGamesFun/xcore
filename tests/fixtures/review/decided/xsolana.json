@@ -16,6 +16,9 @@
       "id": 1
     }
   ],
+  "keys": {
+    "issuer": "24sDWzHodVNPzTuAt5wNqtrHzxNuaxQiCHLaUcDLrkUF"
+  },
   "grants": [
     {
       "key": "discover-whale",
@@ -28,7 +31,6 @@
         "24sDWzHodVNPzTuAt5wNqtrHzxNuaxQiCHLaUcDLrkUF"
       ],
       "limits": {
-        "perWallet": 1,
         "perPerson": 1,
         "perDay": 100
       },

@@ -356,6 +356,7 @@ wallet is free, so a cap per wallet multiplies with every wallet. The levers tha
 | -------------------------------------------------------------------------------------- | --------------------------------------------------------- |
 | `VOUCHERS.payOnly = 'x'` (or `'account'`: X or Google, easier to make) and `perPerson` | identities: one per X (or Google) account, not per wallet |
 | A grant's `perDay` (and `total`) in `xsolana.json`                                     | time: the most the grant pays a day, whoever claims       |
+| A grant's `limits.tokens` in `xsolana.json`                                            | the tokens it gives in all: what a leaked key can drain   |
 | A gate on something the game sells (a pass, a creature)                                | identities: each one costs money                          |
 | Pay only a proven wallet (signed in with, or linked by `gf.loot.link()`)               | who is paid: never a wallet the page names                |
 | A board the server writes (`env.GF.scores.setup(board, {writer: 'server'})`)           | a ranking: the page's submits to it are refused           |
@@ -440,7 +441,9 @@ const r = await env.GF.loot.report({
   `env.GF.loot.status()` says whether the host key is certified.
 - The winner's page claims every win at once:
   `await gf.loot.call('claimWins', { server: new URL('/loot/v1', location.href).href, token: gf.token })`.
-- A grant that counts people (`perPerson`) counts each winner by their X account.
+- A grant that counts people (`perPerson`) counts each winner by their X account, within that grant: the keeper's key
+  is the economy's issuer (Studio's setup makes it so). A box, recipe or lottery that counts people is not counted
+  this way: it reads the wallet's link, which holds the person of whichever grant's claim wrote it last.
 
 #### Your own key: `xcore add vouchers`
 
@@ -492,12 +495,23 @@ const { voucher } = await voucherFor(env, { grant: 'clear', wallet, round: match
   wallet or amount, and never one once the grant has been closed and made again (a new campaign pays new rounds only).
 - **Rate:** a player may make `VOUCHERS.perMinute` pay and link requests a minute (20).
 - **Keys:** the live key lives only on xgames.fun's server and is never shown again; a lost or leaked one: run
-  `xcore secret set VOUCHER_SEED --new-key` again, put the new address in the grant in place of the old, approve. A
-  leaked key can pay no more than the grant's limits, so keep them tight. The test key in `.dev.vars` signs only
+  `xcore secret set VOUCHER_SEED --new-key` again, put the new address in the grant in place of the old (and in `keys.issuer`, when it is the issuer), approve. A
+  leaked key can pay no more than the grant's limits (`perDay`, `total`, and `limits.tokens`, the tokens it gives in
+  all), so keep them tight. The test key in `.dev.vars` signs only
   what the grant lets it sign.
 - `person`: a player signed in with X is counted as one person, hashed with your key (never the account itself), for
-  a grant with `perPerson`. A player signed in with a wallet only has no person, so a grant with `perPerson` refuses
-  to pay them (`person`): sign in with X.
+  a grant with `perPerson` (in all) or `perPersonEach` (`{ "count": 1, "every": "1d" }`: a daily bonus). A player
+  signed in with a wallet only has no person, so such a grant refuses to pay them (`person`): sign in with X.
+- **The issuer.** loot (0.29 and later) counts the person a voucher names only when the economy's issuer signed it:
+  `"keys": { "issuer": "<the live key's address>" }` in `xsolana.json`, the same key the grant names in `vouchers`.
+  The issuer is one key, for the vouchers that name a person and for any links. With no issuer, `xcore loot check`
+  refuses a grant that counts people; with another key as the issuer, every claim is refused (`NotLinked`), and
+  `xcore review` says so. A claim the test key signs under `xcore dev` counts a person only while the test key is the
+  issuer, so try a per-person grant on a devnet copy of the economy. A grant counts people or wallets, not both:
+  `perPerson` in place of `perWallet`.
+- The person is hashed per grant, so it counts across every wallet of theirs within one grant. A box, recipe or
+  lottery that counts people reads the wallet's link instead, which this server never writes: count people on the
+  grants it pays.
 - Each pay is one request to your server and one read of the grant, through xgames.fun's relay or your own RPC
   (`xcore add rpc`).
 - A grant's limits count claims, not amounts: a daily cap of tokens is the grant's amount with one claim a day, or

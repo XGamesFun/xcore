@@ -177,6 +177,15 @@ Since 0.9.1, also:
   Phantom on mainnet no longer warns that the page could be malicious; a project handed to a new owner is theirs to
   change; `approve --mint-key`; saving a draft counts as building; the person's numbers and caps asked with the design.
   The kit's Ask lines are its own wording, some a question and some a request, and review carries them as they are.
+- `@xgamesfun/solana` 0.29.0 (from 0.28.31), for loot 0.29.0, on devnet and mainnet since 2026-11-20: limits per
+  person on any part (`perPerson`, `perPersonEach`), links from the economy's issuer (`keys.issuer`), tickets a grant
+  gives, a cap on a grant's tokens (`limits.tokens`), and 0.28.32's fixes. 0.29 reads no project, grant, lottery or
+  order 0.28 made, so an economy live before then goes live again. **Breaking for a grant that counts people:** loot
+  counts the person a voucher names only when the issuer signed it, so such a grant needs the live voucher key as
+  `"keys": { "issuer": … }` (`xcore loot check` refuses one without), and counts people or wallets, not both.
+  `xcore add vouchers` says so; `xcore review` flags a per-person grant whose issuer is not a key that signs its
+  vouchers (every claim refused, `payout-signer` `issuer`), reads `perPersonEach` as a limit per person, and counts
+  `limits.tokens` in what a leaked key can take. The voucher server asks a person for `perPersonEach` as for `perPerson`.
 
 ## 0.9.1 — 2026-11-11
 
