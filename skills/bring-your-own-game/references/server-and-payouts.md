@@ -46,7 +46,7 @@ Lenses 3 and 5 of the method, applied to every route that pays (docs/SERVER.md, 
 - List each input that decides who is paid, how much and for which round, and where it is held: the chain, state the
   server keeps, or the request. Whatever the request decides, a cheater decides.
 - The ceiling: the identities one person can make × what each may take × time. Bound it with what the platform gives
-  (`VOUCHERS.payOnly`, a grant's `perDay` and `perPerson`, a board the server writes:
+  (`VOUCHERS.payOnly`, a grant's `perDay` and `perPerson` with the voucher key as `keys.issuer`, a board the server writes:
   `env.GF.scores.setup(board, {writer: 'server'})`), or tell the person what a cheater gets.
 - A bounded result earns small capped amounts; entry fees and prize pools need a decided or replayed one. A game
   without a server can still offer what the player pays for or the chain decides (a shop, boxes, raffles, staking,

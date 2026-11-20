@@ -33,7 +33,7 @@ register(
 
 // loot's address, as the installed tools have it
 const LOOT = lootProgram();
-const GRANT = JSON.parse(await readFile(path.join(ROOT, 'tests', 'fixtures', 'grant-0.24.0.json'), 'utf8'));
+const GRANT = JSON.parse(await readFile(path.join(ROOT, 'tests', 'fixtures', 'grant-0.29.0.json'), 'utf8'));
 
 /** The voucher server of a game whose grant "clear" is the fixture's, PAY.check paying body.amount for body.runId. */
 async function voucherServer(t) {
@@ -64,7 +64,7 @@ async function voucherServer(t) {
       id,
       result: {
         context: { slot: 1 },
-        value: [{ data: [GRANT.data, 'base64'], owner: LOOT, lamports: 1, executable: false, space: 304 }],
+        value: [{ data: [GRANT.data, 'base64'], owner: LOOT, lamports: 1, executable: false, space: 318 }],
       },
     });
   };

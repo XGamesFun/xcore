@@ -884,7 +884,7 @@ register(
 
 // loot's address, as the installed tools have it
 const LOOT = lootProgram();
-const GRANT = JSON.parse(await readFile(path.join(ROOT, 'tests', 'fixtures', 'grant-0.24.0.json'), 'utf8'));
+const GRANT = JSON.parse(await readFile(path.join(ROOT, 'tests', 'fixtures', 'grant-0.29.0.json'), 'utf8'));
 
 /** A game with a live economy whose grant "clear" is the devnet grant in the fixture, and its voucher server added. */
 async function voucherGame(tmp) {
@@ -1025,7 +1025,7 @@ test('the voucher server: PAY.check decides, only a proven wallet is paid, one r
       id,
       result: {
         context: { slot: 1 },
-        value: [{ data: [data, 'base64'], owner: LOOT, lamports: 1, executable: false, space: 304 }],
+        value: [{ data: [data, 'base64'], owner: LOOT, lamports: 1, executable: false, space: 318 }],
       },
     });
   };

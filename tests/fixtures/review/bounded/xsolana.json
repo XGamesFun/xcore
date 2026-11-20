@@ -16,6 +16,9 @@
       "id": 1
     }
   ],
+  "keys": {
+    "issuer": "2LW2C9sZbxoizKZ9eXYrsiF8xLP8GajJpnjAyNYKTrh1"
+  },
   "grants": [
     {
       "key": "found-whale",
@@ -28,7 +31,6 @@
         "2LW2C9sZbxoizKZ9eXYrsiF8xLP8GajJpnjAyNYKTrh1"
       ],
       "limits": {
-        "perWallet": 1,
         "perPerson": 1,
         "perDay": 100
       },

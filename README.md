@@ -729,11 +729,11 @@ own transactions and a setup also makes mints and token accounts. So `approve` s
 it is set, else through Solana's public devnet RPC. Where that one refuses you (it limits each address, and some
 networks block it), set `XSOLANA_RPC_URL` in `.env` to a devnet RPC of your own.
 
-**When loot is upgraded.** This package pins the tools for one build of loot: 0.28.0, at loot's official address on
-devnet, `xgamesVsZBpCVgJuatfYAFJRmQoccfQf5qtUFNp2Eet`, since 2026-11-11. It is a new address, so nothing set up at the
-address before it (`9cwq…7NFQ`, loot 0.27 and earlier) exists there: an economy from before goes live again
-(`xcore loot approve`, which takes its file's old live section for another program's and says so; remove that section
-to set it up anew). A game with its own `server/rpc.js` (`xcore add rpc`) from before names the old address in its
+**When loot is upgraded.** This package pins the tools for one build of loot: 0.29.0, at loot's official addresses,
+`xgamesVsZBpCVgJuatfYAFJRmQoccfQf5qtUFNp2Eet` on devnet and `xgames8C758PyweWB9sDw8evvwsTVwyA2fGRUeAXVPy` on mainnet,
+since 2026-11-20. 0.29 reads none of the projects, grants, lotteries and orders that 0.28 made at the same addresses,
+so an economy that went live before then goes live again (`xcore loot approve`; remove its file's old live section
+to set it up anew). Nothing from the address before that (`9cwq…7NFQ`, loot 0.27 and earlier) is there either. A game with its own `server/rpc.js` (`xcore add rpc`) from before names the old address in its
 `scanPrograms`: put the new one first there. The next publish brings `gf/loot/` up to the installed package. **Nothing runs by
 itself** on chain: the page client sends what a player needs (settles, refunds, claims, a draw that is due); a
 schedule's runs are the project's own steps, and a run nobody sends is missed.
