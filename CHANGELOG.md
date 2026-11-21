@@ -2,7 +2,7 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
-## 0.10.0 — 2026-11-12
+## 0.10.0 — 2026-11-20
 
 **Consent gates match the code.** A change that can't be undone now prints first and goes on only with
 `--yes <code>`, as `xcore loot approve` and `xcore coin launch` already did:
