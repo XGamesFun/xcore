@@ -2,6 +2,14 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.10.2 — 2026-11-21
+
+**Ships with `@xgamesfun/solana` 0.29.2**, which fixes the economy skill's front matter. In 0.29.1 (the pin of xcore
+0.10.1) the skill's `description` had a `: ` in it, which strict YAML reads as a mapping: Claude Code loaded the skill,
+but a strict reader drops it, so `xcore connect` could leave an agent without the `xsolana-economy` skill. Run
+`xcore connect` again after updating. Nothing else changes: loot 0.29.0, every spec and every live economy are as they
+were.
+
 ## 0.10.1 — 2026-11-21
 
 **Ships with `@xgamesfun/solana` 0.29.1** (the tools alone: loot 0.29.0 is unchanged, and so is every spec and every
