@@ -1125,6 +1125,10 @@ it with `npm i -g @xgamesfun/xcore`.
 
 ## Documentation
 
+- [xgames.fun/xcore](https://xgames.fun/xcore): this page in short, with what a game gets, the plans and what is not
+  supported
+- [Add Solana to a browser game](https://xgames.fun/solana/web-game): what a page can pay safely, what needs the
+  game's server, and the page code, step by step
 - [docs/SERVER.md](docs/SERVER.md): a game's own server code (`server/`, the `gf-server-v1` contract)
 - [docs/BEFORE-YOU-BUILD.md](docs/BEFORE-YOU-BUILD.md): challenge before you build, and the six lenses that
   find what a design gets wrong
