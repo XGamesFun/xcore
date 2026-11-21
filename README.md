@@ -1,7 +1,13 @@
-# xcore
+# xcore: host a web game you already made, with a backend and a Solana economy
 
-The one place to start with xgames.fun (`@xgamesfun/xcore` on npm, the `xcore` command). What you came for decides where
-it takes you:
+**Publish a browser game you already made at a link anyone can play, and give it player sign-in, a database,
+multiplayer rooms and a Solana economy (shops, loot boxes, raffles, prize pools, staking, token rewards) with no smart
+contract to write.** It takes plain HTML/JS, a Vite, Next.js static export, Astro, SvelteKit, Nuxt, Create React App or
+Parcel project, and Godot and Unity web exports. The economy runs on Solana devnet, and on mainnet when you say so. One
+command line does it all, by hand or run by Claude Code, Codex or another coding agent.
+
+xcore is the one place to start with [xgames.fun](https://xgames.fun) (`@xgamesfun/xcore` on npm, the `xcore` command).
+What you came for decides where it takes you:
 
 | You have                                    | xcore                                                                                                                            | Then                                                                                                                      |
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -1078,6 +1084,44 @@ without one needs none: the D1 database, `xcore db` and `xcore files` are new.
   configuration at run time from your backend.
 - **More than 8 backend origins, IP addresses, localhost, wildcards**: the host opens the page's policy to named
   public origins only.
+
+## Questions people ask
+
+**How do I add Solana payments, loot boxes or token rewards to a web game I already made?** `xcore loot add ./my-game`
+gives the game an economy on loot, one shared Solana program, so there is no Anchor or Rust to write, deploy or audit.
+You describe its shops, loot boxes, raffles, prize pools, staking and rewards in one JSON file (`xsolana.json`), and the
+tools check it, simulate it and price it before anything goes live. See [An economy](#4-an-economy-web3) and
+[`@xgamesfun/solana`](https://github.com/XGamesFun/solana-kit), the toolkit underneath.
+
+**Does the economy run on Solana mainnet?** Yes. It is on devnet, where nothing is real money, until its `xsolana.json`
+says `"network": "mainnet"`, where everything is. The loot program has not been independently audited: read the
+[disclaimer](#disclaimer-and-responsible-use) before real money.
+
+**How do I host a Vite, Next.js, Godot or Unity web game with a backend, for free?** `xcore adopt`, `xcore check` and
+`xcore publish` put its static build on xgames.fun at a link anyone can play. Everyone gets 2 free slots, and a game in
+one has a server of its own (a Worker in `server/`), 10 MB of saves and 8 leaderboards, within the Free plan's limits
+([Its plan](#its-plan-xcore-plan)). A page rendered per request, or a server in Node, Python or Go, does not run there
+([What is not supported](#what-is-not-supported-and-why)).
+
+**How do I add multiplayer to a browser game without running a server?** `xcore add multiplayer ./my-game` adds sign-in
+and rooms the game owns, published with the game. A web game joins one with `GamesFun.rooms.join(code)`, and Godot's
+high-level multiplayer runs over the same rooms unchanged. See [Multiplayer](#multiplayer-xcore-add-multiplayer).
+
+**How do players sign in to a web game with X or a Solana wallet?** `xcore add signin ./my-game` gives the game the page
+client for xgames.fun's sign-in (X first, or a Solana wallet), with saves and leaderboards for each player. A web game
+calls `await GamesFun.signIn()`; Godot 4 and Unity get the same calls in their own shape. See
+[Sign-in, saves and leaderboards](#sign-in-saves-and-leaderboards-xcore-add-signin).
+
+**Can Claude Code, Codex or Cursor publish my game for me?** Yes. `xcore connect` copies the `bring-your-own-game` skill
+into Claude Code's and Codex's skills and adds the economy's MCP tools (`xsolana_*`). For other agents (Cursor, Copilot,
+Gemini CLI and more), `npx skills add XGamesFun/xcore` installs the same skill. The agent then walks the steps on this
+page: adopt, check, add what the game needs, review, publish.
+
+**Can a game launch its own coin?** Yes, once it is published: `xcore coin` launches one on Meteora or pump.fun through
+xgames.fun's launchpad, on devnet to rehearse or on mainnet. See [A coin that trades](#a-coin-that-trades-xcore-coin).
+
+**Is `xcore` on npm this package?** No. This one is `@xgamesfun/xcore`: run it as `npx -y @xgamesfun/xcore`, or install
+it with `npm i -g @xgamesfun/xcore`.
 
 ## Documentation
 
