@@ -2,6 +2,20 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.10.1 — 2026-11-21
+
+**Ships with `@xgamesfun/solana` 0.29.1** (the tools alone: loot 0.29.0 is unchanged, and so is every spec and every
+live economy). The economy's tools say "the game keeps 38% of each price" where they said "the house keeps", every
+`xsolana_*` tool has a title a person can read, and their listings say what they are: a toolkit for building game
+economies. Every warning about the law is as it was.
+
+**The README says what xcore does.** Its title and first paragraph name what it is for (host a web game you already
+made, with a backend and a Solana economy), the stacks it takes and what a game gets. A new section, "Questions people
+ask", answers eight of them in a few lines each, and "Documentation" links to [xgames.fun/xcore](https://xgames.fun/xcore)
+and to the step-by-step page for [Solana in a browser game](https://xgames.fun/solana/web-game).
+
+**On npm:** 28 keywords where there were 7, and the homepage is `https://xgames.fun/xcore`.
+
 ## 0.10.0 — 2026-11-20
 
 **Consent gates match the code.** A change that can't be undone now prints first and goes on only with
