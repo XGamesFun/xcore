@@ -11,6 +11,7 @@ import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { printJson } from '../lib/cli.mjs';
 import { CMD } from '../lib/command.mjs';
 import { readJson } from '../lib/util.mjs';
 import { madeByKit } from '../lib/games.mjs';
@@ -177,6 +178,13 @@ export async function main([name, ...args]) {
     console.error(
       own ? `${NO_KIT}\n\n${own.usage ?? ''}` : `${unknownCommand(name, commands)}\n\n${help(commands, null)}`,
     );
+    // --json: the same failure as JSON on stdout, as every command's own failures are (lib/cli.mjs guard)
+    if (args.includes('--json'))
+      printJson({
+        ok: false,
+        error: (own ? NO_KIT : unknownCommand(name, commands)).replace(/\s*\n\s*/g, ' '),
+        code: own || KIT_COMMANDS.has(name) ? 'no-kit' : 'unknown-command',
+      });
     return 1;
   }
   if (wantsHelp) {

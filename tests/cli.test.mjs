@@ -37,6 +37,13 @@ test('help lists its own commands; a kit command with no kit says how to get the
   const unknown = run(['frobnicate'], { cwd: away.dir });
   assert.match(unknown.stderr, /"frobnicate" is not an xcore command\.\n/);
   assert.doesNotMatch(unknown.stderr, /Did you mean|not released/);
+  // --json: the same failures as JSON on stdout, with a code
+  const asJson = args => JSON.parse(run([...args, '--json'], { cwd: away.dir }).stdout);
+  assert.deepEqual(
+    [asJson(['create', 'x']).ok, asJson(['create', 'x']).code, asJson(['pubish']).code],
+    [false, 'no-kit', 'unknown-command'],
+  );
+  assert.match(asJson(['create', 'x']).error, /^"create" is the kit's command\. .*@xgamesfun\/kit/);
   assert.equal(
     run(['--version'], { cwd: away.dir }).stdout.trim(),
     JSON.parse(await (await import('node:fs/promises')).readFile(new URL('../package.json', import.meta.url), 'utf8'))
