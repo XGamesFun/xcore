@@ -17,12 +17,25 @@ Play the game on this machine as xgames.fun will host it, with everything a publ
 gamesfun.js (${CMD} add signin|database|multiplayer) uses all of it here, from any engine: open the page in two
 windows to play a room together. Running server/ needs Miniflare (workerd), installed once on first use (~140 MB).
 Saves, scores and Durable Object storage are kept in <dir>/.gamesfun/ (never published).
-  --port <n>      the port (default 8787)
+  --port <n>      the port (default the first free one from 8787)
   --plan <name>   the plan to imitate: free (the default), creator or scale: its boards, saves, reads and writes a
                   minute and file sizes, as xgames.fun holds a game on that plan (${CMD} plan shows a game's own)
   --no-build      serve what is built already; do not run gamesfun.json page.build first
   --open          open the page in your browser
   --json          print where it runs as JSON, then keep running`;
+
+/** The first port from `from` (step 2: the page's, and the next for its files) free on 127.0.0.1, or null. */
+async function freePort(from, tries = 10) {
+  const { createServer } = await import('node:net');
+  const free = p =>
+    new Promise(resolve => {
+      const s = createServer()
+        .once('error', () => resolve(false))
+        .listen(p, '127.0.0.1', () => s.close(() => resolve(true)));
+    });
+  for (let p = from; p < from + 2 * tries; p += 2) if ((await free(p)) && (await free(p + 1))) return p;
+  return null;
+}
 
 export default {
   name: 'dev',
@@ -40,9 +53,12 @@ export default {
         },
         usage,
       );
-      const port = values.port === undefined ? 8787 : Number(values.port);
+      let port = values.port === undefined ? 8787 : Number(values.port);
       if (!Number.isInteger(port) || port < 0 || port > 65535)
         throw new UsageError(`--port is a port number\n\n${usage}`);
+      // no --port: the first free one from 8787 (each game takes two, its page and its files), so a second game in dev
+      // starts beside the first instead of failing
+      if (values.port === undefined) port = (await freePort(port)) ?? port;
       const plan = String(values.plan ?? 'free').toLowerCase();
       if (!PLAN_NAMES.includes(plan))
         throw new UsageError(`--plan is ${PLAN_NAMES.slice(0, -1).join(', ')} or ${PLAN_NAMES.at(-1)}\n\n${usage}`);

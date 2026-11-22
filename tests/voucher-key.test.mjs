@@ -75,7 +75,7 @@ test('an issuer the owner chose, and a key this machine cannot name, are left an
   const live = await key();
   const r = await pointGrantsAt(g.dir, live);
   const e = await g.read();
-  assert.deepEqual(e.grants[0].vouchers, [unknown, live]);
+  assert.deepEqual(e.grants[0].vouchers, [unknown, g.test, live], 'the test key added on devnet by add vouchers');
   assert.equal(e.keys.issuer, chosen);
   assert.ok(
     r.left.some(l => l.includes(unknown) && /take it out/.test(l)),

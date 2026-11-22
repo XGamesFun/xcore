@@ -756,8 +756,8 @@ signs, with no key for you to keep. When the amount depends on the result (paid 
 bounds runs before paying, when there are entry fees or a prize pool, or when results come faster than 120 an hour,
 give the server its own key: `xcore add vouchers` writes `server/vouchers.js` (its `PAY.check` is what your server
 checks) and a test key in `.dev.vars` for `xcore dev`. In order: `xcore publish`, `xcore secret set VOUCHER_SEED
---new-key` (the live key: made here, sent only to xgames.fun and never kept on your machine; it prints the address), that address into the
-grant in `xsolana.json`, `xcore loot approve`, `xcore publish`. A voucher pays only a wallet the player proved is
+--new-key` (the live key: made here, sent only to xgames.fun and never kept on your machine; it points the grants your
+server pays at it in `xsolana.json`), `xcore loot approve`, `xcore publish`. A voucher pays only a wallet the player proved is
 theirs (signed in with it, or linked with `gf.loot.link()`), and since a wallet is free, pay rewards worth farming
 only to players signed in with X (`VOUCHERS.payOnly`). A grant names up to three keys, so the keeper and your own can
 pay the same grant while you move from one to the other.
