@@ -1,6 +1,6 @@
 // The voucher server on its economy's cluster, and the person it names: a mainnet economy's grant is read (and signed
-// for) at its mainnet address, through the relay's mainnet route; with PERSON_SALT a person stays the same person when
-// the voucher key is replaced. Set up as tests/vouchers-state.test.mjs.
+// for) at its mainnet address, through the relay's mainnet route; a person stays the same person when the voucher key is
+// replaced, with nothing to set. Set up as tests/vouchers-state.test.mjs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -99,7 +99,7 @@ async function voucherServer(t, { network, limits = {}, player } = {}) {
     );
     return res.json();
   };
-  return { asked, pay, program, dir };
+  return { asked, pay, program, dir, seed };
 }
 
 test('a mainnet economy’s voucher server reads its grant on mainnet, through the relay’s mainnet route', async t => {
@@ -117,17 +117,16 @@ test('a mainnet economy’s voucher server reads its grant on mainnet, through t
   assert.notEqual(devnet.asked[0].address, s.asked[0].address);
 });
 
-test('with PERSON_SALT a person stays the same person when the voucher key is replaced', async t => {
+test('a person stays the same person when the voucher key is replaced, with nothing to set', async t => {
   const s = await voucherServer(t, { limits: { perPerson: 1 } });
-  const salt = { PERSON_SALT: 'one salt' };
-  const a = await s.pay({ runId: 'run-1', amount: 'grant' }, salt);
-  const b = await s.pay(
-    { runId: 'run-2', amount: 'grant' },
-    { ...salt, VOUCHER_SEED: randomBytes(32).toString('hex') },
-  );
+  const a = await s.pay({ runId: 'run-1', amount: 'grant' });
+  const b = await s.pay({ runId: 'run-2', amount: 'grant' }, { VOUCHER_SEED: randomBytes(32).toString('hex') });
   assert.ok(a.voucher.personHash);
+  assert.notEqual(b.voucher.publicKey, a.voucher.publicKey, 'signed with the new key');
   assert.equal(b.voucher.personHash, a.voucher.personHash);
-  // without one, the person is keyed on the voucher key, as it always was
-  const c = await s.pay({ runId: 'run-3', amount: 'grant' }, { VOUCHER_SEED: randomBytes(32).toString('hex') });
-  assert.notEqual(c.voucher.personHash, a.voucher.personHash);
+  // the key kept is the one every server derived from its voucher key: a server that has counted people under it
+  // goes on counting them as they were
+  const fresh = await voucherServer(t, { limits: { perPerson: 1 } });
+  const c = await fresh.pay({ runId: 'run-1', amount: 'grant' }, { VOUCHER_SEED: s.seed });
+  assert.equal(c.voucher.personHash, a.voucher.personHash);
 });

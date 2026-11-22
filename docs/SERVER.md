@@ -499,13 +499,13 @@ const { voucher } = await voucherFor(env, { grant: 'clear', wallet, round: match
   leaked key can pay no more than the grant's limits (`perDay`, `total`, and `limits.tokens`, the tokens it gives in
   all), so keep them tight. The test key in `.dev.vars` signs only
   what the grant lets it sign.
-- `person`: a player signed in with X is counted as one person, hashed with your server's `PERSON_SALT` (else its
-  voucher key; never the account itself), for a grant with `perPerson` (in all) or `perPersonEach`
-  (`{ "count": 1, "every": "1d" }`: a daily bonus). A player signed in with a wallet only has no person, so such a
-  grant refuses to pay them (`person`): sign in with X. Set `PERSON_SALT` once (`xcore secret set PERSON_SALT
---new-key`) before the first such payout: without it a new voucher key makes every player a new person, and each
-  per-person limit starts again. Under `xcore dev` each local player stands in for one signed in with X
-  (`XCORE_DEV_SIGNIN=wallet xcore dev` signs them in with a wallet only, to try what a player with no X account meets).
+- `person`: a player signed in with X is counted as one person, hashed with a key your server keeps (never the
+  account itself), for a grant with `perPerson` (in all) or `perPersonEach` (`{ "count": 1, "every": "1d" }`: a daily
+  bonus). A player signed in with a wallet only has no person, so such a grant refuses to pay them (`person`): sign in
+  with X. The server makes that key from its voucher key the first time it names a person and keeps it in its own
+  storage, so a person stays the same person when the voucher key is replaced; there is nothing to set. Under
+  `xcore dev` each local player stands in for one signed in with X (`XCORE_DEV_SIGNIN=wallet xcore dev` signs them in
+  with a wallet only, to try what a player with no X account meets).
 - **The issuer.** loot (0.29 and later) counts the person a voucher names only when the economy's issuer signed it:
   `"keys": { "issuer": "<the live key's address>" }` in `xsolana.json`, the same key the grant names in `vouchers`.
   The issuer is one key, for the vouchers that name a person and for any links. With no issuer, `xcore loot check`
