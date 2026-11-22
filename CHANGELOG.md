@@ -11,14 +11,15 @@ the program refuses. Its changelog has the whole list. loot 0.29.0 is unchanged,
 
 - **Fixed: a mainnet economy's voucher server paid nobody.** The server's copy of loot's client had no way to know the
   economy's network on xgames.fun, so it read every grant at its devnet address and refused each payout. It now works on
-  the economy's own network and asks the relay's mainnet route. `server/vouchers.js` is the game's own file, so a game
-  that has one runs `xcore add vouchers` again (it keeps `PAY`, `VOUCHERS` and the settings at its top); publish
-  refuses a mainnet game whose `vouchers.js` is the old one, and says so.
-- **New: `PERSON_SALT`.** The person a voucher names was keyed on the voucher key, so a new key (`xcore secret set
-VOUCHER_SEED --new-key`) made every player a new person and each `perPerson` grant paid everyone again. With
-  `xcore secret set PERSON_SALT --new-key` a person stays the same across key changes. Setting it for the first time on
-  a server that has already paid per-person grants starts those limits again once: `xcore secret` asks first, and
-  before deleting it. A server without it works as before.
+  the economy's own network and asks the relay's mainnet route. `server/vouchers.js` is the game's own file, which
+  publish never rewrites: a mainnet game whose server names no cluster (in `vouchers.js` or a file of its own) is
+  refused at publish, with the fix: `xcore add vouchers` writes the template again, keeping `PAY`, `VOUCHERS` and the
+  settings at its top.
+- **Fixed: a new voucher key made every player a new person.** The person a voucher names was hashed with a key
+  derived from the voucher key, so after `xcore secret set VOUCHER_SEED --new-key` each `perPerson` grant would pay
+  everyone again. The server now keeps that key in its own storage the first time it names a person (derived as
+  before, so the people a live server has counted stay the same), and a new voucher key leaves them as they were.
+  Nothing to set.
 - **`xcore review`:** says when a grant that counts people has the test key as the economy's issuer (every claim the
   hosted server pays is then refused), and asks which key is the issuer when the grant names several; reads
   `perWalletEach` in the payout ledger; counts a grant capped by `limits.tokens` as bounded.

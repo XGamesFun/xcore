@@ -233,3 +233,27 @@ test('a mainnet game whose server/vouchers.js predates its cluster is refused, w
     e => e.code === 'vouchers-cluster' && /add vouchers again/.test(e.message),
   );
 });
+
+test('a mainnet game that names its cluster in a server file of its own (as Bubble Day does) is published', async t => {
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = { GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'), GAMESFUN_CREDENTIALS: 'file' };
+  await signIn(g, env);
+  const dir = await fixture(tmp, 'static');
+  await adopt(dir);
+  await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify({ network: 'mainnet', grants: [] }));
+  await mkdir(path.join(dir, 'server'), { recursive: true });
+  await writeFile(
+    path.join(dir, 'server', 'vouchers.js'),
+    "import { RELAY } from './network.js';\nexport const PAY = {};\n",
+  );
+  await writeFile(
+    path.join(dir, 'server', 'network.js'),
+    "import { useCluster as useLoot } from './gf-loot/client/cluster.js';\nuseLoot('mainnet');\n",
+  );
+  await assert.doesNotReject(publishGame(dir, { origin: g.origin, env, check: passing }));
+});
