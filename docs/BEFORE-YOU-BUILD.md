@@ -64,14 +64,14 @@ Bring what you find with a recommendation for each. A deadline goes first.
 
 ## Worked examples
 
-From one day running a promo on xgames.fun: a bubble popper whose players earn BUBL, swap it for raffle entries, and
-win a physical card. Each was built exactly as asked and found by the person after it shipped; one lens would have
-found it first. They illustrate the lenses; they are not rules to check one by one.
+A promotion game: players pop bubbles to earn a token (POP), swap it for raffle entries, and can win a physical card.
+Each row was built exactly as asked, and each problem was one a single lens finds before it ships. They illustrate the
+lenses; they are not rules to check one by one.
 
 | What was built                                                                | Lens | What the lens says                                                                     |
 | ----------------------------------------------------------------------------- | ---- | -------------------------------------------------------------------------------------- |
-| Entries made by burning BUBL; a draw short of its minimum refunds entries     | 1    | Cancelled: the player holds entries, not the BUBL they put in.                         |
-| A swap from entries back to BUBL, open at any time                            | 1    | Lost: the player turns their entries back once the outcome is known.                   |
+| Entries made by burning POP; a draw short of its minimum refunds entries      | 1    | Cancelled: the player holds entries, not the POP they put in.                          |
+| A swap from entries back to POP, open at any time                             | 1    | Lost: the player turns their entries back once the outcome is known.                   |
 | A free entry that is the same token as a bought one                           | 1    | Made from nothing, and worth what a paid one is once it converts.                      |
 | A voucher abandoned for one wallet, asked again for another                   | 1    | Abandoned half-way, then completed on chain: paid twice along two paths.               |
 | "Buy 10 tickets" that first opens a prompt for 4 (making the missing entries) | 2    | Two steps for one intent, and the first doesn't look like it.                          |

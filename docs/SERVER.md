@@ -220,19 +220,18 @@ it can change (a player links another). Key a player's data (saves, rows, rooms)
 is about the wallet itself (paying it, what it holds). A game that kept a player's data by wallet reads `wallet` now,
 and one that keys on `sub` must not expect a Google player's id to match the same person's in another game.
 
-`player` is the game's own word for a player; normally `verifyPlayer`'s `sub`, so nobody can write another player's.
-The page writes the same saves and boards for its own signed-in player (`/platform/v1/*`), so a board is the player's
-own word until the server takes it: **`GF.scores.setup(board, {writer: 'server'})`** (or `writer: 'server'` in the
-server's own `submit`) makes a board only the server writes. From then on the page's submit to it is refused
-(`server-only`, HTTP 403; `GamesFun.scores.submit` answers `{error, status: 403, code: 'server-only'}`), the page still reads it (`top` says
-`writer: "server"`), and the server submits what it checked. A board that becomes the server's starts empty: what
-the page wrote while anyone could write it is removed (`setup` answers how many, `removed`). **A pattern** names every
-board starting that way, now and to come: `GF.scores.setup('daily-*', {writer: 'server'})` before the first day, and
-nobody fills a day's board ahead of time; `GF.scores.setup('*', {writer: 'server'})` keeps the page from making
-boards at all (a board's own rule wins over a pattern, a longer pattern over a shorter one). A game has 8 boards on
-Free (16 rules) and 16 on Creator and Scale (32 rules):
-**`GF.scores.drop(board)`** removes one (a past day's, once its prizes are paid) and frees its place. Only the server
-can set or lift a rule (`writer: 'any'`) or drop a board.
+`player` is the game's own word for a player; normally `verifyPlayer`'s `sub`, so nobody can write another player's. The
+page writes the same saves and boards for its own signed-in player (`/platform/v1/*`), so a board is the player's own
+word until the server takes it: **`GF.scores.setup(board, {writer: 'server'})`** (or `writer: 'server'` in the server's
+own `submit`) makes a board only the server writes. From then on the page's submit to it is refused (`server-only`, HTTP
+403; `GamesFun.scores.submit` answers `{error, status: 403, code: 'server-only'}`), the page still reads it (`top` says
+`writer: "server"`), and the server submits what it checked. A board that becomes the server's starts empty: what the
+page wrote while anyone could write it is removed (`setup` answers how many, `removed`). **A pattern** names every board
+starting that way, now and to come: `GF.scores.setup('daily-*', {writer: 'server'})` before the first day, and nobody
+fills a day's board ahead of time; `GF.scores.setup('*', {writer: 'server'})` keeps the page from making boards at all
+(a board's own rule wins over a pattern, a longer pattern over a shorter one). A game has 8 boards on Free (16 rules)
+and 16 on Creator and Scale (32 rules): **`GF.scores.drop(board)`** removes one (a past day's, once its prizes are paid)
+and frees its place. Only the server can set or lift a rule (`writer: 'any'`) or drop a board.
 
 ### Project files: `env.GF.files`
 
@@ -316,7 +315,8 @@ xcore secret set XSOLANA_RPC_URL         # the RPC's URL with its key: the serve
 - `RPC` at the top of `server/rpc.js` is what it passes on: the calls loot's page client makes, one at a time;
   `getProgramAccounts` only with filters and only of loot's own programs (loot, Metaplex Core, lookup tables); and
   `sendTransaction` only for the game's own transactions (one with a loot instruction, or a plain SOL send). So a
-  stranger calling `api/rpc` cannot spend your RPC's credits on anything else. The URL is on the economy's cluster: devnet's, or mainnet's for an economy whose file says `"network": "mainnet"`.
+  stranger calling `api/rpc` cannot spend your RPC's credits on anything else. The URL is on the economy's cluster:
+  devnet's, or mainnet's for an economy whose file says `"network": "mainnet"`.
 - The server's entry, where `api/rpc` runs, may call only `backend.json`'s origins: `xcore add rpc` adds the RPC's
   (`https://host` alone, never the key) when `XSOLANA_RPC_URL` is in `.dev.vars` or `.env`, and publish says when it
   is missing. `xcore secret set XSOLANA_RPC_URL` checks it too: an origin not there yet is added and the URL is not
@@ -373,10 +373,10 @@ the economy's own review beside it and, with `--live`, each `api/` route asked w
 Its `review.md` ends with the trade-offs to tell the person. `@xgamesfun/solana`'s skill reference
 `skills/xsolana-economy/references/trust-and-cheating.md` has Solana's own exploit checklist.
 
-`server/gf-loot/` carries @xgamesfun/solana's server helpers for this (`import { … } from './gf-loot/results/index.js'`):
-`holds({ rpc, spec, wallet, item })` and `collectiblesOf(…)` (the game's collectibles a wallet holds, from the chain),
-`proofRequest` / `verifyProof` (a wallet's signed proof: the link uses them), and `makeCodes` / `codeVoucher` (promo
-codes with keys nobody can guess, 80 bits by default).
+`server/gf-loot/` carries @xgamesfun/solana's server helpers for this
+(`import { … } from './gf-loot/results/index.js'`): `holds({ rpc, spec, wallet, item })` and `collectiblesOf(…)` (the
+game's collectibles a wallet holds, from the chain), `proofRequest` / `verifyProof` (a wallet's signed proof: the link
+uses them), and `makeCodes` / `codeVoucher` (promo codes with keys nobody can guess, 80 bits by default).
 
 ### What your server does, declared
 
@@ -390,7 +390,7 @@ only through `xsolana.json`, so two things the server does must be declared ther
 - **What it bounds**, on each grant a voucher pays, in `"serverLimit"`: the most the server signs for one identity a
   window, `{ "per": "person" | "wallet" | "all", "amount", "every": "1h", "total" }` (amount in the prize's own units;
   `every` defaults to `"1d"`). Undeclared, the tools compute with the chain's caps, which only bound a leaked voucher
-  key and are often far looser. (Read by @xgamesfun/solana after 0.28.12; an older one refuses the field.)
+  key and are often far looser.
 
 `xcore review` checks them against the code, both ways: a conversion in `server/` with no declaration
 (`code-undeclared`), a declaration no code does (`design-unbuilt`), and a grant whose bound lives in its check with no
@@ -454,9 +454,9 @@ xcore add vouchers <folder>      # needs the economy (xcore loot add) with a gra
 ```
 
 It writes `server/vouchers.js` (routed at `api/vouchers/`, with its Durable Object `GameVouchers`), copies loot's
-voucher code into `server/gf-loot/` (bundled with the server, never a public file), makes a **test key** for
-`xcore dev` with its seed as `VOUCHER_SEED` in `.dev.vars` (and, in a folder kept in git, `.dev.vars` into
-`.gitignore`), and says its address. The **live key** is made here and sent to xgames.fun only, never kept on your machine:
+voucher code into `server/gf-loot/` (bundled with the server, never a public file), makes a **test key** for `xcore dev`
+with its seed as `VOUCHER_SEED` in `.dev.vars` (and, in a folder kept in git, `.dev.vars` into `.gitignore`), and says
+its address. The **live key** is made here and sent to xgames.fun only, never kept on your machine:
 
 1. `xcore publish`, then `xcore secret set VOUCHER_SEED --new-key`: a new key made and sent to the server only. It
    puts the key's address in the grants your server pays in `xsolana.json` (those that name a voucher key, and those
@@ -465,13 +465,14 @@ voucher code into `server/gf-loot/` (bundled with the server, never a public fil
 2. `xcore loot approve` puts that on chain. To claim vouchers signed under `xcore dev`, add the test key's address to
    the grant too (devnet only: a copy of the folder holds the test key).
 3. Write `PAY.check` at the top of `server/vouchers.js`: what your server checks before a result pays. It gets the
-   page's JSON, the signed-in player and `env`, and answers `{grant, round, amount}` (grant: its key or id; round:
-   the result's own id, any text, used once; amount: base units, or `'grant'` for the grant's own amount, always
-   named so a forgotten amount never pays the most) or `{why}` to refuse. Until you write it, nothing is paid. Count a
-   player's daily total in `PAY.paid` (it runs once a round, after its voucher is signed; again only if it threw), not in `check`.
-   Then give the grant its `trust` (what that check does: `decides`, `replays` or `bounds`) and run `xcore review`.
-4. Who is paid: set `VOUCHERS.payOnly` to `'x'` or `'account'` for rewards worth farming (above, "What a payout rests on"); the grant's
-   `perDay` total caps the rest.
+   page's JSON, the signed-in player and `env`, and answers `{grant, round, amount}` (grant: its key or id; round: the
+   result's own id, any text, used once; amount: base units, or `'grant'` for the grant's own amount, always named so a
+   forgotten amount never pays the most) or `{why}` to refuse. Until you write it, nothing is paid. Count a player's
+   daily total in `PAY.paid` (it runs once a round, after its voucher is signed; again only if it threw), not in
+   `check`. Then give the grant its `trust` (what that check does: `decides`, `replays` or `bounds`) and run
+   `xcore review`.
+4. Who is paid: set `VOUCHERS.payOnly` to `'x'` or `'account'` for rewards worth farming (above, "What a payout rests
+   on"); the grant's `perDay` total caps the rest.
 5. `xcore loot approve` (the grant's change goes live), then `xcore publish`. `api/vouchers/key` answers the live
    key's address once the secret is set; until then the server pays nothing.
 
@@ -491,8 +492,9 @@ const { voucher } = await voucherFor(env, { grant: 'clear', wallet, round: match
 ```
 
 - **A voucher pays a proven wallet.** `api/vouchers/pay` pays the wallet the player signed in with, or the one they
-  linked (`api/vouchers/link`: the wallet signs @xgamesfun/solana's proof text naming the game, the link to this
-  player, a nonce the server takes once and an expiry), or one `PAY.check` names itself. A wallet the page names is refused. One wallet is linked to one player at a time.
+  linked (`api/vouchers/link`: the wallet signs @xgamesfun/solana's proof text naming the game, the link to this player,
+  a nonce the server takes once and an expiry), or one `PAY.check` names itself. A wallet the page names is refused. One
+  wallet is linked to one player at a time.
 - **One result pays one wallet once.** `GameVouchers` remembers every round it signed: the same result asked again
   gets the same voucher (with no chain read, and a fresh one when it is about to run out), never one for another
   wallet or amount, and never one once the grant has been closed and made again (a new campaign pays new rounds only).
@@ -626,8 +628,7 @@ A game with the block and no `server/` gets **xcore's stock server** as its serv
   `GamesFun.db.get('profiles', 'main', { owner: playerId })`, a player's list with `{ owner: playerId }`. An id alone
   is the player's own: a `get` by id alone that finds only another player's document answers 400 `owner` ("name
   whose document it is with `{owner}`"), and `GamesFun.db.get` gives `data: null` with `code: 'owner'` and says it
-  once in the console. Before each player had a space of their own (gamesfun.js 1.3, xcore 0.1.0) an id named any
-  player's document, so a page that reads another's by id alone needs its `owner` now (each document has it).
+  once in the console: a page that reads another player's document passes its `owner` (each document has it).
 - `write: "server"`: only a server writes it (owner `"server"`); the page reads it without naming an owner, from the
   server's space and then from the player's own (what the server wrote for that player, with `{owner: sub}`), so a
   `read: "owner"` + `write: "server"` collection (an inbox, a verified record) is read by id alone. The stock server
@@ -674,30 +675,30 @@ players' data: keep it out of git and off shared drives.
 Publish refuses a game with a database while xgames.fun does not run databases yet (its `GET /api/kit/me` lists
 `"d1"` once it does), and says so.
 
-**The older database**, `server/database.js` (one Durable Object with SQLite storage, from xcore 0.1.0), keeps
-working for a game that has it, and `xcore add database` keeps it up to date; the check says it is the older way. It
+**The older database**, `server/database.js` (one Durable Object with SQLite storage), keeps working for a game
+that has it, and `xcore add database` keeps it up to date; the check says it is the older way. It
 has the same owner spaces, rules and paging, with `RULES` at its top and `dataOf(env)` for the server's own code:
 without an owner it is the server's own space (`dataOf(env).put('news', 'today', …)`), with one a player's
-(`dataOf(env).get('profiles', 'main', { owner: sub })`). In 0.1.0 a document was found by its id alone, whoever wrote
-it, so 0.1.0 code that reads or writes a player's document by id alone needs `{ owner }`: `xcore add database` and
-publish list each such call (the README's "Upgrading from 0.1.0").
+(`dataOf(env).get('profiles', 'main', { owner: sub })`). Code written for its first version, which found a document
+by its id alone, needs `{ owner }` where it reads or writes a player's document by id: `xcore add database` and
+publish list each such call ([UPGRADING.md](UPGRADING.md)).
 
 ## Running it locally
 
 `xcore dev <folder>` runs `server/` under workerd, the runtime xgames.fun runs it on, at the page's `/game/api/*`
 (WebSockets too), with the game's page beside it and a local `env.GF`: `verifyPlayer` accepts the local sign-in that
 `gamesfun.js` gets from it (a tab that signed in is signed in again, with a new token, after a reload and after
-`xcore dev` starts again: a token from before it started is refused, as one signed with a replaced key is hosted), and saves and scores are the ones the page reads through `/platform/v1/*` (kept in
-`.gamesfun/dev-platform.json`). `env.GF.loot.report` is printed, not signed or paid; a voucher key of your own
-(`xcore add vouchers`) signs for real, with the test key in `.dev.vars`. The dev host answers only `localhost`,
-`127.0.0.1` and `[::1]`, so a page on another site can't reach it. Durable Object storage is kept in
-`.gamesfun/dev-server/`, the game's database (a local D1, its migrations applied) in `.gamesfun/dev/d1/`, its project files in
-`.gamesfun/dev/files/` (the public ones on a port of their own), its secrets come from `.dev.vars`, and a change under `server/`, to `gamesfun.json` or to
-`.dev.vars` rebuilds and reloads it. Miniflare (with
-workerd, about 140 MB) is installed once on first use, into xcore's state folder (`GAMESFUN_SERVER_DEPS=<folder>` uses
-one installed elsewhere). What is not the same as hosted: no CPU or request limits (its log says when the page's requests would pass Free's
-or Creator's rate, or a request takes longer than Free's CPU allows: lines starting `limits:`), and outbound `fetch`
-is not limited to `backend.json`'s origins.
+`xcore dev` starts again: a token from before it started is refused, as one signed with a replaced key is hosted), and
+saves and scores are the ones the page reads through `/platform/v1/*` (kept in `.gamesfun/dev-platform.json`).
+`env.GF.loot.report` is printed, not signed or paid; a voucher key of your own (`xcore add vouchers`) signs for real,
+with the test key in `.dev.vars`. The dev host answers only `localhost`, `127.0.0.1` and `[::1]`, so a page on another
+site can't reach it. Durable Object storage is kept in `.gamesfun/dev-server/`, the game's database (a local D1, its
+migrations applied) in `.gamesfun/dev/d1/`, its project files in `.gamesfun/dev/files/` (the public ones on a port of
+their own), its secrets come from `.dev.vars`, and a change under `server/`, to `gamesfun.json` or to `.dev.vars`
+rebuilds and reloads it. Miniflare (with workerd, about 140 MB) is installed once on first use, into xcore's state
+folder (`GAMESFUN_SERVER_DEPS=<folder>` uses one installed elsewhere). What is not the same as hosted: no CPU or request
+limits (its log says when the page's requests would pass Free's or Creator's rate, or a request takes longer than Free's
+CPU allows: lines starting `limits:`), and outbound `fetch` is not limited to `backend.json`'s origins.
 
 A named export that is a plain value (`export const SEASON = 5`) makes the runtime refuse to start the server: keep
 only the default export and the Durable Object classes exported (the check says so before publishing).
