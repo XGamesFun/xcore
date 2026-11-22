@@ -79,7 +79,15 @@ test("xcore dev answers as xgames.fun's side of sign-in: the client's address, t
     assert.deepEqual((await ask(named)).json, { player: null }, `a tab named ${named} is nobody`);
   await http(`${dev.origin}/platform/v1/dev/token`, { method: 'POST', body: '{"id":"tabaaaaaa1","name":"Ana"}' });
   const session = (await ask('tabaaaaaa1')).json;
-  assert.deepEqual(session.player, { wallet: null, level: 1, x: null, google: null, name: 'Ana', by: 'dev' });
+  // a local player stands in for one signed in with X, so what counts people can be tried here
+  assert.deepEqual(session.player, {
+    wallet: null,
+    level: 1,
+    x: { id: 'dev:tabaaaaaa1' },
+    google: null,
+    name: 'Ana',
+    by: 'dev',
+  });
   assert.ok(session.expires > Date.now() + 3500e3);
   const who = await http(`${dev.origin}/platform/v1/me`, { headers: { authorization: `Bearer ${session.token}` } });
   assert.equal(who.json.player.id, 'dev:tabaaaaaa1', 'the same player');

@@ -186,6 +186,16 @@ export default {
             key
               ? `The key in ${name} now is gone for good: it was kept only on xgames.fun, which never shows it, so nothing restores it. The economy's grant names the old key's address, so what the server signs with the new one is refused on chain until the grant's "vouchers" in xsolana.json lists the new address and that change goes live (${CMD} loot approve, signed by the key file that owns the economy); from then, vouchers the old key signed that nobody redeemed yet stop paying.`
               : `The value it has now is gone for good: xgames.fun never shows a secret, so nothing brings it back. Anything that still needs the old value (a voucher key's address in a grant, an outside service's old key) stops working with this server.`,
+            ...(name === 'VOUCHER_SEED' && !names.includes('PERSON_SALT')
+              ? [
+                  `This server has no PERSON_SALT, so the person each voucher names is keyed on this key: with a new one, every player is a new person to the grants that count people (perPerson, perPersonEach), and each of those limits starts again for everyone. To keep them, set PERSON_SALT first (${CMD} secret set PERSON_SALT --new-key): that also starts them again once, now, rather than at every new key. The economy's issuer ("keys": { "issuer" }) names the voucher key too: put the new address there as well.`,
+                ]
+              : []),
+            ...(name === 'PERSON_SALT'
+              ? [
+                  'PERSON_SALT keys the person each voucher names: with another value, every player is a new person to the grants that count people, and each of those limits starts again for everyone.',
+                ]
+              : []),
           ],
           nothing: 'Nothing was replaced',
           values,
@@ -203,7 +213,11 @@ export default {
         console.log(
           `Set ${name} on ${shown(dir)}'s server: env.${name} from its next request. (${r.names.length} secrets.)`,
         );
-        if (made)
+        if (made && name === 'PERSON_SALT')
+          console.log(
+            "It is a new random value, made here and kept only on xgames.fun's server: the voucher server keys each person on it from its next request.",
+          );
+        else if (made)
           console.log(
             `It is a new key, made here and kept only on xgames.fun's server. Its address: ${made.address}\nA voucher key's address goes in the grant's "vouchers" in xsolana.json (then ${CMD} loot approve).`,
           );
