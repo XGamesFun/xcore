@@ -10,6 +10,7 @@ import { buildFailure, pageRoots, runBuild } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
 import { reviewNudge } from '../lib/review.mjs';
 import { cardPrinted, drawable } from '../lib/card.mjs';
+import { plural } from '../lib/util.mjs';
 
 const usage = `Usage: xcore publish [dir] [--draft] [--new] [--title <name>] [--no-card] [--status] [--check [--verify [--port <n>]]] [--json]
 
@@ -111,12 +112,13 @@ export function publishCommand({
           if (roots.build) {
             if (!values.json) console.error(`Building it (${roots.build})…`);
             const b = await runBuild(dir, { onLine: values.json ? () => {} : l => console.error(`  ${l}`) });
-            if (b.code !== 0) {
-              console.error(
-                `Its build (${roots.build}) failed with exit code ${b.code}${buildFailure(b) ? ` (${buildFailure(b)})` : ''}: nothing was checked.`,
+            if (b.code !== 0)
+              throw Object.assign(
+                new Error(
+                  `Its build (${roots.build}) failed with exit code ${b.code}${buildFailure(b) ? ` (${buildFailure(b)})` : ''}: nothing was checked.`,
+                ),
+                { code: 'build' },
               );
-              return 1;
-            }
           }
           const p = await preflight(dir, { origin });
           const ok = !p.problems.length && !p.secrets && !p.names;
@@ -188,7 +190,6 @@ export function publishCommand({
 
 // ---- What the command prints. `where` is the game's folder as the person reads it. ----------------------------------
 
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const kb = bytes => `${(bytes / 1024).toFixed(1)} KB`;
 const failedNames = failed => failed.map(c => `${c.n} ${c.name}`).join('; ');
 

@@ -2,14 +2,14 @@
 // has no node_modules). Copied into a game with an economy as gf/loot/wallets.js, beside loot's page client
 // (@xgamesfun/xcore's lib/economy.mjs installPage). With its client:
 //
-//   import { solanaApp, walletStandardSigner } from './gf/loot/play/index.js';   (lootApp in a kit game's older copy)
+//   import { solanaApp, walletStandardSigner } from './gf/loot/play/index.js';
 //   import { solanaWallets, connectWallet, PAGE_RPC } from './gf/loot/wallets.js';
 //   const [wallet] = await solanaWallets();                 // none: the browser has no wallet (say so, never fail)
 //   const account = await connectWallet(wallet);            // the wallet asks the player
 //   const app = solanaApp({ spec, rpcUrl: PAGE_RPC, wallet: walletStandardSigner(wallet, account) });
 
-/** The page's own Solana RPC: the play host's relay once published, xcore dev's forward on the person's machine. */
 // (no page, as in a test: the path alone; a game is never checked for an address on this machine it does not use)
+/** The page's own Solana RPC: the play host's relay once published, xcore dev's forward on the person's machine. */
 export const PAGE_RPC = globalThis.location ? new URL('/loot/v1/rpc', globalThis.location.href).href : '/loot/v1/rpc';
 /** The wallet chain of an economy's cluster: devnet unless its file says "network": "mainnet". */
 export const chainOf = cluster => (cluster === 'mainnet' ? 'solana:mainnet' : 'solana:devnet');
@@ -37,7 +37,8 @@ function listen() {
 }
 listen(); // from the import on, so a wallet that announces itself early is not missed
 
-/** The wallets that can sign on `cluster` (devnet unless named), after `waitMs` for slow ones to announce themselves. */
+/** The wallets that can sign on `cluster` (devnet unless named), after `waitMs` for slow ones to announce
+ * themselves. */
 export async function solanaWallets({ waitMs = 300, cluster = 'devnet' } = {}) {
   const CHAIN = chainOf(cluster);
   listen();
@@ -47,7 +48,8 @@ export async function solanaWallets({ waitMs = 300, cluster = 'devnet' } = {}) {
   );
 }
 
-/** Ask `wallet` for the player's account (the wallet shows its own prompt). → the account, or throws if they said no. */
+/** Ask `wallet` for the player's account (the wallet shows its own prompt). → the account, or throws if they said
+ * no. */
 export async function connectWallet(wallet, { cluster = 'devnet' } = {}) {
   const CHAIN = chainOf(cluster);
   const have = wallet.accounts?.find(a => a.chains?.includes(CHAIN));

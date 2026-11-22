@@ -8,6 +8,7 @@ import { codeMatches, sameCommand, wrongCode } from '../lib/consent.mjs';
 import { economyFile } from '../lib/economy.mjs';
 import { pageRoots } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
+import { plural } from '../lib/util.mjs';
 
 const usage = `Usage: xcore db info [dir] [--live] [--json]
        xcore db query "<sql>" [dir] [--params '<json list>'] [--write] [--live [--yes <code>]] [--json]
@@ -35,7 +36,6 @@ back to) with a code, and changes nothing. It goes on when run again with --yes 
 type its word (write, import, restore). A code printed for another change is refused. With --json, the printout is
 {planned: true, code, plan, next}.`;
 
-const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const kb = n => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1024).toFixed(1)} KB`);
 
 /** Rows as columns a person reads; long values cut short. */

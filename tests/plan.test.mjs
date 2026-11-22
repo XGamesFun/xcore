@@ -125,7 +125,7 @@ test('plan in words: the tier, the month, the limits, capped and the slots', () 
     paid,
     /Game slots: 1 of 2 in use, paid through 2026-12-01 \(buy or renew on xgames.fun: your console → Plans, in SOL or USDC\)/,
   );
-  // xgames.fun from 2026-11-08 answers gameSlots: 2 free slots for everyone, any more paid.
+  // xgames.fun answers gameSlots: 2 free slots for everyone, any more paid.
   const slots = describeAccount({
     slots: 1,
     used: 1,

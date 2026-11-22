@@ -5,7 +5,7 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { named, resolveGame } from '../lib/games.mjs';
-import { filesGet, filesList, filesPut, filesRemove, filesUsage } from '../lib/files.mjs';
+import { filesGet, filesList, filesPut, filesRemove, filesUsage, sizeText as mb } from '../lib/files.mjs';
 import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore files ls [prefix/] [--dir <game>] [--live] [--json]
@@ -27,9 +27,6 @@ published); with --live, the game's files on xgames.fun (each call kept in the g
   usage              the bytes kept, against the game's cap (Free: 100 MB)
 A path is letters, digits, . _ and -, with / between folders: levels/forest-3.json.
 --dir <game> names the game's folder (default: the one you are in).`;
-
-const mb = n =>
-  n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : n >= 1024 ? `${(n / 1024).toFixed(1)} KB` : `${n} bytes`;
 
 export default {
   name: 'files',

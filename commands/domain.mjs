@@ -78,7 +78,9 @@ export default {
         console.log(
           `\nThen: ${CMD} domain check ${host} (DNS can take a few minutes; xgames.fun also checks by itself).`,
         );
-      // the page must know its domain: gamesfun.js 1.2.0 asks the play edge which game it is on a host of its own
+      // the page must know its domain: gamesfun.js asks the play edge which game it is on a host of its own, and an
+      // older copy does not
+      // a hint after the domain was added: a folder whose copies can't be read gets none, and the domain stays added
       const stale = await staleClient(dir).catch(() => []);
       if (stale.length)
         console.log(
