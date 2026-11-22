@@ -3,12 +3,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { adopt } from '../lib/publish/adopt.mjs';
 import { findChrome, playwrightChromium, playwrightCli } from '../lib/browser.mjs';
 import { FRAME_BLOCKS, pageVerify } from '../lib/check.mjs';
 import { PLAY_FRAME_ALLOW, PLAY_FRAME_SANDBOX } from '../lib/play-policy.mjs';
+import { buildTree } from '../lib/publish/tree.mjs';
 import { fixture, ROOT, tempDir } from './helpers.mjs';
 
 const browser = findChrome() ?? ((await playwrightChromium()).installed ? true : null);
@@ -511,3 +512,20 @@ test(
     );
   },
 );
+
+test('the check and the dev host leave out what publish leaves out, so a page that loads it fails there too', async t => {
+  const { servePage } = await import('../lib/check.mjs');
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  await mkdir(path.join(tmp.dir, 'node_modules/three'), { recursive: true });
+  await writeFile(path.join(tmp.dir, 'node_modules/three/three.js'), 'export {};');
+  await writeFile(path.join(tmp.dir, 'README.md'), 'notes');
+  await writeFile(path.join(tmp.dir, 'index.html'), '<!doctype html><title>x</title>');
+  await mkdir(path.join(tmp.dir, 'levels'), { recursive: true });
+  await writeFile(path.join(tmp.dir, 'levels/README.md'), 'a level’s notes, published');
+  const site = await servePage(tmp.dir);
+  t.after(site.close);
+  const published = (await buildTree(tmp.dir)).tree.files.map(f => f.path);
+  for (const p of ['node_modules/three/three.js', 'README.md', 'index.html', 'levels/README.md'])
+    assert.equal((await fetch(`${site.url}${p}`)).status === 200, published.includes(p), p);
+});

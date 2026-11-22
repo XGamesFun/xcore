@@ -2,6 +2,7 @@
 // folder's own game and the saved sign-in, the routes and bodies xgames.fun takes, and the value never in an answer.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { saveSecret } from '../lib/credentials.mjs';
@@ -287,4 +288,58 @@ test('set VOUCHER_SEED --new-key points the grant the server pays at the new key
   assert.match(r.stdout, /"clear" now takes vouchers from/);
   assert.match(r.stdout, / loot approve \(signed by the key file/);
   assert.match(r.stdout, /Left as it is: "clear" also takes vouchers from/);
+});
+
+test('secret set XSOLANA_RPC_URL waits for backend.json’s origin to be published; VOUCHER_SEED from .dev.vars points the grants', async t => {
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = {
+    GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'),
+    GAMESFUN_CREDENTIALS: 'file',
+    GAMESFUN_STUDIO: g.origin,
+    GAMESFUN_NO_UPDATE_CHECK: '1',
+  };
+  await signIn(g, env);
+  const dir = path.join(tmp.dir, 'game');
+  await mkdir(path.join(dir, '.gamesfun'), { recursive: true });
+  await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>g</title>\n');
+  await writeFile(path.join(dir, '.gamesfun', 'publish.json'), JSON.stringify({ [g.origin]: { projectId: 'g-9' } }));
+  await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify({ grants: [{ key: 'clear', id: 1, vouchers: [] }] }));
+  const names = new Map();
+  g.state.handle = (method, url, json, { authed }) => {
+    const m = url.match(/^\/api\/kit\/games\/g-9\/secrets(?:\/([A-Z0-9_]+))?$/);
+    if (!m) return null;
+    if (!authed) return [401, { error: 'Sign in first.' }];
+    if (method === 'PUT') names.set(m[1], json.value);
+    return [200, { ok: true, game: 'g-9', names: [...names.keys()].sort() }];
+  };
+  const url = 'https://devnet.rpc.example.com/?api-key=k';
+  await writeFile(path.join(dir, 'rpc.txt'), url);
+  const xc = args => runAsync(['secret', 'set', ...args], { env, cwd: dir });
+  let r = await xc(['XSOLANA_RPC_URL', '--from-file', 'rpc.txt']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /Not set yet/);
+  assert.equal(names.has('XSOLANA_RPC_URL'), false);
+  assert.deepEqual(JSON.parse(await readFile(path.join(dir, 'backend.json'), 'utf8')).origins, [
+    'https://devnet.rpc.example.com',
+  ]);
+  r = await xc(['XSOLANA_RPC_URL', '--from-file', 'rpc.txt']);
+  assert.equal(names.get('XSOLANA_RPC_URL'), url, r.stdout + r.stderr);
+  await writeFile(path.join(dir, 'bad.txt'), 'https://mainnet.rpc.example.com/');
+  r = await xc(['XSOLANA_RPC_URL', '--from-file', 'bad.txt']);
+  assert.notEqual(r.status, 0);
+  assert.match(r.stderr, /mainnet RPC.*Nothing was set/);
+
+  const seed = 'c5'.repeat(32);
+  await writeFile(path.join(dir, '.dev.vars'), `VOUCHER_SEED=${seed}\n`);
+  r = await xc(['VOUCHER_SEED', '--from-dev-vars']);
+  assert.equal(r.status, 0, r.stderr);
+  const address = await seedAddress(seed);
+  assert.match(r.stdout, new RegExp(`Its address: ${address}`));
+  assert.ok(existsSync(path.join(dir, '.gamesfun', 'vouchers.json')));
+  assert.equal(JSON.parse(await readFile(path.join(dir, '.gamesfun', 'vouchers.json'), 'utf8')).liveKey, address);
 });
