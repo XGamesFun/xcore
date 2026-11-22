@@ -404,14 +404,14 @@ signature that says this wallet earned it. The page can never sign one (anyone c
 a voucher comes from one of two signers. Both start from a result your server stands behind (above); they differ in
 who holds the key.
 
-|                    | **xgames.fun's keeper** (`env.GF.loot.report`)                                    | **your server's own key** (`xcore add vouchers`)                                          |
-| ------------------ | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Who signs          | xgames.fun, with the game's host key (made for the game, never shown to anyone)   | your server, with `VOUCHER_SEED` (a secret only it reads)                                 |
-| What a result pays | a place: up to 16 winners a result, each paid its grant's own amount              | any amount up to the grant's (by score, by rank), worked out by your server               |
-| How often          | 120 reports an hour a game                                                        | your plan's request rates                                                                 |
-| To set up          | the owner certifies the host key in Studio once; the grant names the keeper's key | `xcore add vouchers`, `xcore secret set VOUCHER_SEED --new-key`, its address in the grant |
-| Under `xcore dev`  | printed, not signed                                                               | signed with the key in `.dev.vars`, against devnet                                        |
-| Follows loot       | when xgames.fun updates the keeper                                                | when you update xcore (publish keeps `server/gf-loot/` at its loot)                       |
+|                    | **xgames.fun's keeper** (`env.GF.loot.report`)                                    | **your server's own key** (`xcore add vouchers`)                                      |
+| ------------------ | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Who signs          | xgames.fun, with the game's host key (made for the game, never shown to anyone)   | your server, with `VOUCHER_SEED` (a secret only it reads)                             |
+| What a result pays | a place: up to 16 winners a result, each paid its grant's own amount              | any amount up to the grant's (by score, by rank), worked out by your server           |
+| How often          | 120 reports an hour a game                                                        | your plan's request rates                                                             |
+| To set up          | the owner certifies the host key in Studio once; the grant names the keeper's key | `xcore add vouchers`, `xcore secret set VOUCHER_SEED --new-key`, `xcore loot approve` |
+| Under `xcore dev`  | printed, not signed                                                               | signed with the key in `.dev.vars`, against devnet                                    |
+| Follows loot       | when xgames.fun updates the keeper                                                | when you update xcore (publish keeps `server/gf-loot/` at its loot)                   |
 
 **Use the keeper** when the server already decides who won and the prize is fixed by place: a room's winner, the top
 three of a match, a hidden thing found first. No key to make or keep.
@@ -456,11 +456,12 @@ voucher code into `server/gf-loot/` (bundled with the server, never a public fil
 `xcore dev` with its seed as `VOUCHER_SEED` in `.dev.vars` (and, in a folder kept in git, `.dev.vars` into
 `.gitignore`), and says its address. The **live key** is made here and sent to xgames.fun only, never kept on your machine:
 
-1. `xcore publish`, then `xcore secret set VOUCHER_SEED --new-key`: a new key made and sent to the server only; it
-   prints the key's address.
-2. Put that address in the grant: `"vouchers": ["<the live key's address>"]` in `xsolana.json`; `xcore loot check`.
-   To claim vouchers signed under `xcore dev`, add the test key's address too (devnet only; take it out before the
-   economy holds anything of value: a copy of the folder holds the test key).
+1. `xcore publish`, then `xcore secret set VOUCHER_SEED --new-key`: a new key made and sent to the server only. It
+   puts the key's address in the grants your server pays in `xsolana.json` (those that name a voucher key, and those
+   `PAY.check` names), makes it the economy's issuer where a grant counts people, and on mainnet takes the test key out;
+   it says each change.
+2. `xcore loot approve` puts that on chain. To claim vouchers signed under `xcore dev`, add the test key's address to
+   the grant too (devnet only: a copy of the folder holds the test key).
 3. Write `PAY.check` at the top of `server/vouchers.js`: what your server checks before a result pays. It gets the
    page's JSON, the signed-in player and `env`, and answers `{grant, round, amount}` (grant: its key or id; round:
    the result's own id, any text, used once; amount: base units, or `'grant'` for the grant's own amount, always
@@ -495,7 +496,8 @@ const { voucher } = await voucherFor(env, { grant: 'clear', wallet, round: match
   wallet or amount, and never one once the grant has been closed and made again (a new campaign pays new rounds only).
 - **Rate:** a player may make `VOUCHERS.perMinute` pay and link requests a minute (20).
 - **Keys:** the live key lives only on xgames.fun's server and is never shown again; a lost or leaked one: run
-  `xcore secret set VOUCHER_SEED --new-key` again, put the new address in the grant in place of the old (and in `keys.issuer`, when it is the issuer), approve. A
+  `xcore secret set VOUCHER_SEED --new-key` again (it puts the new address in the grants in place of the old, and as the
+  issuer when the old one was), then approve. A
   leaked key can pay no more than the grant's limits (`perDay`, `total`, and `limits.tokens`, the tokens it gives in
   all), so keep them tight. The test key in `.dev.vars` signs only
   what the grant lets it sign.

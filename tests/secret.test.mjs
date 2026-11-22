@@ -2,7 +2,7 @@
 // folder's own game and the saved sign-in, the routes and bodies xgames.fun takes, and the value never in an answer.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { saveSecret } from '../lib/credentials.mjs';
 import { credentialKey } from '../lib/publish/client.mjs';
@@ -209,7 +209,10 @@ test('replacing or deleting a live secret prints what changes (never a value) wi
   r = await xc(['set', 'VOUCHER_SEED', '--new-key']);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /The key in VOUCHER_SEED now is gone for good/);
-  assert.match(r.stdout, /refused on chain until the grant's "vouchers" in xsolana\.json lists the new address/);
+  assert.match(
+    r.stdout,
+    /are pointed at the new key in xsolana\.json as it is made; what the server signs with it is refused on chain until that change goes live/,
+  );
   assert.match(r.stdout, /vouchers the old key signed that nobody redeemed yet stop paying/);
   assert.equal(names.get('VOUCHER_SEED'), 'a'.repeat(64), 'nothing replaced');
   const keyCode = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
@@ -242,4 +245,46 @@ test('replacing or deleting a live secret prints what changes (never a value) wi
   r = await xc(['delete', 'VOUCHER_SEED', '--yes']);
   assert.equal(r.status, 2);
   assert.ok(names.has('VOUCHER_SEED'));
+});
+
+test('set VOUCHER_SEED --new-key points the grant the server pays at the new key, and says the approve', async t => {
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = {
+    GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'),
+    GAMESFUN_CREDENTIALS: 'file',
+    GAMESFUN_STUDIO: g.origin,
+    GAMESFUN_NO_UPDATE_CHECK: '1',
+  };
+  await signIn(g, env);
+  const dir = path.join(tmp.dir, 'game');
+  await mkdir(path.join(dir, '.gamesfun'), { recursive: true });
+  await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>g</title>\n');
+  await writeFile(path.join(dir, '.gamesfun', 'publish.json'), JSON.stringify({ [g.origin]: { projectId: 'g-9' } }));
+  const other = await seedAddress('c4'.repeat(32));
+  await writeFile(
+    path.join(dir, 'xsolana.json'),
+    JSON.stringify({ grants: [{ key: 'clear', id: 1, vouchers: [other], limits: { perPerson: 1 } }] }),
+  );
+  const names = new Map();
+  g.state.handle = (method, url, json, { authed }) => {
+    const m = url.match(/^\/api\/kit\/games\/g-9\/secrets(?:\/([A-Z0-9_]+))?$/);
+    if (!m) return null;
+    if (!authed) return [401, { error: 'Sign in first.' }];
+    if (method === 'PUT') names.set(m[1], json.value);
+    return [200, { ok: true, game: 'g-9', names: [...names.keys()].sort() }];
+  };
+  const r = await runAsync(['secret', 'set', 'VOUCHER_SEED', '--new-key'], { env, cwd: dir });
+  assert.equal(r.status, 0, r.stderr);
+  const address = await seedAddress(names.get('VOUCHER_SEED'));
+  const e = JSON.parse(await readFile(path.join(dir, 'xsolana.json'), 'utf8'));
+  assert.deepEqual(e.grants[0].vouchers, [other, address]);
+  assert.equal(e.keys.issuer, address);
+  assert.match(r.stdout, /"clear" now takes vouchers from/);
+  assert.match(r.stdout, / loot approve \(signed by the key file/);
+  assert.match(r.stdout, /Left as it is: "clear" also takes vouchers from/);
 });

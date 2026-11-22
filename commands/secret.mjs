@@ -8,6 +8,7 @@ import { studioOrigin } from '../lib/publish/client.mjs';
 import { CMD } from '../lib/command.mjs';
 import { changeCode, codeMatches, sameCommand, wrongCode } from '../lib/consent.mjs';
 import { newVoucherKey } from '../lib/add.mjs';
+import { pointGrantsAt } from '../lib/voucher-key.mjs';
 import { secretNameProblem, secretValueProblem } from '../lib/server/secrets.mjs';
 
 const usage = `Usage: xcore secret set <NAME> [dir] [--from-file <path> | --from-dev-vars | --new-key] [--yes <code>] [--json]
@@ -21,8 +22,9 @@ server's next request, with no publish. On this machine, ${CMD} dev reads the sa
 .dev.vars (NAME=value lines; a hidden file, so publish never sends it; keep it out of git).
   set <NAME>         the value from --from-file, or the folder's .dev.vars (--from-dev-vars: the same key as under
                      xcore dev), or --new-key: a new Ed25519 key made here and sent to xgames.fun only, never kept on
-                     this machine (it prints the key's address: a voucher key's goes in the grant), else from stdin
-                     when it is piped, else typed (not shown)
+                     this machine (it prints the key's address; for VOUCHER_SEED it points the grants the server pays
+                     at it in xsolana.json, then xcore loot approve), else from stdin when it is piped, else typed (not
+                     shown)
   list               the names (values are never shown)
   delete <NAME>      remove one
 A new name is set at once. Replacing a name the server has already, or deleting one, can't be undone (xgames.fun
@@ -184,7 +186,7 @@ export default {
           lines: [
             `${shown(dir)}'s server on xgames.fun (game ${game}) has ${name} already. This replaces its value with ${sourceOf(values)}, from the server's next request.`,
             key
-              ? `The key in ${name} now is gone for good: it was kept only on xgames.fun, which never shows it, so nothing restores it. The economy's grant names the old key's address, so what the server signs with the new one is refused on chain until the grant's "vouchers" in xsolana.json lists the new address and that change goes live (${CMD} loot approve, signed by the key file that owns the economy); from then, vouchers the old key signed that nobody redeemed yet stop paying.`
+              ? `The key in ${name} now is gone for good: it was kept only on xgames.fun, which never shows it, so nothing restores it. The grants the server pays are pointed at the new key in xsolana.json as it is made; what the server signs with it is refused on chain until that change goes live (${CMD} loot approve, signed by the key file that owns the economy), and from then vouchers the old key signed that nobody redeemed yet stop paying.`
               : `The value it has now is gone for good: xgames.fun never shows a secret, so nothing brings it back. Anything that still needs the old value (a voucher key's address in a grant, an outside service's old key) stops working with this server.`,
           ],
           nothing: 'Nothing was replaced',
@@ -198,15 +200,24 @@ export default {
         ? made.seed
         : (early ?? (process.stdin.isTTY ? await hidden(`Value for ${name} (not shown): `) : await piped()));
       const r = await setSecret(dir, name, value);
-      if (out) out(made ? { ...r, address: made.address } : r);
+      // a new voucher key: the grants the server pays point at it in the economy, so no address is copied by hand
+      const pointed = made && name === 'VOUCHER_SEED' ? await pointGrantsAt(dir, made.address) : null;
+      if (out) out(made ? { ...r, address: made.address, ...(pointed ? { economy: pointed } : {}) } : r);
       else {
         console.log(
           `Set ${name} on ${shown(dir)}'s server: env.${name} from its next request. (${r.names.length} secrets.)`,
         );
         if (made)
+          console.log(`It is a new key, made here and kept only on xgames.fun's server. Its address: ${made.address}`);
+        if (pointed?.changed.length)
           console.log(
-            `It is a new key, made here and kept only on xgames.fun's server. Its address: ${made.address}\nA voucher key's address goes in the grant's "vouchers" in xsolana.json (then ${CMD} loot approve).`,
+            `In ${path.relative(process.cwd(), pointed.economy) || pointed.economy}:\n${pointed.changed.map(l => `  ${l}`).join('\n')}\nThe chain takes it once you approve it: ${CMD} loot approve (signed by the key file that owns the economy).`,
           );
+        else if (made && name === 'VOUCHER_SEED' && !pointed?.economy)
+          console.log(
+            `The game has no economy yet: ${CMD} add vouchers points its grants at this key once it has one.`,
+          );
+        for (const line of pointed?.left ?? []) console.log(`Left as it is: ${line}`);
       }
       return 0;
     }, args),

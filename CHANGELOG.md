@@ -4,10 +4,12 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 
 ## 0.10.4 — 2026-11-22
 
-**Ships with `@xgamesfun/solana` 0.29.4**, from an audit of the kit against loot 0.29.0: a shop item's per-person limit
+**Ships with `@xgamesfun/solana` 0.29.6**, from an audit of the kit against loot 0.29.0: a shop item's per-person limit
 goes live as written (0.29.3 put it live with no limit), a change to a live economy publishes every part it changes, a
 box's draws, runs of lottery places, halving and rises are simulated as the program pays them, and `check` refuses what
-the program refuses. Its changelog has the whole list. loot 0.29.0 is unchanged, and so is every live economy.
+the program refuses. The approval reads from the chain what it used to make you correct by hand: an NFT's collection,
+and a coin's decimals and token program. Its changelog has the whole list. loot 0.29.0 is unchanged, and so is every
+live economy.
 
 - **Fixed: a mainnet economy's voucher server paid nobody.** The server's copy of loot's client had no way to know the
   economy's network on xgames.fun, so it read every grant at its devnet address and refused each payout. It now works on
@@ -20,6 +22,11 @@ the program refuses. Its changelog has the whole list. loot 0.29.0 is unchanged,
   everyone again. The server now keeps that key in its own storage the first time it names a person (derived as
   before, so the people a live server has counted stay the same), and a new voucher key leaves them as they were.
   Nothing to set.
+- **`xcore secret set VOUCHER_SEED --new-key` points the grants at the new key.** It puts the live key's address in
+  the grants the server pays (those that name a voucher key, and those `PAY.check` names), in place of the live key it
+  made before; makes it the economy's issuer where a grant counts people (unless you chose another); and on mainnet
+  takes the test key out. It says each change and what it left (a key it can't name), and `xcore loot approve` puts it
+  on chain. No address is copied by hand.
 - **`xcore review`:** says when a grant that counts people has the test key as the economy's issuer (every claim the
   hosted server pays is then refused), and asks which key is the issuer when the grant names several; reads
   `perWalletEach` in the payout ledger; counts a grant capped by `limits.tokens` as bounded.
