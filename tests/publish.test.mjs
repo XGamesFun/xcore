@@ -2,11 +2,12 @@
 // same link updated, a secret refused, sign out; a game the kit made is never published by this package alone.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { adopt } from '../lib/publish/adopt.mjs';
 import { credentialKey, logout, savedLogin } from '../lib/publish/client.mjs';
 import { preflight, publishGame } from '../lib/publish/index.mjs';
+import { buildTree } from '../lib/publish/tree.mjs';
 import { fixture, passing, run, signIn, standIn, tempDir } from './helpers.mjs';
 
 test('sign in, publish, update at the same link, a secret refused, sign out', async t => {
@@ -256,4 +257,27 @@ test('a mainnet game that names its cluster in a server file of its own (as Bubb
     "import { useCluster as useLoot } from './gf-loot/client/cluster.js';\nuseLoot('mainnet');\n",
   );
   await assert.doesNotReject(publishGame(dir, { origin: g.origin, env, check: passing }));
+});
+
+test('a published folder linked from outside the game is refused; one linked inside it is published', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const outside = path.join(tmp.dir, 'outside');
+  await mkdir(outside);
+  await writeFile(path.join(outside, 'index.html'), '<!doctype html>');
+  const game = path.join(tmp.dir, 'game');
+  await mkdir(path.join(game, 'build'), { recursive: true });
+  await writeFile(path.join(game, 'build', 'index.html'), '<!doctype html>');
+  await writeFile(path.join(game, 'gamesfun.json'), JSON.stringify({ page: { out: 'dist' } }));
+  await symlink(outside, path.join(game, 'dist'));
+  const out = await buildTree(game);
+  assert.ok(out.refused.some(r => r.path === 'dist' && /outside the game/.test(r.why)));
+  assert.ok(!out.tree.files.some(f => f.path === 'index.html'));
+  await writeFile(path.join(game, 'gamesfun.json'), JSON.stringify({ page: { out: 'inside' } }));
+  await symlink(path.join(game, 'build'), path.join(game, 'inside'));
+  const ok = await buildTree(game);
+  assert.ok(
+    ok.tree.files.some(f => f.path === 'index.html'),
+    JSON.stringify(ok.refused),
+  );
 });

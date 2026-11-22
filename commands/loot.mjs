@@ -10,7 +10,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { guard, parse, printJson } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
-import { ECONOMY_FILE, solanaCommand, solanaHas } from '../lib/economy.mjs';
+import { ECONOMY_FILE, NO_SOLANA, solanaCommand, solanaHas } from '../lib/economy.mjs';
 import { addLoot } from '../lib/publish/adopt.mjs';
 import { economyCluster, solanaRpc } from '../lib/solana-rpc.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -132,19 +132,15 @@ export default {
       }, args);
     // --json goes to the kit as it is, and its answer comes back untouched: the kit's JSON is the contract
     const json = args.includes('--json');
-    const refuse = (error, code) => {
-      console.error(error);
-      if (json) printJson({ ok: false, error, code });
-      return 1;
-    };
+    // a refusal before the kit runs is this command's own, said as every command says one (with --json, as JSON too)
+    const refuse = (error, code) =>
+      guard(() => {
+        throw Object.assign(new Error(error), { code });
+      }, args);
     const xsolana = solanaCommand();
-    if (!xsolana)
-      return refuse(
-        'The economy tools (@xgamesfun/solana) are not installed here: reinstall @xgamesfun/xcore (npm i @xgamesfun/xcore), or set GAMESFUN_SOLANA to a solana-kit checkout.',
-        'no-solana',
-      );
-    // an installed package from before `review`: what to do, instead of its help
-    if (args[0] === 'review' && !solanaHas('review')) return refuse(`xcore: ${NO_REVIEW}.`, 'no-review');
+    if (!xsolana) return refuse(NO_SOLANA, 'no-solana');
+    // an installed package without `review`: what to do, instead of its help
+    if (args[0] === 'review' && !solanaHas('review')) return refuse(`${NO_REVIEW}.`, 'no-review');
     // a game made before the file was named xsolana.json keeps loot.json: given to the command when it names no file
     // (a key file's name is a flag's value, never the economy file)
     const at = ON_FILE.has(args[0]) ? plainArgs(args).find(i => i > 0 && args[i].endsWith('.json')) : undefined;

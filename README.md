@@ -13,7 +13,6 @@ What you came for decides where it takes you:
 | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | **A web game you already made**             | brings it to xgames.fun: checks it as the host serves it, gives it a backend, publishes it at a link anyone can play (this page) |                                                                                                                           |
 | **A game that should pay or sell on chain** | adds a Solana economy on loot: shops, loot boxes, raffles, prize pools, staking, rewards (§4)                                    | the economy tools are [`@xgamesfun/solana`](https://github.com/XGamesFun/solana-kit) (`xsolana`), which `xcore loot` runs |
-| **An idea for a game, no game yet**         | hands its commands to the kit                                                                                                    | the game-making kit, `@xgamesfun/kit` (coming later)                                                                      |
 
 Nothing about a game you bring changes: it keeps its code, its framework and its build, as long as it fits the hosting
 (below): static files a browser runs on its own, plus, if it needs one, a backend that is public on the internet or a
@@ -45,26 +44,20 @@ xcore domain add play.mygame.com ./my-game       # Creator or Scale: it plays at
 ```
 
 (`xcore` on npm is another package: always run this one as `npx -y @xgamesfun/xcore …`, or install it.) It needs Node 24
-or newer, and Chrome, Edge or Chromium for the check (else it downloads Playwright's Chromium once). With an agent,
-the skill in `skills/bring-your-own-game/` walks the same steps: `xcore connect` copies it into Claude Code's and Codex's
+or newer, and Chrome, Edge or Chromium for the check (else it downloads Playwright's Chromium once). With an agent, the
+skill in `skills/bring-your-own-game/` walks the same steps: `xcore connect` copies it into Claude Code's and Codex's
 skills, adds the economy's tools (what `xcore loot connect` does), and prints a few lines for a project's AGENTS.md.
 Before an economy, a draw or anything a player pays for, read [docs/BEFORE-YOU-BUILD.md](docs/BEFORE-YOU-BUILD.md): one
 method (challenge before you build, then six lenses) that finds what a design gets wrong.
 
-**Making a game from an idea** is the kit's (`@xgamesfun/kit`): base worlds, the build loop, the studio page, its six
-gates. The kit brings this package, and `xcore` hands the kit every command it does not have itself (`create`,
-`verify` …) when the kit is in or above the folder you run it in, or `GAMESFUN_KIT` names it. A game the kit made
-publishes, checks and runs (`dev`) through the kit, so its six gates run first. The kit's dev server also serves a
-brought game, with the studio around it; its MCP tools for a brought game are `gamesfun_adopt`,
-`gamesfun_verify`, `gamesfun_backend_use` (provider `custom`), `gamesfun_loot_add`, `gamesfun_publish_check` and
-`gamesfun_publish`.
+A game-making kit, for a game that starts from an idea, is coming as `@xgamesfun/kit`.
 
 ## What the hosting takes
 
 |                            |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **The page**               | Static files, served as they are (GET and HEAD). `index.html` at the root of what is published is the game's entry. A folder URL ending in `/` serves that folder's `index.html`; any other missing path is a "not found" page, with no fallback to `index.html` (a client-side router works from the entry page; a deep link to `/level/3` reloads to "not found").                                                                                                                                                                                                                                                                   |
-| **Where it is served**     | At its own origin's root once published (the link `xcore publish` prints). Under a folder in xgames.fun Studio's preview, in `xcore dev` and in the kit's dev server (`/game/`). A game uses relative URLs (`./assets/x.js`, not `/assets/x.js`), so it works in all of them.                                                                                                                                                                                                                                                                                                                                                          |
+| **Where it is served**     | At its own origin's root once published (the link `xcore publish` prints). Under a folder in xgames.fun Studio's preview, and in `xcore dev` (`/game/`). A game uses relative URLs (`./assets/x.js`, not `/assets/x.js`), so it works in all of them.                                                                                                                                                                                                                                                                                                                                                                                  |
 | **Inside the play page**   | xgames.fun shows the game in a frame (`sandbox="allow-scripts allow-same-origin allow-pointer-lock"`, `allow="autoplay; fullscreen; gamepad; clipboard-write"`): no form submits, no pop-ups and no top-level navigation, so a `<form>`, `window.open` or a link that leaves does nothing there. Sign-in, the wallet and full screen go through `gamesfun.js`, which the play page answers. `xcore check` loads the game in this frame too, and fails a page that tries one of them as it loads. Test a flow inside the play page, not only the bare game.                                                                             |
 | **Its server, if any**     | `server/` and `gamesfun.json` → `server`: a Cloudflare Worker that answers the game's `/api/*`, with up to 8 Durable Objects and the platform binding `env.GF` (sign-in, saves, scores, loot reports). [docs/SERVER.md](docs/SERVER.md). Bundled into one file on publish; never a public file.                                                                                                                                                                                                                                                                                                                                        |
 | **A backend of its own**   | Any public `https://` or `wss://` origin, listed in `backend.json` → `origins` (at most 8, public names only, no IP address, no localhost). The play host lets the page reach exactly those.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -81,16 +74,16 @@ brought game, with the studio around it; its MCP tools for a brought game are `g
 
 - **Plain static files** (an `index.html` at its root, or in `dist/`, `build/`, `public/`, `www/` …): published as
   they are.
-- **A project with a build**: the build runs (install its packages first, `npm ci` or `npm install`: adopt does not), and its output is
-  published. Known: Vite (`dist`, its `outDir`; `public/`), Next.js with `output: 'export'` (`out`), Astro (`dist`),
-  SvelteKit with `@sveltejs/adapter-static` (`build`), Nuxt with `nuxt generate` (`.output/public`), Create React App
-  (`build`), Parcel (`dist`), Gatsby (`public`), React Router in SPA mode (`build/client`). Any other `build` script:
-  its output is found after it runs (`dist`, `build`, `out` …), or given: `--build "<cmd>" --out <dir>`.
+- **A project with a build**: the build runs (install its packages first, `npm ci` or `npm install`: adopt does not),
+  and its output is published. Known: Vite (`dist`, its `outDir`; `public/`), Next.js with `output: 'export'` (`out`),
+  Astro (`dist`), SvelteKit with `@sveltejs/adapter-static` (`build`), Nuxt with `nuxt generate` (`.output/public`),
+  Create React App (`build`), Parcel (`dist`), Gatsby (`public`), React Router in SPA mode (`build/client`). Any other
+  `build` script: its output is found after it runs (`dist`, `build`, `out` …), or given: `--build "<cmd>" --out <dir>`.
 - **Refused** (nothing is written): a frontend rendered by a server (Next.js without a static export, SvelteKit
   without the static adapter, `nuxt build`, Astro with `output: 'server'`, Remix, an Express app with no static
   page), a folder with no `index.html` and no build, a build that fails. Each comes with what to do.
 
-It writes the kit's record into the game's `gamesfun.json` (never published):
+It writes the game's record into its `gamesfun.json` (never published):
 
 ```json
 { "page": { "build": "npm run build", "out": "dist", "static": "public", "title": "My Game" } }
@@ -103,7 +96,7 @@ It writes the kit's record into the game's `gamesfun.json` (never published):
 | `static` | the folder the build copies as it is (Vite, Next.js, Astro, CRA: `public`), where xcore puts the files it adds (`backend.json`, `xsolana.json`, `gf/loot/`), so every build carries them; for plain files, the folder itself |
 | `title`  | optional: the game's name on xgames.fun (else `index.html`'s `<title>`, else `package.json`'s name)                                                                                                                          |
 
-`--static <dir>` names that folder when the kit cannot tell; `--no-build` reads what is built already. A `server`
+`--static <dir>` names that folder when xcore cannot tell; `--no-build` reads what is built already. A `server`
 part of `gamesfun.json` (the game's own server) stays as it is.
 
 Then a plain list, each line with its fix:
@@ -123,9 +116,9 @@ path from the root built in a script, a request to a site `backend.json` does no
 
 **A game of several pages** (a Next.js export with routes, Astro pages): such builds link their pages from the root
 (`/level/2/`), and Next.js has no relative mode for them. Every page works at the published link, which is the game's
-own origin, but not under a folder, so `xcore check` (which serves the game under one, as Studio's preview and the
-kit's dev server do) fails them and publish saves a private draft. Until xgames.fun previews games at an origin of their
-own, make the game one page that changes screens itself (or uses a hash router), or keep it a single-page export.
+own origin, but not under a folder, so `xcore check` (which serves the game under one, as Studio's preview does) fails
+them and publish saves a private draft. Until xgames.fun previews games at an origin of their own, make the game one
+page that changes screens itself (or uses a hash router), or keep it a single-page export.
 
 **A Nuxt game**: `nuxt generate` with its defaults links every file from the root and routes by path. Make it one
 page that is served from any folder: in `nuxt.config`, `ssr: false`, `app: { cdnURL: './' }` and
@@ -141,19 +134,19 @@ pages. For a game that runs everywhere, use React Router as a library in a Vite 
 the game; the output is found in the workspace it built (`packages/game/dist`). Or adopt the game's own package: its
 packages installed at the root count as installed.
 
-**A game exported by an engine** (Godot, Unity, Defold, GameMaker): adopt the project, not the export folder the
-engine rewrites, and name the export: `xcore adopt . --out build/web` (or `--build "<export command>" --out …`). A
-Godot project never exported for the Web gets its Web preset from `xcore adopt .` (single-threaded, into `build/web/`),
-with the one command that exports it; export, then adopt again. Export again before each publish: with no build
-command, `check` and `publish` take the export as it is on disk (`check` says when the project changed after it).
-`gamesfun.json` and `evidence/` then stay out of the export. A whole export must fit in 100 MB: a stock Godot 4
-`index.wasm` is about 36 MB, so the game's own `index.pck` has the rest (compressed textures and Ogg audio keep it small).
+**A game exported by an engine** (Godot, Unity, Defold, GameMaker): adopt the project, not the export folder the engine
+rewrites, and name the export: `xcore adopt . --out build/web` (or `--build "<export command>" --out …`). A Godot
+project never exported for the Web gets its Web preset from `xcore adopt .` (single-threaded, into `build/web/`), with
+the one command that exports it; export, then adopt again. Export again before each publish: with no build command,
+`check` and `publish` take the export as it is on disk (`check` says when the project changed after it). `gamesfun.json`
+and `evidence/` then stay out of the export. A whole export must fit in 100 MB: a stock Godot 4 `index.wasm` is about 36
+MB, so the game's own `index.pck` has the rest (compressed textures and Ogg audio keep it small).
 
-- **Godot 4.3 or later**: export for the Web with **Thread Support off**, and `xcore add signin` for sign-in, saves
-  and leaderboards from GDScript (§3). A xgames.fun page is not cross-origin
-  isolated, so a threaded export stops at "missing features" (Godot 4.0 to 4.2 always use threads: upgrade). Godot's
-  ENet does not run in a browser: `xcore add multiplayer` and `GamesFun.join_room` put the game's high-level multiplayer
-  on xgames.fun's rooms unchanged (§3), or a `WebSocketMultiplayerPeer` reaches a server of your own (`backend use custom`).
+- **Godot 4.3 or later**: export for the Web with **Thread Support off**, and `xcore add signin` for sign-in, saves and
+  leaderboards from GDScript (§3). A xgames.fun page is not cross-origin isolated, so a threaded export stops at
+  "missing features" (Godot 4.0 to 4.2 always use threads: upgrade). Godot's ENet does not run in a browser:
+  `xcore add multiplayer` and `GamesFun.join_room` put the game's high-level multiplayer on xgames.fun's rooms unchanged
+  (§3), or a `WebSocketMultiplayerPeer` reaches a server of your own (`backend use custom`).
 - **Unity** (`xcore add signin` for sign-in, saves and leaderboards from C#, §3): Player Settings → Publishing
   Settings, **Compression Format Disabled** (or keep it and turn on
   **Decompression Fallback**): the play host sends files as they are, with no `Content-Encoding`, so a Brotli or Gzip
@@ -178,8 +171,7 @@ there; add `evidence/` to the game's `.gitignore`.
 
 ## 2. Check
 
-`xcore check <folder>` is the page check (a brought game is never judged by the kit's six gates, which are
-about games made on the kit; the kit's `verify` runs this same check for one):
+`xcore check <folder>` is the page check:
 
 1. **it builds** (skipped for plain files, or with `--no-build`)
 2. **it fits the hosting**: everything publish would refuse, and what breaks once hosted, on exactly what would go up
@@ -265,9 +257,9 @@ engine takes:
 
 The same calls everywhere: sign in and out, the player (`id`, `name`, `level`, `wallet`, `x`; `id` is the player's
 account, `x:<X id>` or for a Google account `g:<id>`, an id different in every game, and never the wallet, which is
-`wallet`, empty when the account has none), saves (any JSON, 64 KB each, 16 a player), leaderboards (submit, top, the player's own), the game's database (below) and its own server
-(`api`). Every call answers `{data, error, status}` and none throws, so a game plays on as a guest wherever xgames.fun is
-not there.
+`wallet`, empty when the account has none), saves (any JSON, 64 KB each, 16 a player), leaderboards (submit, top, the
+player's own), the game's database (below) and its own server (`api`). Every call answers `{data, error, status}` and
+none throws, so a game plays on as a guest wherever xgames.fun is not there.
 
 **Full screen.** Most players meet a game in a post on X or on a phone, where it shows in a small frame first; `xcore
 adopt` warns when a game has no way to go full screen. A button that calls `GamesFun.fullscreen()` from the click
@@ -328,14 +320,14 @@ claimButton.onclick = () => {
 no play page and no xgames.fun, so `canOpenWallet()` is `null` and `openWallet` answers `no-page`: test the fallback
 there, and the wallet app on xgames.fun.
 
-**A leaderboard is the player's own word until the server takes it.** A signed-in player submits their own scores
-from the page, so anyone can submit any score for themselves from the browser's console. A game with its own server
-makes a board nobody can write that way: `env.GF.scores.setup('ranked', {writer: 'server'})` (or a pattern for boards
-to come, `'daily-*'`), then the page's submits
-to it are refused (their answer's `code` is `'server-only'`, HTTP 403) and the server submits each run it checked; the page reads the board as before
-([docs/SERVER.md](docs/SERVER.md)). A board a page makes ranks higher first; a lower-first board (a time) is made by
-the game's server, and a page's `order: 'low'` for a new board is refused (`code: 'order'`). `scores.top` gives each
-entry's `player` as an id of this game's own and marks the signed-in player's own entry `me: true`.
+**A leaderboard is the player's own word until the server takes it.** A signed-in player submits their own scores from
+the page, so anyone can submit any score for themselves from the browser's console. A game with its own server makes a
+board nobody can write that way: `env.GF.scores.setup('ranked', {writer: 'server'})` (or a pattern for boards to come,
+`'daily-*'`), then the page's submits to it are refused (their answer's `code` is `'server-only'`, HTTP 403) and the
+server submits each run it checked; the page reads the board as before ([docs/SERVER.md](docs/SERVER.md)). A board a
+page makes ranks higher first; a lower-first board (a time) is made by the game's server, and a page's `order: 'low'`
+for a new board is refused (`code: 'order'`). `scores.top` gives each entry's `player` as an id of this game's own and
+marks the signed-in player's own entry `me: true`.
 
 Where the sign-in comes from:
 
@@ -535,10 +527,11 @@ is for what players must not set themselves (the page reads it without naming an
 the player's own that the server wrote for them). Lists page with `after`; `offset` is gone, and refused in words.
 The order is by when a document was last written, so one written between two pages can show twice or be skipped.
 
-A game made with xcore 0.1.0: see [Upgrading from 0.1.0](#upgrading-from-010). On a plain local server the
-page keeps documents in the browser; under `xcore dev` the database is a local D1 in `.gamesfun/dev/d1/` with the
-same migrations. Its calls count toward the game server's requests (a minute's limit per player and per game, set
-by its plan: [Its plan](#its-plan-xcore-plan)): read and write when something happens, not every frame.
+A game whose `server/database.js` was written by xcore 0.1.0: see [docs/UPGRADING.md](docs/UPGRADING.md). On a plain
+local server the page keeps documents in the browser; under `xcore dev` the database is a local D1 in
+`.gamesfun/dev/d1/` with the same migrations. Its calls count toward the game server's requests (a minute's limit per
+player and per game, set by its plan: [Its plan](#its-plan-xcore-plan)): read and write when something happens, not
+every frame.
 
 `xcore db info|query|export|import` reads and writes the local database, and with `--live` the one on xgames.fun
 (each call kept in the game's audit log); a query only reads unless `--write`. `xcore db restore <time> --live` puts
@@ -581,24 +574,26 @@ its server leave, `server_disconnected`, as over ENet).
 | A Unity project   | `var room = await GamesFun.JoinRoom(code)`: `room.Send(json, to)`, `room.SendBytes(bytes, to)`, `OnMessage`, `OnBytes`, `OnJoin`, `OnLeave`, `OnHost`                                                                                                                                      |
 | A web game        | `const { data: room } = await GamesFun.rooms.join(code)`: `room.send(data, to)`, `room.sendBytes(bytes, to)`, `room.on('message', …)`                                                                                                                                                      |
 
-A room's code is 4 to 8 letters and digits (`rooms.code()` makes one). By default the first to a code opens the room
-and anyone after joins it; a Host button passes `host: true` (refused when someone is in the room) and a Join button
-`host: false` (refused when no one is, as joining an address no one serves fails over ENet). `rooms.link(code)` is the link to share:
-`https://xgames.fun/play/<slug>?room=<CODE>`, which opens the game in that room, on xgames.fun and inside a post on X
-(its card frames the room), and `rooms.fromLink()` reads it back. `ROOM` at the top of `server/rooms.js` sets the most
-players (16), whether only signed-in players may join (their xgames.fun id and X handle come with them), and the
-message limits (120 messages a second a player; past it messages are dropped and the game told, through the room's
-`error` event, Godot's `room_error` signal and Unity's `OnError`). The page client sends each frame's messages as one,
-so a game at any frame rate sends at most about 60 a second, however many objects it syncs. A player's connection
-counts once toward the game server's requests (its plan's limits: [Its plan](#its-plan-xcore-plan)), however many messages it carries.
+A room's code is 4 to 8 letters and digits (`rooms.code()` makes one). By default the first to a code opens the room and
+anyone after joins it; a Host button passes `host: true` (refused when someone is in the room) and a Join button
+`host: false` (refused when no one is, as joining an address no one serves fails over ENet). `rooms.link(code)` is the
+link to share: `https://xgames.fun/play/<slug>?room=<CODE>`, which opens the game in that room, on xgames.fun and inside
+a post on X (its card frames the room), and `rooms.fromLink()` reads it back. `ROOM` at the top of `server/rooms.js`
+sets the most players (16), whether only signed-in players may join (their xgames.fun id and X handle come with them),
+and the message limits (120 messages a second a player; past it messages are dropped and the game told, through the
+room's `error` event, Godot's `room_error` signal and Unity's `OnError`). The page client sends each frame's messages as
+one, so a game at any frame rate sends at most about 60 a second, however many objects it syncs. A player's connection
+counts once toward the game server's requests (its plan's limits: [Its plan](#its-plan-xcore-plan)), however many
+messages it carries.
 
 Porting a Godot game from ENet: `create_server` / `create_client` become `join_room` (with `host: true` / `false` for
 Host and Join buttons), a variable typed `ENetMultiplayerPeer` becomes `MultiplayerPeer`, `create_server`'s
-`max_clients` is `ROOM.maxPlayers` (for every room of the game), and a packet sent unreliable arrives reliable. The
-peer leaves its room on `peer.close()` or when nothing holds it any more. The host's game relays every client's
-packets to the others, as Godot's server does over ENet. On this machine, tabs of the same browser share a room, so two tabs play together before the game
-is published; under `xcore dev` they play through the room server itself, as on xgames.fun. A netcode library with a server of its own (Netcode for GameObjects, Mirror, a Node server) does not
-run on xgames.fun as it is: its game logic moves to the host's game, or its server runs on a host of your own (below).
+`max_clients` is `ROOM.maxPlayers` (for every room of the game), and a packet sent unreliable arrives reliable. The peer
+leaves its room on `peer.close()` or when nothing holds it any more. The host's game relays every client's packets to
+the others, as Godot's server does over ENet. On this machine, tabs of the same browser share a room, so two tabs play
+together before the game is published; under `xcore dev` they play through the room server itself, as on xgames.fun. A
+netcode library with a server of its own (Netcode for GameObjects, Mirror, a Node server) does not run on xgames.fun as
+it is: its game logic moves to the host's game, or its server runs on a host of your own (below).
 
 **When the host must not decide.** In a room the host's game is the referee, and the host's player can read anything
 their page holds. That is fine for most games played with friends, but not for a hidden role or word (the host would
@@ -616,18 +611,18 @@ the page never holds its address or password.
 
 Three ways, any of them, or none:
 
-- **One you already run**: `xcore backend use custom <folder> --url https://api.my-game.example [--origin wss://live.my-game.example]`
-  writes `backend.json` with the URL's origin and its `wss://` twin, plus any `--origin` you add (another host, a CDN for its pictures). No client is
-  copied: the game's own code calls it. The backend answers CORS for the game's origin (the published link's, and
-  `http://127.0.0.1:<port>` in the kit's dev server). No key, unless one made to be public.
-- **Supabase or Railway**: needs the game-making kit (`@xgamesfun/kit`) installed. `xcore backend connect supabase|railway`
-  hands the command to the kit, which connects one for you. Without the kit, set one up yourself and declare it with
-  `backend use custom`.
-- **A server xgames.fun runs**: `server/index.js` and `gamesfun.json` → `server` (the `gf-server-v1` contract, [docs/SERVER.md](docs/SERVER.md)): a Worker on the
-  game's `/api/*`, with Durable Objects for rooms and state, `env.GF` for sign-in, saves and scores, and your own
-  secrets as `env.<NAME>` (`xcore secret set <NAME>`: kept on the server's host only, never shown again, never given
-  to the page). `xcore dev` runs it under workerd at `/game/api/*`, with secrets from `.dev.vars`; publish bundles it.
-  This is the way to keep server logic without a host of your own.
+- **One you already run**:
+  `xcore backend use custom <folder> --url https://api.my-game.example [--origin wss://live.my-game.example]` writes
+  `backend.json` with the URL's origin and its `wss://` twin, plus any `--origin` you add (another host, a CDN for its
+  pictures). No client is copied: the game's own code calls it. The backend answers CORS for the game's origin (the
+  published link's, and `http://127.0.0.1:<port>` under `xcore dev`). No key, unless one made to be public.
+- **Supabase, Railway or another hosted service**: set it up there, then declare its URL with `backend use custom`, as
+  above.
+- **A server xgames.fun runs**: `server/index.js` and `gamesfun.json` → `server` (the `gf-server-v1` contract,
+  [docs/SERVER.md](docs/SERVER.md)): a Worker on the game's `/api/*`, with Durable Objects for rooms and state, `env.GF`
+  for sign-in, saves and scores, and your own secrets as `env.<NAME>` (`xcore secret set <NAME>`: kept on the server's
+  host only, never shown again, never given to the page). `xcore dev` runs it under workerd at `/game/api/*`, with
+  secrets from `.dev.vars`; publish bundles it. This is the way to keep server logic without a host of your own.
 
 A brought game with a build keeps `backend.json` in its `static` folder, so the build publishes it.
 
@@ -637,12 +632,12 @@ A brought game with a build keeps `backend.json` in its `static` folder, so the 
 > raffles, lotteries, prize pools and tokens are regulated in many places, and on-chain transactions cannot be undone.
 
 A game's economy runs on loot, one shared Solana program, on devnet by default and on mainnet when its `xsolana.json`
-says `"network": "mainnet"` (real money; loot is not independently audited): shops, loot boxes, raffles
-and lotteries, prize pools, staking, crafting, perks for holders, rewards a player claims. Its tools come with this
-package (`@xgamesfun/solana`). `xcore loot connect` adds them to Claude Code or Codex: the `xsolana_*` MCP tools
-and the `xsolana-economy` skill, which turn a one-line idea into a checked economy. `xsolana_check` refuses what would
-fail or lose money on chain (a prize a pool cannot pay, a pool nothing fills, a farm that empties a lottery, a claim with
-no limit), `xsolana_simulate` shows where the money goes day by day, and `xsolana_cost` what going live costs.
+says `"network": "mainnet"` (real money; loot is not independently audited): shops, loot boxes, raffles and lotteries,
+prize pools, staking, crafting, perks for holders, rewards a player claims. Its tools come with this package
+(`@xgamesfun/solana`). `xcore loot connect` adds them to Claude Code or Codex: the `xsolana_*` MCP tools and the
+`xsolana-economy` skill, which turn a one-line idea into a checked economy. `xsolana_check` refuses what would fail or
+lose money on chain (a prize a pool cannot pay, a pool nothing fills, a farm that empties a lottery, a claim with no
+limit), `xsolana_simulate` shows where the money goes day by day, and `xsolana_cost` what going live costs.
 
 **A token.** An economy's tokens are of three kinds, and the `xsolana-economy` skill asks which one is meant ("When
 they ask for a token"):
@@ -696,16 +691,17 @@ const shop = await GamesFun.loot.call('shop'); // any method of loot's page clie
 await GamesFun.loot.call('buy', 'sword', { listing: shop.data[0] }); // a listing goes back as it came
 ```
 
-Godot: `await GamesFun.loot_ready()`, `loot_connect()`, `loot_link()`, `loot_call("shop")`, `loot_call("buy", ["sword", {"listing": item}])`.
-Unity: `GamesFun.LootReady()`, `LootConnect()`, `LootLink()`, `LootCall("shop")`, `LootCall("buy", "\"sword\", {\"listing\": …}")`.
-In a Godot or Unity project, `xcore loot add` keeps `xsolana.json` and `gf/loot/` out of the engine's export, in the
-project's own `gamesfun/` folder (with a `.gdignore`, so Godot leaves it alone): `gamesfun.json` → `page.static`.
-Publish, `xcore check` and `xcore dev` lay that folder over the export, so you export as before, and the file that
-holds the addresses the economy went live at stays in the project (keep it in git).
+Godot: `await GamesFun.loot_ready()`, `loot_connect()`, `loot_link()`, `loot_call("shop")`,
+`loot_call("buy", ["sword", {"listing": item}])`. Unity: `GamesFun.LootReady()`, `LootConnect()`, `LootLink()`,
+`LootCall("shop")`, `LootCall("buy", "\"sword\", {\"listing\": …}")`. In a Godot or Unity project, `xcore loot add`
+keeps `xsolana.json` and `gf/loot/` out of the engine's export, in the project's own `gamesfun/` folder (with a
+`.gdignore`, so Godot leaves it alone): `gamesfun.json` → `page.static`. Publish, `xcore check` and `xcore dev` lay that
+folder over the export, so you export as before, and the file that holds the addresses the economy went live at stays in
+the project (keep it in git).
 
 `@xgamesfun/solana`'s own examples use a public devnet RPC and `node_modules/` paths; on xgames.fun use `PAGE_RPC` and
-`gf/loot/` as above. Where its help says `xsolana <command>`, run `xcore loot <command>`. `xcore loot check|simulate|cost|explain`
-runs the tools from a terminal.
+`gf/loot/` as above. Where its help says `xsolana <command>`, run `xcore loot <command>`.
+`xcore loot check|simulate|cost|explain` runs the tools from a terminal.
 
 **Going live** is signed by a key file on your own computer. `approve` first shows everything it would send, with a
 code, and sends nothing; run again with that code, it sends exactly what it showed:
@@ -735,14 +731,15 @@ own transactions and a setup also makes mints and token accounts. So `approve` s
 it is set, else through Solana's public devnet RPC. Where that one refuses you (it limits each address, and some
 networks block it), set `XSOLANA_RPC_URL` in `.env` to a devnet RPC of your own.
 
-**When loot is upgraded.** This package pins the tools for one build of loot: 0.29.0, at loot's official addresses,
-`xgamesVsZBpCVgJuatfYAFJRmQoccfQf5qtUFNp2Eet` on devnet and `xgames8C758PyweWB9sDw8evvwsTVwyA2fGRUeAXVPy` on mainnet,
-since 2026-11-20. 0.29 reads none of the projects, grants, lotteries and orders that 0.28 made at the same addresses,
-so an economy that went live before then goes live again (`xcore loot approve`; remove its file's old live section
-to set it up anew). Nothing from the address before that (`9cwq…7NFQ`, loot 0.27 and earlier) is there either. A game with its own `server/rpc.js` (`xcore add rpc`) from before names the old address in its
-`scanPrograms`: put the new one first there. The next publish brings `gf/loot/` up to the installed package. **Nothing runs by
-itself** on chain: the page client sends what a player needs (settles, refunds, claims, a draw that is due); a
-schedule's runs are the project's own steps, and a run nobody sends is missed.
+**When loot is upgraded.** This package pins the tools for one build of loot (the one its `@xgamesfun/solana` dependency
+names), at loot's official addresses: `xgamesVsZBpCVgJuatfYAFJRmQoccfQf5qtUFNp2Eet` on devnet and
+`xgames8C758PyweWB9sDw8evvwsTVwyA2fGRUeAXVPy` on mainnet. When a new build cannot read the projects, grants, lotteries
+and orders an earlier one made at the same addresses, an economy that was live goes live again (`xcore loot approve`;
+remove its file's old live section to set it up anew). A game with its own `server/rpc.js` (`xcore add rpc`) lists the
+programs it may scan in `scanPrograms`: when loot moves to a new address, put the new one first there. The next publish
+brings `gf/loot/` up to the installed package. **Nothing runs by itself** on chain: the page client sends what a player
+needs (settles, refunds, claims, a draw that is due); a schedule's runs are the project's own steps, and a run nobody
+sends is missed.
 
 **What a page alone can pay safely.** A game that runs only in the browser can't prove what a player did there: anyone
 can change its score in the console. So from the page alone, offer what the player pays for or the chain decides (a
@@ -750,18 +747,17 @@ shop, boxes, raffles, lotteries, staking, crafting, perks for holders). A reward
 is a grant claimed with a voucher, and the voucher key must never be in the page (publish refuses a key it finds): the
 game's server checks the result, and then one of two signers vouches for it.
 
-**Paying a result: the keeper or your own key.** When the server already decides who won and the prize is fixed by
-place (a room's winner, a match's top three), it reports the winners with `env.GF.loot.report` and xgames.fun's keeper
-signs, with no key for you to keep. When the amount depends on the result (paid by score), when the server replays or
-bounds runs before paying, when there are entry fees or a prize pool, or when results come faster than 120 an hour,
-give the server its own key: `xcore add vouchers` writes `server/vouchers.js` (its `PAY.check` is what your server
-checks) and a test key in `.dev.vars` for `xcore dev`. In order: `xcore publish`, `xcore secret set VOUCHER_SEED
---new-key` (the live key: made here, sent only to xgames.fun and never kept on your machine; it points the grants your
-server pays at it in `xsolana.json`), `xcore loot approve`, `xcore publish`. A voucher pays only a wallet the player proved is
-theirs (signed in with it, or linked with `gf.loot.link()`), and since a wallet is free, pay rewards worth farming
-only to players signed in with X (`VOUCHERS.payOnly`). A grant names up to three keys, so the keeper and your own can
-pay the same grant while you move from one to the other.
-[docs/SERVER.md](docs/SERVER.md), "Paying a result", has both, side by side.
+**Paying a result: the keeper or your own key.** When the server already decides who won and the prize is fixed by place
+(a room's winner, a match's top three), it reports the winners with `env.GF.loot.report` and xgames.fun's keeper signs,
+with no key for you to keep. When the amount depends on the result (paid by score), when the server replays or bounds
+runs before paying, when there are entry fees or a prize pool, or when results come faster than 120 an hour, give the
+server its own key: `xcore add vouchers` writes `server/vouchers.js` (its `PAY.check` is what your server checks) and a
+test key in `.dev.vars` for `xcore dev`. In order: `xcore publish`, `xcore secret set VOUCHER_SEED --new-key` (the live
+key: made here, sent only to xgames.fun and never kept on your machine; it points the grants your server pays at it in
+`xsolana.json`), `xcore loot approve`, `xcore publish`. A voucher pays only a wallet the player proved is theirs (signed
+in with it, or linked with `gf.loot.link()`), and since a wallet is free, pay rewards worth farming only to players
+signed in with X (`VOUCHERS.payOnly`). A grant names up to three keys, so the keeper and your own can pay the same grant
+while you move from one to the other. [docs/SERVER.md](docs/SERVER.md), "Paying a result", has both, side by side.
 
 ### Review: `xcore review`
 
@@ -788,26 +784,27 @@ A game that pays is read the way a cheater reads it before players are paid. `xc
   the published economy's `live` against the folder's.
 
 Each grant a voucher pays says how much its server checks before signing: `"trust": "decides"`, `"replays"` or
-`"bounds"` (docs/SERVER.md, "What a payout rests on"). `review.md` ends with the trade-offs for the person: for each paid route, its level,
-what a cheater gets, and what the stronger level would cost. It opens with two blocks for the agent to pass on: "Ask
-the person" (questions whose answers change the design) and "Tell the person, as written" (final sentences: the economy
-check's own, each paid route's ceiling, keys out of place, and what stops when the plan caps the server), also in
-`review.json` as `ask` and `tell`. `xcore publish` says when a game that pays through vouchers changed since its last
-review (it never refuses for it).
+`"bounds"` (docs/SERVER.md, "What a payout rests on"). `review.md` ends with the trade-offs for the person: for each
+paid route, its level, what a cheater gets, and what the stronger level would cost. It opens with two blocks for the
+agent to pass on: "Ask the person" (questions whose answers change the design) and "Tell the person, as written" (final
+sentences: the economy check's own, each paid route's ceiling, keys out of place, and what stops when the plan caps the
+server), also in `review.json` as `ask` and `tell`. `xcore publish` says when a game that pays through vouchers changed
+since its last review (it never refuses for it).
 
 ## 5. Publish
 
-`xcore login` signs this computer in (your browser signs in to xgames.fun and hands it a publish token for 30
-days; xcore never sees your password). On the approval page you tick the games this computer may work on, or your
-whole account, and `xcore login` says which it got (`login --status` says it again). A game you publish as new from
-that sign-in is added to it; a command for any other game is refused with code `not-granted` ("your sign-in was not
-given this game"): run `xcore login` again and tick it. `xcore publish <folder>` then builds the game, checks it (the page
+`xcore login` signs this computer in (your browser signs in to xgames.fun and hands it a publish token for 30 days;
+xcore never sees your password). On the approval page you tick the games this computer may work on, or your whole
+account, and `xcore login` says which it got (`login --status` says it again). A game you publish as new from that
+sign-in is added to it; a command for any other game is refused with code `not-granted` ("your sign-in was not given
+this game"): run `xcore login` again and tick it. `xcore publish <folder>` then builds the game, checks it (the page
 check on exactly the files built), and uploads its published folder with its `server/` bundle:
 
-1. **The files**: the published folder, without hidden files, `evidence/`, `node_modules/`, `server/`, `supabase/` and the makers' notes at its top (`README.md`, `NOTES.md`, `LAUNCH.md` and the like). A `.env` file or a link
-   stops it. Two small records go up beside them, as xgames.fun keeps them with every version:
-   `foundation.lock.json` (which tool published it) and `adaptation-plan.json` (the game's title and a one-line
-   description). Like every published file, they can be read at the game's link.
+1. **The files**: the published folder, without hidden files, `evidence/`, `node_modules/`, `server/`, `supabase/` and
+   the makers' notes at its top (`README.md`, `NOTES.md`, `LAUNCH.md` and the like). A `.env` file or a link stops it.
+   Two small records go up beside them, as xgames.fun keeps them with every version: `foundation.lock.json` (which tool
+   published it) and `adaptation-plan.json` (the game's title and a one-line description). Like every published file,
+   they can be read at the game's link.
 2. **No secrets**: every text file is scanned for anything that looks like a key (private keys, cloud, payment and AI
    keys, a Supabase service-role key, a database address with a password). xgames.fun scans again on its side.
 3. **Its backend**: `backend.json`'s origins are the only other sites the published page may reach.
@@ -827,15 +824,17 @@ check on exactly the files built), and uploads its published folder with its `se
 Before any of that goes up, it needs the game's **preview picture** (below): with none, or one xgames.fun cannot use,
 publish stops and says what is wrong, until you make one (`xcore card`) or say it goes without (`--no-card`).
 
-`publish --check` runs steps 1 to 4 above without publishing (and says whether the preview picture is there) (`--check --verify` adds the check and remembers a pass), `--status`
-shows the link and the account, `--draft` saves a private version, `--new` makes a new game with a new link.
+`publish --check` runs steps 1 to 4 above without publishing (and says whether the preview picture is there)
+(`--check --verify` adds the check and remembers a pass), `--status` shows the link and the account, `--draft` saves a
+private version, `--new` makes a new game with a new link.
 
 **For scripts and agents**: every command takes `--json`. A failure is then also printed on stdout as
-`{ "ok": false, "error", "code", "state", "next" }`: `code` is why (`usage`, `login`, `files`, `secrets`, `build`, `card`,
-`size`…), `next` the command that moves it on. `login --status --json` and `publish --status --json` name the sign-in's
-`state` (`signed-in`, `signed-out`, `expired`, or `unreadable` when the token is kept where this session cannot read
-it, such as the Secret Service over SSH); `publish --status --json` also names the game's `link` (`never`, `started`,
-`public`, `draft`, or `draft-over-public`); `adopt --json` gives `state` (`refused`, `fix`, `ready`) and `next`.
+`{ "ok": false, "error", "code", "state", "next" }`: `code` is why (`usage`, `login`, `files`, `secrets`, `build`,
+`card`, `size`…), `next` the command that moves it on. `login --status --json` and `publish --status --json` name the
+sign-in's `state` (`signed-in`, `signed-out`, `expired`, or `unreadable` when the token is kept where this session
+cannot read it, such as the Secret Service over SSH); `publish --status --json` also names the game's `link` (`never`,
+`started`, `public`, `draft`, or `draft-over-public`); `adopt --json` gives `state` (`refused`, `fix`, `ready`) and
+`next`.
 
 **Where the token is kept**: the macOS keychain; on Linux the Secret Service (`secret-tool`) when it runs, else a file
 only you can read under `~/.config/gamesfun/secrets/`; on Windows a file encrypted for your user (DPAPI) under
@@ -862,8 +861,9 @@ jobs:
 Commit the game's preview picture (`assets/card.jpg`, made once with `xcore card`): a publish without one stops, in a
 job as anywhere.
 
-**Limits**: one game 3,000 files, 100 MiB (one file may be all of it); one account 30 publishes and 1 GB of new files a day, 100
-games. `GAMESFUN_STUDIO=<origin>` publishes to another xgames.fun (a Studio on your own machine while developing it).
+**Limits**: one game 3,000 files, 100 MiB (one file may be all of it); one account 30 publishes and 1 GB of new files a
+day, 100 games. `GAMESFUN_STUDIO=<origin>` publishes to another xgames.fun (a Studio on your own machine while
+developing it).
 
 ### Preview picture: `xcore card`
 
@@ -875,9 +875,9 @@ Without a picture the card is a plain dark gradient with the title, which is eas
 - **The file**: `assets/card.jpg` (else `assets/card.png`) among the published files (for a brought game with a build,
   in what the build makes: `page.out`). `card.jpg` wins when both are there.
 - **What xgames.fun can draw** (publish stops for anything else): a JPEG or PNG named for what it is (a PNG in
-  `card.jpg`, or a JPEG in `card.png`, fails to draw: rename it), whole (not cut short; a PNG's image data is checked too), at most 1,500,000 bytes
-  (it ignores a bigger one), and for a JPEG a baseline or progressive one (other kinds, such as lossless or
-  arithmetic-coded, cannot be drawn: `xcore card <folder> --from <it> --force` makes one that can).
+  `card.jpg`, or a JPEG in `card.png`, fails to draw: rename it), whole (not cut short; a PNG's image data is checked
+  too), at most 1,500,000 bytes (it ignores a bigger one), and for a JPEG a baseline or progressive one (other kinds,
+  such as lossless or arithmetic-coded, cannot be drawn: `xcore card <folder> --from <it> --force` makes one that can).
 - **What looks right** (publish goes on, with a warning and the fix): square, 960×960, as drawn. A side under 600 px is
   scaled up and looks blurry; a picture far from square (the longer side over 1.25 times the shorter) is cropped to
   its middle, and `xcore card <folder> --from assets/card.jpg --force` does that crop here so you can see it. Keep the
@@ -917,16 +917,15 @@ free their slot unless their link is still live. What the game's server, saves a
 
 Past what is included, a game is **capped** until the month ends: **its server is switched off** (every `api/*` request
 answers 451 with `reason: "capped"`, and a room that is running stops within about five minutes), and saves and scores
-slow down (60 save writes, 30 score submits and 60 reads a minute). Its pages keep loading and nothing is lost: the server comes
-back by itself when the cap lifts ([docs/SERVER.md](docs/SERVER.md), "Publishing it"). An unpublished or taken-down
-game's server is switched off the same way. Paid slots are $15 for
-30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans; no automatic renewal, 7 days' grace after the period
-ends; when they end, their games go back to free slots and nothing is taken down).
-Usage credit, bought the same way, lets Creator games go past what their slots include, at twice what xgames.fun pays,
-instead of being capped. A paid slot moves between your games at any time
-(`xcore plan deactivate <one>`, `xcore plan activate <another>`) without changing the bill. `xcore plan [folder]`
-shows a game's plan, its limits and this month's use; `--all` your free and paid slots and every game. A game's server sees a 429
-with `scope` (`"player"` or `"game"`) and `plan` when it goes past a rate.
+slow down (60 save writes, 30 score submits and 60 reads a minute). Its pages keep loading and nothing is lost: the
+server comes back by itself when the cap lifts ([docs/SERVER.md](docs/SERVER.md), "Publishing it"). An unpublished or
+taken-down game's server is switched off the same way. Paid slots are $15 for 30 days, prepaid in SOL or USDC on
+xgames.fun (your console → Plans; no automatic renewal, 7 days' grace after the period ends; when they end, their games
+go back to free slots and nothing is taken down). Usage credit, bought the same way, lets Creator games go past what
+their slots include, at twice what xgames.fun pays, instead of being capped. A paid slot moves between your games at any
+time (`xcore plan deactivate <one>`, `xcore plan activate <another>`) without changing the bill. `xcore plan [folder]`
+shows a game's plan, its limits and this month's use; `--all` your free and paid slots and every game. A game's server
+sees a 429 with `scope` (`"player"` or `"game"`) and `plan` when it goes past a rate.
 
 ### A coin that trades: `xcore coin`
 
@@ -946,8 +945,8 @@ xcore coin launch … --yes <code>                   # the same command, with th
 
 - **The picture** is a PNG, JPEG or WebP among the published game's files (`xcore coin` lists them); the coin's link
   is the game's own play link.
-- **The key file** signs and pays (about 0.03 SOL on the cluster), on your machine: no browser page opens. The coin's creator
-  fees belong to its address for good, so keep the file, and a copy somewhere safe.
+- **The key file** signs and pays (about 0.03 SOL on the cluster), on your machine: no browser page opens. The coin's
+  creator fees belong to its address for good, so keep the file, and a copy somewhere safe.
 - **Nothing is sent by the first run.** It prints the launch (every choice, the key's address and what it holds, what
   can't be undone) and a code, and keeps the plan in the folder (`.gamesfun/coin-plan.json`). The same command with
   `--yes <code>` launches it, held to that kept plan choice by choice (also the venue and pair xgames.fun chose by
@@ -968,12 +967,12 @@ xcore coin launch … --yes <code>                   # the same command, with th
     pump.fun fee paid to the key's own account, no change to another coin of the key's, nothing that names loot (the
     game's economy, which the same key may own), no lookup table, and at most 0.1 SOL in fees of the key's own.
 - **The cluster is asked, too.** Nothing in a transaction names its cluster, so before the key signs, an RPC of the
-  launch's cluster (devnet, or mainnet with `--cluster mainnet`, held to mainnet's first block) is asked. On devnet: a devnet RPC is asked
-  that each transaction's blockhash is one of devnet's and that the coin's address holds nothing yet. It is your own
-  RPC when `XSOLANA_RPC_URL` is set, else Solana's public one, and never xgames.fun's (the same party as the
-  launchpad: it may show the key's balance in the plan, never decide a signature). When none answers, or
-  `XSOLANA_RPC_URL` is set to something that can't be used, nothing is signed: Solana's public RPC limits how often
-  one address asks, so a devnet RPC of your own makes a launch steadier.
+  launch's cluster (devnet, or mainnet with `--cluster mainnet`, held to mainnet's first block) is asked. On devnet: a
+  devnet RPC is asked that each transaction's blockhash is one of devnet's and that the coin's address holds nothing
+  yet. It is your own RPC when `XSOLANA_RPC_URL` is set, else Solana's public one, and never xgames.fun's (the same
+  party as the launchpad: it may show the key's balance in the plan, never decide a signature). When none answers, or
+  `XSOLANA_RPC_URL` is set to something that can't be used, nothing is signed: Solana's public RPC limits how often one
+  address asks, so a devnet RPC of your own makes a launch steadier.
 - **Mainnet** (`--cluster mainnet`): real money. A game has one mainnet coin besides its devnet one; the plan opens
   with "MAINNET: REAL MONEY", the code covers the cluster, and every call to xgames.fun names it. Mainnet is checked
   through your own mainnet RPC (`XSOLANA_RPC_URL`) or Solana's public mainnet RPC, never xgames.fun's. Selling a token
@@ -1023,46 +1022,8 @@ xcore domain                           # where the game plays, the sites that em
   The page must load `gamesfun.js` 1.2.0 or later (it asks the play edge which game it is on a host of its own): an
   older copy can't sign players in there, so `domain add` says when to run `xcore add signin` and publish again. A
   game whose plan drops keeps its domain paused: it sends players to the xgames.fun link until there is room again.
-- Custom domains need xgames.fun's operator to have set them up (Cloudflare for SaaS): until then `xcore domain` says so.
-
-## Upgrading from 0.1.0
-
-A game made with xcore 0.1.0 that has `server/database.js` (`xcore add database` then) needs these changes. A game
-without one needs none: the D1 database, `xcore db` and `xcore files` are new.
-
-1. **Run `xcore add database` again.** It brings `server/database.js` up to date (your `RULES` and `LIMITS` are
-   kept), with `gamesfun.js` (1.9.0) and the Godot or Unity glue, and lists each `dataOf(env)` call in `server/` that
-   needs an owner (step 3) as `file:line` with its change; `xcore publish` lists them again until each names its
-   owner. On its first start the new `database.js` moves the documents to a table keyed by collection, owner and id,
-   each under its owner. After that, do not roll the game back to a version with 0.1.0's `database.js`: its writes
-   fail on the new table.
-2. **Rules are private by default.** A `RULES` that 0.1.0 wrote and nobody changed
-   (`'*': { read: 'anyone', write: 'owner' }`) becomes `'*': { read: 'owner', write: 'owner' }`: each player reads
-   only their own documents. Name each collection that is meant to be public:
-   `levels: { read: 'anyone', write: 'owner' }`. A rule xcore does not know (`read: 'everyone'`) now stops the server
-   when it starts, instead of being read as something else.
-3. **`dataOf(env)` takes an owner.** Without one it is the server's own space (owner `"server"`): 0.1.0's
-   `dataOf(env).get('profiles', playerId)` answers 404, and `.put('profiles', playerId, …)` writes a copy the player
-   never sees. Pass `{ owner: sub }` (the player's id, `env.GF.verifyPlayer`'s `sub`) as the last argument of `get`,
-   `put`, `add` and `delete`, or `{ owner: 'server' }` for the server's own documents. A `list` without an owner is
-   still everyone's.
-4. **A page reads another player's document by its owner.** An id alone is now the player's own document (or, in a
-   `write: 'server'` collection, the server's). For someone else's, pass the owner:
-   `gf.db.get('levels', id, { owner: doc.owner })`, `GET api/db/<collection>/<id>?owner=<id>`, Godot
-   `db_get(collection, id, {"owner": owner})`, Unity `DbGet(collection, id, owner)`. By id alone it gives
-   `data: null` with `code: 'owner'` (said once in the console).
-5. **Lists page with `after`, not `offset`.** Pass the last answer's `after` for the next page
-   (`gf.db.list('levels', { after: page.after })`); it is `null` on the last page, and `more` says whether there is
-   another. A real `offset` is refused (0 or none is fine): `code: 'offset'` from `gf.db.list` and Godot's `db_list`,
-   400 from `GET api/db/<collection>?offset=` and from `dataOf(env).list`. Unity's
-   `DbList(collection, owner, limit, after, order)` takes the `after` text where 0.1.0's took an `int offset`, so a
-   call that passed an offset does not compile until it passes `after`. `LIMITS.offset` is gone.
-6. **`createData`** (for server code that runs the documents over SQLite of its own): 0.1.0's
-   `createData(sql, { rules, limits, now })`, which called `sql.exec`, is
-   `createData(exec, { rules, limits, now, table })`, where `exec(query, ...bindings)` answers the rows or a promise
-   of them. Every call is async, and the options come before `who`: `get(collection, id, opts, who)`,
-   `put(collection, id, value, opts, who)`, `add(collection, value, opts, who)`, `delete(collection, id, opts, who)`,
-   `list(collection, opts, who)`.
+- Custom domains need xgames.fun's operator to have set them up (Cloudflare for SaaS): until then `xcore domain` says
+  so.
 
 ## What is not supported, and why
 
@@ -1133,7 +1094,9 @@ it with `npm i -g @xgamesfun/xcore`.
 - [docs/BEFORE-YOU-BUILD.md](docs/BEFORE-YOU-BUILD.md): challenge before you build, and the six lenses that
   find what a design gets wrong
 - [skills/bring-your-own-game/SKILL.md](skills/bring-your-own-game/SKILL.md): the same steps, for a coding agent
-- [CHANGELOG.md](https://github.com/XGamesFun/xcore/blob/main/CHANGELOG.md), [CONTRIBUTING.md](https://github.com/XGamesFun/xcore/blob/main/CONTRIBUTING.md), [SECURITY.md](https://github.com/XGamesFun/xcore/blob/main/SECURITY.md)
+- [CHANGELOG.md](https://github.com/XGamesFun/xcore/blob/main/CHANGELOG.md),
+  [CONTRIBUTING.md](https://github.com/XGamesFun/xcore/blob/main/CONTRIBUTING.md),
+  [SECURITY.md](https://github.com/XGamesFun/xcore/blob/main/SECURITY.md)
 
 ## Disclaimer and responsible use
 
@@ -1159,9 +1122,10 @@ from a qualified professional before you offer anything of real value.
 **On-chain features.** The loot program runs on Solana devnet and on **mainnet**, and **has not been independently
 audited**. An economy is on devnet, where nothing has value, unless its `xsolana.json` says `"network": "mainnet"`:
 there every transaction moves real SOL and real tokens, and what is sent to the program can be lost. Try an economy on
-devnet first, and put it on mainnet only once you accept that risk. Blockchain transactions are public and irreversible. You alone control your wallet and keys. Never put a
-private key, seed phrase or secret in a game, and approve only transactions you understand. The key file an economy
-goes live with owns it: keep it outside the game's folder, and never paste it anywhere.
+devnet first, and put it on mainnet only once you accept that risk. Blockchain transactions are public and irreversible.
+You alone control your wallet and keys. Never put a private key, seed phrase or secret in a game, and approve only
+transactions you understand. The key file an economy goes live with owns it: keep it outside the game's folder, and
+never paste it anywhere.
 
 **Third-party services.** xgames.fun, Cloudflare, Supabase, Railway, GitHub, npm, Solana RPC providers and wallets are
 run by others under their own terms and policies, which you must follow. Their availability, fees and rules can change

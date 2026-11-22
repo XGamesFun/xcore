@@ -24,15 +24,16 @@ Set `GAMESFUN_DEBUG=1` to print stack traces for errors.
 
 ## Project layout
 
-| Path            | What it holds                                                                                                  |
-| --------------- | -------------------------------------------------------------------------------------------------------------- |
-| `bin/xcore.mjs` | the command's entry point: loads `commands/` and hands other commands to the kit                               |
-| `commands/`     | one module per command (`adopt`, `check`, `dev`, `publish`, `add`, `backend`, `loot`, `review`, `secret`, …)   |
-| `lib/`          | everything the commands use; `lib/publish/` is the publish pipeline, `lib/server/` the `gf-server-v1` contract |
-| `loot-page/`    | the browser-side wallet helper copied into a game with an economy                                              |
-| `skills/`       | instructions for coding agents                                                                                 |
-| `docs/`         | longer documentation                                                                                           |
-| `tests/`        | `node:test` tests, with sample games in `tests/fixtures/`                                                      |
+| Path            | What it holds                                                                                                                                                                          |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bin/xcore.mjs` | the command's entry point: loads `commands/` and hands other commands to the kit                                                                                                       |
+| `commands/`     | one module per command (`adopt`, `check`, `dev`, `publish`, `add`, `backend`, `loot`, `review`, `secret`, …)                                                                           |
+| `lib/`          | everything the commands use; `lib/publish/` is the publish pipeline, `lib/server/` the `gf-server-v1` contract                                                                         |
+| `lib/client/`   | the templates copied into a game: `gamesfun.js` (and its generated copy `signin-v1.js`), the Godot and Unity glue, and `server/` (the files `xcore add` writes into the game's server) |
+| `loot-page/`    | the browser-side wallet helper copied into a game with an economy                                                                                                                      |
+| `skills/`       | instructions for coding agents                                                                                                                                                         |
+| `docs/`         | longer documentation                                                                                                                                                                   |
+| `tests/`        | `node:test` tests, with sample games in `tests/fixtures/`                                                                                                                              |
 
 ## Making a change
 

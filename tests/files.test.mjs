@@ -1,4 +1,4 @@
-// The game's project files (xgames.fun's STORAGE.md §2, §8.6–8.8): the path and type rules, the store env.GF.files
+// The game's project files: the path and type rules, the store env.GF.files
 // answers from on this machine (.gamesfun/dev/files/), the public files on an origin of their own with the files
 // domain's headers, `xcore files` here and --live against a stand-in xgames.fun, and env.GF.files from a game's server
 // under `xcore dev` (that last needs Miniflare: GAMESFUN_SERVER_DEPS, as tests/dev.test.mjs).
@@ -31,7 +31,7 @@ async function game(tmp, files = {}) {
   return dir;
 }
 
-test('a file’s path and how the files domain serves its type (§8.6, §8.7)', () => {
+test('a file’s path and how the files domain serves its type', () => {
   for (const ok of ['a.json', 'replays/2026-11-08/run_1.bin', 'x'.repeat(512)])
     assert.equal(filePathProblem(ok), null, ok);
   for (const no of ['', '/a', 'a/', 'a//b', 'a/../b', './a', 'a/.', 'a b', 'a%2Fb', 'é.png', 'x'.repeat(513)])
@@ -157,7 +157,7 @@ test('.gamesfun/ gets a .gitignore of its own (*) the first time xcore writes th
   assert.equal(await readFile(path.join(dir, '.gamesfun', '.gitignore'), 'utf8'), '');
 });
 
-test('public files on an origin of their own: the files domain’s headers, types, ETag and ranges (§8.7)', async t => {
+test('public files on an origin of their own: the files domain’s headers, types, ETag and ranges', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await game(tmp);
@@ -304,7 +304,7 @@ test('xcore files on this machine: put, ls, get, rm, usage', async t => {
   assert.match(r.stdout, /Deleted levels\/forest-3\.json on this machine/);
 });
 
-test('xcore files --live: refused until xgames.fun lists "files", then through the owner routes (§8.8)', async t => {
+test('xcore files --live: refused until xgames.fun lists "files", then through the owner routes', async t => {
   const tmp = await tempDir(),
     g = await standIn();
   t.after(async () => {
@@ -382,12 +382,12 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
     gfLength: undefined,
     body: 'PNG!',
   });
-  // over Studio's 4.5 MB (its host's limit on a request): refused here, with the way that takes it
+  // over Studio's 4,500,000 bytes (its host's limit on a request): refused here, with the way that takes it
   await writeFile(path.join(dir, 'world.bin'), Buffer.alloc(4_600_000));
   const before = seen.length;
   r = await xc(['put', 'world.bin']);
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /This file is 4\.6 MB\..*at most 4\.5 MB a request\. A bigger one .*env\.GF\.files\.put/s);
+  assert.match(r.stderr, /This file is 4\.4 MB\..*at most 4\.3 MB a request\. A bigger one .*env\.GF\.files\.put/s);
   assert.equal(seen.length, before, 'not sent');
   r = await xc(['ls', 'art']);
   assert.match(r.stdout, /public\s+4 bytes\s+art\/hero\.png/);

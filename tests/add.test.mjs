@@ -4,8 +4,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createPrivateKey, sign } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { register } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -1221,4 +1222,18 @@ test('vouchers on mainnet: the steps never suggest the test key, and say to take
   const said = r.steps.join('\n');
   assert.match(said, /The economy is on mainnet: never add the test key to a grant/);
   assert.doesNotMatch(said, /add the test key's address too/);
+});
+
+test('add vouchers keeps .dev.vars out of a repository the game sits in, not only one of its own', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  execFileSync('git', ['init', '-q'], { cwd: tmp.dir });
+  const dir = path.join(tmp.dir, 'games', 'mine');
+  await cp(path.join(ROOT, 'tests/fixtures/byo/static'), dir, { recursive: true });
+  await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify({ grants: [{ key: 'clear', id: 0 }] }));
+  await addVouchers(dir);
+  execFileSync('git', ['add', '-A'], { cwd: tmp.dir });
+  const staged = execFileSync('git', ['diff', '--cached', '--name-only'], { cwd: tmp.dir, encoding: 'utf8' });
+  assert.doesNotMatch(staged, /\.dev\.vars/);
+  assert.match(staged, /games\/mine\/\.gitignore/);
 });

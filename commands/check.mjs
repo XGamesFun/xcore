@@ -32,12 +32,10 @@ export default {
         usage,
       );
       const dir = await resolveGame(positionals[0]);
-      if (madeByKit(dir)) {
-        console.error(
+      if (madeByKit(dir))
+        throw new Error(
           `${shown(dir)} was made with the kit: its check is the kit's six gates (${CMD} verify, with @xgamesfun/kit installed).`,
         );
-        return 1;
-      }
       const port = values.port === undefined ? 0 : Number(values.port);
       if (values.port !== undefined && !(Number.isInteger(port) && port >= 1 && port <= 65535))
         throw new UsageError(`--port takes a port number (1–65535)\n\n${usage}`);

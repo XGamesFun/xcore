@@ -1,20 +1,35 @@
 // A new live voucher key points the grants the server pays at itself in the economy: the owner copies no address. The
 // key it replaces goes out, the test key goes out on mainnet, a grant that counts people gets it as the issuer, and what
-// this machine can't decide is said, never guessed.
+// this machine can't decide is said, never guessed. The live key reaches each grant PAY.check pays however it names
+// it, and add vouchers run again keeps the owner's own code beside PAY.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { addVouchers, newVoucherKey } from '../lib/add.mjs';
+import { addVouchers, keepSettings, newVoucherKey } from '../lib/add.mjs';
 import { pointGrantsAt } from '../lib/voucher-key.mjs';
 import { fixture, tempDir } from './helpers.mjs';
 
-async function game(t, economy) {
+/** A PAY.check that names its grant through a variable, as an owner's own code may. */
+const PAY_VIA_VARIABLE = `async check({ body }) {
+    const grant = body.boss ? 'boss' : "clear";
+    return { grant, round: body.runId, amount: 'grant' };
+  },`;
+
+/** A game with the economy `economy` and add vouchers' server; `check` replaces the template's PAY.check. */
+async function game(t, economy, { check } = {}) {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await fixture(tmp, 'static');
   await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify(economy));
   const { address: test } = await addVouchers(dir);
+  if (check) {
+    const f = path.join(dir, 'server', 'vouchers.js');
+    const text = await readFile(f, 'utf8');
+    const out = text.replace(/async check\(\) \{\r?\n {4}return \{ why: [^\r\n]*\r?\n {2}\},/, check);
+    assert.notEqual(out, text, 'the template check was replaced');
+    await writeFile(f, out);
+  }
   const read = async () => JSON.parse(await readFile(path.join(dir, 'xsolana.json'), 'utf8'));
   return { dir, test, read };
 }
@@ -85,4 +100,68 @@ test('an issuer the owner chose, and a key this machine cannot name, are left an
     r.left.some(l => l.includes(chosen) && /which you chose/.test(l)),
     r.left.join('\n'),
   );
+});
+
+test('the live key reaches every grant PAY.check names as a string, and says so when none is named', async t => {
+  const g = await game(
+    t,
+    {
+      grants: [
+        { key: 'clear', id: 1 },
+        { key: 'boss', id: 2 },
+        { key: 'other', id: 3 },
+      ],
+    },
+    { check: PAY_VIA_VARIABLE },
+  );
+  const live = (await newVoucherKey()).address;
+  const r = await pointGrantsAt(g.dir, live);
+  const e = await g.read();
+  assert.deepEqual(
+    e.grants.map(x => x.vouchers ?? null),
+    [[live], [live], null],
+  );
+  assert.equal(r.left.length, 0, r.left.join('\n'));
+
+  const none = await game(t, { grants: [{ key: 'clear', id: 1 }] });
+  const r2 = await pointGrantsAt(none.dir, live);
+  assert.ok(r2.left.some(l => /No grant in xsolana\.json takes vouchers from/.test(l) && l.includes('"clear"')));
+});
+
+test('add vouchers on devnet puts the test key in the grants the server pays, and later the live key made before', async t => {
+  const g = await game(t, { grants: [{ key: 'clear', id: 1 }] }, { check: PAY_VIA_VARIABLE });
+  const live = (await newVoucherKey()).address;
+  await pointGrantsAt(g.dir, live);
+  // a grant added after the live key was made: add vouchers points it at both, no new key
+  const e = await g.read();
+  e.grants.push({ key: 'boss', id: 2 });
+  await writeFile(path.join(g.dir, 'xsolana.json'), JSON.stringify(e));
+  const r = await addVouchers(g.dir);
+  const after = await g.read();
+  assert.deepEqual(after.grants[1].vouchers, [live, g.test]);
+  assert.ok(after.grants[0].vouchers.includes(g.test));
+  assert.ok(r.written.some(l => /pointed the live voucher key/.test(l)));
+
+  // mainnet: never the test key
+  const m = await game(t, { network: 'mainnet', grants: [{ key: 'clear', id: 1 }] }, { check: PAY_VIA_VARIABLE });
+  await addVouchers(m.dir);
+  assert.equal((await m.read()).grants[0].vouchers, undefined);
+});
+
+test('add vouchers run again keeps what the owner wrote beside PAY, and a setting’s whole default', async t => {
+  const g = await game(t, { grants: [{ key: 'clear', id: 1 }] });
+  const f = path.join(g.dir, 'server', 'vouchers.js');
+  await writeFile(
+    f,
+    (await readFile(f, 'utf8')) +
+      '\n// my own scoring\nfunction scoreOf(body) {\n  return Number(body.score ?? 0);\n}\nconst BONUS = 2;\n',
+  );
+  for (let i = 0; i < 2; i++) await addVouchers(g.dir);
+  const out = await readFile(f, 'utf8');
+  assert.equal(out.match(/function scoreOf/g)?.length, 1);
+  assert.equal(out.match(/const BONUS = 2/g)?.length, 1);
+
+  const before = "export const RPC = {\n  scanPrograms: ['mine'],\n};\n";
+  const now = "export const RPC = {\n  scanPrograms: ['9cwq'],\n  loot: ['xgamesVs', 'xgames8C'],\n};\n";
+  assert.match(keepSettings(before, now, ['RPC']), /loot: \['xgamesVs', 'xgames8C'\]/);
 });

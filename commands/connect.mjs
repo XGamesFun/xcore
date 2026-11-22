@@ -7,7 +7,7 @@ import { cp, mkdir, readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { guard, parse, printJson } from '../lib/cli.mjs';
-import { solanaRoot } from '../lib/economy.mjs';
+import { NO_SOLANA, solanaRoot } from '../lib/economy.mjs';
 import { CMD } from '../lib/command.mjs';
 import { ownWords } from './loot.mjs';
 
@@ -66,13 +66,7 @@ async function solanaConnect(env = process.env) {
  */
 export async function connectAgents({ dryRun = false, run, cwd = process.cwd(), env = process.env } = {}) {
   const kit = await solanaConnect(env);
-  if (!kit)
-    throw Object.assign(
-      new Error(
-        'The economy tools (@xgamesfun/solana) are not installed here: reinstall @xgamesfun/xcore (npm i @xgamesfun/xcore), or set GAMESFUN_SOLANA to a solana-kit checkout.',
-      ),
-      { code: 'no-solana' },
-    );
+  if (!kit) throw Object.assign(new Error(NO_SOLANA), { code: 'no-solana' });
   run ??= kit.runAgent;
   const agents = [];
   for (const [id, a] of Object.entries(kit.AGENTS)) {

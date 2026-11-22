@@ -2,6 +2,29 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.10.5 — 2026-11-22
+
+Ships with `@xgamesfun/solana` 0.29.8, a cleanup of the kit's code and docs (no behaviour changed). A cleanup here too: no behaviour changed. Notes about past versions and dates left the code and the docs (this file keeps the
+history), shared helpers replaced their copies, unused internal exports went, and the server templates' comments were
+wrapped to 120 columns. Wording a person sees:
+
+- **Fixed: `--json` failures that printed no JSON.** `xcore check` and `xcore dev` on a game the kit made,
+  `xcore publish --check` when the build fails, and `xcore loot`'s own refusals (no economy tools, no `review`) now say
+  `{ "ok": false, "error", "code"? }` on stdout like every other failure (the build failure with `code: "build"`), and
+  their line on stderr starts with `xcore:`. So does a command of the kit's with no kit here (`code: "no-kit"`). The
+  exit code is still 1.
+- `xcore files put --live` with a file too big for Studio gives every size in the unit the 25 MB file limit is set in
+  (1 MB = 1,048,576 bytes): "This file is 4.4 MB … at most 4.3 MB a request" (was 4.6 and 4.5, in millions of bytes).
+- With no economy tools: "…or set GAMESFUN_SOLANA to the folder of a copy of @xgamesfun/solana" (was "a solana-kit
+  checkout"); the economy review's note says the same.
+- A command of the kit's with no kit here: "It is not installed here: run xcore inside a folder that has the kit, or set
+  GAMESFUN_KIT=<folder>…".
+- Docs: the README names the coming game kit once; upgrading a game whose `server/database.js` came from xcore 0.1.0 is
+  in [docs/UPGRADING.md](docs/UPGRADING.md); docs/BEFORE-YOU-BUILD.md's worked examples are a generic promotion game.
+
+The page client (`gamesfun.js`) and the engine plugins are unchanged, so no game's copy reads as older. The server
+templates (`xcore add …`) had their comments tidied; a game's own copy changes only when its `add` runs again.
+
 ## 0.10.4 — 2026-11-22
 
 **Ships with `@xgamesfun/solana` 0.29.7**, from two audits of the kit against loot 0.29.0:

@@ -63,12 +63,10 @@ export default {
       if (!PLAN_NAMES.includes(plan))
         throw new UsageError(`--plan is ${PLAN_NAMES.slice(0, -1).join(', ')} or ${PLAN_NAMES.at(-1)}\n\n${usage}`);
       const dir = await resolveGame(positionals[0]);
-      if (madeByKit(dir)) {
-        console.error(
+      if (madeByKit(dir))
+        throw new Error(
           `${shown(dir)} was made with the kit: its dev server is the kit's (${CMD} dev, with @xgamesfun/kit).`,
         );
-        return 1;
-      }
       const say = values.json ? m => console.error(m) : m => console.log(m);
       const { startDev } = await import('../lib/dev/index.mjs');
       let dev;

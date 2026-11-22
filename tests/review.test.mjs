@@ -1367,3 +1367,40 @@ test('a paid read that answers "not paid" when the chain fails (paid-read-open),
   assert.deepEqual(of(closed), []);
   assert.deepEqual(of(thrown), []);
 });
+
+test('review asks which key is the issuer when a grant that counts people names several, and counts a cap on tokens', () => {
+  const KEEPER = 'Kee1111111111111111111111111111111111111111';
+  const LIVE = 'Liv1111111111111111111111111111111111111111';
+  const site = {
+    signer: 'server',
+    where: 'server/vouchers.js',
+    payOnly: 'x',
+    source: 'env',
+    amount: 'grant',
+    recipient: 'proven',
+  };
+  const cases = (vouchers, issuer) =>
+    payoutFindings(
+      payoutLedger(
+        {
+          keys: { issuer },
+          grants: [{ key: 'clear', id: 1, vouchers, trust: 'decides', limits: { perPerson: 1, perDay: 100 } }],
+        },
+        { sites: [site] },
+      ),
+      { available: true },
+    ).flatMap(f => f.cases ?? []);
+  assert.ok(cases([LIVE], KEEPER).includes('issuer'));
+  assert.ok(cases([KEEPER, LIVE], KEEPER).includes('issuer-which'));
+  assert.ok(!cases([LIVE], LIVE).some(c => c.startsWith('issuer')));
+  const capped = payoutCeiling({ tokens: 1000 });
+  assert.equal(capped.bounded, true);
+  assert.match(capped.words, /1000 base units of its token in all/);
+});
+
+test('review: a setting read from env is no state; storage through env is', () => {
+  const check = body => paysFromRequest({ body });
+  assert.equal(check("return body.score > Number(env.MIN_SCORE) ? { grant: 'clear' } : { why: 'low' };"), true);
+  assert.equal(check("const r = await env.DB.prepare('x').first();\n return { grant: 'clear' };"), false);
+  assert.equal(check("return seen(env) && { grant: 'clear' };"), false);
+});

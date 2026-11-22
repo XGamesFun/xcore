@@ -350,3 +350,17 @@ test('names a request brings ("constructor", "__proto__") are keys like any othe
   assert.deepEqual((await again.run('saves.get', ['dev:a', '__proto__'])).value, { level: 2 });
   assert.equal(await again.signinSession('tostring'), null);
 });
+
+test('a local player stands in for one signed in with X, so a grant that counts people can be tried under xcore dev', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const store = createPlatformStore({ dir: tmp.dir, slug: 'g' });
+  const { token, player } = store.devToken({ id: 'tab1abc' });
+  const v = await store.verifyPlayer(token);
+  assert.equal(v.x?.id, 'dev:tab1abc');
+  assert.equal(player.x?.id, v.x.id);
+  // XCORE_DEV_SIGNIN=wallet: a player with no X account, to try what they meet
+  process.env.XCORE_DEV_SIGNIN = 'wallet';
+  t.after(() => delete process.env.XCORE_DEV_SIGNIN);
+  assert.equal((await store.verifyPlayer(store.devToken({ id: 'tab2abc' }).token)).x, null);
+});

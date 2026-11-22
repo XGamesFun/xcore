@@ -6,23 +6,19 @@
 // they are, and so do publish and check for a game the kit made (its six gates) and every backend the kit connects;
 // without it, the command says how to get it.
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
+import { realpathSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { printJson } from '../lib/cli.mjs';
 import { CMD } from '../lib/command.mjs';
+import { readJson } from '../lib/util.mjs';
+import { madeByKit } from '../lib/games.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const COMMANDS_DIR = path.join(HERE, '..', 'commands');
 const KIT = '@xgamesfun/kit';
-const readJson = file => {
-  try {
-    return JSON.parse(readFileSync(file, 'utf8'));
-  } catch {
-    return null;
-  }
-};
 
 /** The kit's folder: GAMESFUN_KIT, else a kit in or above the folder this runs in (its checkout, or installed in a
  *  project), else the kit this package was installed with. → its folder, or null */
@@ -53,7 +49,7 @@ export function kitsTurn(name, args) {
   if (name === 'backend') return !(positionals[0] === 'use' && positionals[1] === 'custom');
   if (name === 'publish' || name === 'check' || name === 'dev') {
     const dir = path.resolve(positionals[0] ?? '.');
-    return existsSync(path.join(dir, 'gf-three.json'));
+    return madeByKit(dir);
   }
   return false;
 }
@@ -80,8 +76,8 @@ function runKit(kit, args) {
   });
 }
 
-const NO_KIT = `That is the kit's (@xgamesfun/kit): it makes games, the studio page, verify and the build loop. The kit is
-not released yet; with a checkout of it, run xcore inside that folder, or set GAMESFUN_KIT=<folder> to use it from anywhere.`;
+const NO_KIT = `That is the kit's (@xgamesfun/kit): it makes games, the studio page, verify and the build loop. It is not
+installed here: run xcore inside a folder that has the kit, or set GAMESFUN_KIT=<folder> to use it from anywhere.`;
 
 /** The kit's own commands (@xgamesfun/kit's builder/commands, less those this package has): only these are said to be
  *  the kit's when there is no kit. */
@@ -182,6 +178,13 @@ export async function main([name, ...args]) {
     console.error(
       own ? `${NO_KIT}\n\n${own.usage ?? ''}` : `${unknownCommand(name, commands)}\n\n${help(commands, null)}`,
     );
+    // --json: the same failure as JSON on stdout, as every command's own failures are (lib/cli.mjs guard)
+    if (args.includes('--json'))
+      printJson({
+        ok: false,
+        error: (own ? NO_KIT : unknownCommand(name, commands)).replace(/\s*\n\s*/g, ' '),
+        code: own || KIT_COMMANDS.has(name) ? 'no-kit' : 'unknown-command',
+      });
     return 1;
   }
   if (wantsHelp) {

@@ -1,4 +1,4 @@
-// The game's own D1 database (gamesfun.json → database; xgames.fun's STORAGE.md §8): the block's rules, `xcore add
+// The game's own D1 database (gamesfun.json → database): the block's rules, `xcore add
 // database` with and without a server, the stock server (the same answers as server/database.js, over D1), the
 // migrations in the publish manifest and xgames.fun's refusals of them, and `xcore db` against a stand-in xgames.fun.
 // The local D1 (xcore dev, xcore db without --live) needs Miniflare: GAMESFUN_SERVER_DEPS, as tests/dev.test.mjs.
@@ -84,7 +84,7 @@ function fakeD1() {
   };
 }
 
-test('gamesfun.json → database: the binding, the migrations and the collections follow §8.2', async t => {
+test('gamesfun.json → database: the binding, the migrations and the collections, and their rules', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const problems = async (config, files) => (await readServerConfig(await game(tmp, config, files))).problems;
