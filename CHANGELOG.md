@@ -2,6 +2,33 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.10.4 — 2026-11-22
+
+**Ships with `@xgamesfun/solana` 0.29.4**, from an audit of the kit against loot 0.29.0: a shop item's per-person limit
+goes live as written (0.29.3 put it live with no limit), a change to a live economy publishes every part it changes, a
+box's draws, runs of lottery places, halving and rises are simulated as the program pays them, and `check` refuses what
+the program refuses. Its changelog has the whole list. loot 0.29.0 is unchanged, and so is every live economy.
+
+- **Fixed: a mainnet economy's voucher server paid nobody.** The server's copy of loot's client had no way to know the
+  economy's network on xgames.fun, so it read every grant at its devnet address and refused each payout. It now works on
+  the economy's own network and asks the relay's mainnet route. `server/vouchers.js` is the game's own file, so a game
+  that has one runs `xcore add vouchers` again (it keeps `PAY`, `VOUCHERS` and the settings at its top); publish
+  refuses a mainnet game whose `vouchers.js` is the old one, and says so.
+- **New: `PERSON_SALT`.** The person a voucher names was keyed on the voucher key, so a new key (`xcore secret set
+VOUCHER_SEED --new-key`) made every player a new person and each `perPerson` grant paid everyone again. With
+  `xcore secret set PERSON_SALT --new-key` a person stays the same across key changes. Setting it for the first time on
+  a server that has already paid per-person grants starts those limits again once: `xcore secret` asks first, and
+  before deleting it. A server without it works as before.
+- **`xcore review`:** says when a grant that counts people has the test key as the economy's issuer (every claim the
+  hosted server pays is then refused), and asks which key is the issuer when the grant names several; reads
+  `perWalletEach` in the payout ledger; counts a grant capped by `limits.tokens` as bounded.
+- **`xcore check` and `xcore dev` leave out what publish leaves out** (`node_modules`, the maker's notes, the top
+  folders publish skips), so a page that loads one fails there as it would live.
+- **`xcore dev`:** a local player stands in for one signed in with X, so a grant that counts people and
+  `VOUCHERS.payOnly: 'x'` can be tried; `XCORE_DEV_SIGNIN=wallet` signs them in with a wallet only.
+- **`add vouchers`:** keeps `.dev.vars` out of git in a repository the game sits in (a monorepo's subfolder), and its
+  `voucherFor` example names the amount.
+
 ## 0.10.3 — 2026-11-21
 
 **Ships with `@xgamesfun/solana` 0.29.3**, which quotes each economy at its own network's fees. Mainnet's player fee

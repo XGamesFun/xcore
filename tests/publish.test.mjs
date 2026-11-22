@@ -209,3 +209,27 @@ test("a game's link name: xgames.fun leaves sign-in, wallet and brand words out 
   });
   assert.ok(!again.some(l => /link name/.test(l)), again.join('\n'));
 });
+
+test('a mainnet game whose server/vouchers.js predates its cluster is refused, with the command that writes it again', async t => {
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = { GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'), GAMESFUN_CREDENTIALS: 'file' };
+  await signIn(g, env);
+  const dir = await fixture(tmp, 'static');
+  await adopt(dir);
+  await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify({ network: 'mainnet', grants: [] }));
+  await mkdir(path.join(dir, 'server'), { recursive: true });
+  // a voucher server as xcore 0.10.3 wrote it: no cluster named
+  await writeFile(
+    path.join(dir, 'server', 'vouchers.js'),
+    "import ECONOMY from '__ECONOMY__';\nexport const PAY = {};\n",
+  );
+  await assert.rejects(
+    publishGame(dir, { origin: g.origin, env, check: passing }),
+    e => e.code === 'vouchers-cluster' && /add vouchers again/.test(e.message),
+  );
+});

@@ -817,6 +817,11 @@ test('the ceiling arithmetic: identities × limit per identity × time', () => {
   assert.deepEqual([c.bounded, c.by, c.per, c.severity], [true, 'person', '1 claim each 1d', null]);
   assert.match(c.words, /^bounded per person: 1 claim each 1d an X account \(perPersonEach\)/);
   // the keeper's own rate is a total too: shared, so medium
+  // A window on each wallet is said, and bounds nothing: a wallet is free.
+  c = payoutCeiling({ perWalletEach: { count: 1, every: '1d' } }, 'wallet');
+  assert.equal(c.bounded, false);
+  assert.match(c.words, /1 claim each 1d a wallet \(perWalletEach\)/);
+  assert.doesNotMatch(c.words, /no limit a wallet/);
   c = payoutCeiling({}, 'wallet', { keeper: true });
   assert.deepEqual([c.bounded, c.by, c.severity], [true, 'keeper', 'medium']);
   assert.match(c.words, /120 reports an hour, 16 winners each/);
