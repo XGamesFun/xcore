@@ -37,6 +37,10 @@ test('a local player stands in for one signed in with X, so a grant that counts 
   const v = await store.verifyPlayer(token);
   assert.equal(v.x?.id, 'dev:tab1abc');
   assert.equal(player.x?.id, v.x.id);
+  // XCORE_DEV_SIGNIN=wallet: a player with no X account, to try what they meet
+  process.env.XCORE_DEV_SIGNIN = 'wallet';
+  t.after(() => delete process.env.XCORE_DEV_SIGNIN);
+  assert.equal((await store.verifyPlayer(store.devToken({ id: 'tab2abc' }).token)).x, null);
 });
 
 test('add vouchers keeps .dev.vars out of a repository the game sits in, not only one of its own', async t => {
@@ -80,5 +84,5 @@ test('review asks which key is the issuer when a grant that counts people names 
   assert.ok(!cases([LIVE], LIVE).some(c => c.startsWith('issuer')));
   const capped = payoutCeiling({ tokens: 1000 });
   assert.equal(capped.bounded, true);
-  assert.match(capped.words, /1000 tokens in all/);
+  assert.match(capped.words, /1000 base units of its token in all/);
 });

@@ -504,7 +504,8 @@ const { voucher } = await voucherFor(env, { grant: 'clear', wallet, round: match
   (`{ "count": 1, "every": "1d" }`: a daily bonus). A player signed in with a wallet only has no person, so such a
   grant refuses to pay them (`person`): sign in with X. Set `PERSON_SALT` once (`xcore secret set PERSON_SALT
 --new-key`) before the first such payout: without it a new voucher key makes every player a new person, and each
-  per-person limit starts again. Under `xcore dev` each local player stands in for one signed in with X.
+  per-person limit starts again. Under `xcore dev` each local player stands in for one signed in with X
+  (`XCORE_DEV_SIGNIN=wallet xcore dev` signs them in with a wallet only, to try what a player with no X account meets).
 - **The issuer.** loot (0.29 and later) counts the person a voucher names only when the economy's issuer signed it:
   `"keys": { "issuer": "<the live key's address>" }` in `xsolana.json`, the same key the grant names in `vouchers`.
   The issuer is one key, for the vouchers that name a person and for any links. With no issuer, `xcore loot check`

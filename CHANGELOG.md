@@ -6,18 +6,21 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 
 - **Fixed: a mainnet economy's voucher server paid nobody.** The server's copy of loot's client had no way to know the
   economy's network on xgames.fun, so it read every grant at its devnet address and refused each payout. It now works on
-  the economy's own network and asks the relay's mainnet route.
+  the economy's own network and asks the relay's mainnet route. `server/vouchers.js` is the game's own file, so a game
+  that has one runs `xcore add vouchers` again (it keeps `PAY`, `VOUCHERS` and the settings at its top); publish
+  refuses a mainnet game whose `vouchers.js` is the old one, and says so.
 - **New: `PERSON_SALT`.** The person a voucher names was keyed on the voucher key, so a new key (`xcore secret set
-VOUCHER_SEED --new-key`) made every player a new person and each `perPerson` grant paid everyone again. Set
-  `xcore secret set PERSON_SALT --new-key` once: a person then stays the same across key changes. A server without it
-  works as before. `add vouchers` and the warning before a key is replaced say so.
-- **`xcore review`:** says when a grant that counts people has the test key, or one of several keys, as the economy's
-  issuer (every claim the server pays is then refused); reads `perWalletEach` in the payout ledger; and counts a grant
-  capped by `limits.tokens` as bounded.
+VOUCHER_SEED --new-key`) made every player a new person and each `perPerson` grant paid everyone again. With
+  `xcore secret set PERSON_SALT --new-key` a person stays the same across key changes. Setting it for the first time on
+  a server that has already paid per-person grants starts those limits again once: `xcore secret` asks first, and
+  before deleting it. A server without it works as before.
+- **`xcore review`:** says when a grant that counts people has the test key as the economy's issuer (every claim the
+  hosted server pays is then refused), and asks which key is the issuer when the grant names several; reads
+  `perWalletEach` in the payout ledger; counts a grant capped by `limits.tokens` as bounded.
 - **`xcore check` and `xcore dev` leave out what publish leaves out** (`node_modules`, the maker's notes, the top
   folders publish skips), so a page that loads one fails there as it would live.
 - **`xcore dev`:** a local player stands in for one signed in with X, so a grant that counts people and
-  `VOUCHERS.payOnly: 'x'` can be tried.
+  `VOUCHERS.payOnly: 'x'` can be tried; `XCORE_DEV_SIGNIN=wallet` signs them in with a wallet only.
 - **`add vouchers`:** keeps `.dev.vars` out of git in a repository the game sits in (a monorepo's subfolder), and its
   `voucherFor` example names the amount.
 
