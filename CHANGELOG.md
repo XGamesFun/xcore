@@ -4,10 +4,12 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 
 ## 0.10.4 — 2026-11-22
 
-**Ships with `@xgamesfun/solana` 0.29.4**, from an audit of the kit against loot 0.29.0: a shop item's per-person limit
+**Ships with `@xgamesfun/solana` 0.29.6**, from an audit of the kit against loot 0.29.0: a shop item's per-person limit
 goes live as written (0.29.3 put it live with no limit), a change to a live economy publishes every part it changes, a
 box's draws, runs of lottery places, halving and rises are simulated as the program pays them, and `check` refuses what
-the program refuses. Its changelog has the whole list. loot 0.29.0 is unchanged, and so is every live economy.
+the program refuses. The approval reads from the chain what it used to make you correct by hand: an NFT's collection,
+and a coin's decimals and token program. Its changelog has the whole list. loot 0.29.0 is unchanged, and so is every
+live economy.
 
 - **Fixed: a mainnet economy's voucher server paid nobody.** The server's copy of loot's client had no way to know the
   economy's network on xgames.fun, so it read every grant at its devnet address and refused each payout. It now works on
