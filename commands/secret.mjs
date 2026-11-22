@@ -7,7 +7,8 @@ import { deleteSecret, listSecrets, setSecret } from '../lib/publish/secrets.mjs
 import { studioOrigin } from '../lib/publish/client.mjs';
 import { CMD } from '../lib/command.mjs';
 import { changeCode, codeMatches, sameCommand, wrongCode } from '../lib/consent.mjs';
-import { newVoucherKey } from '../lib/add.mjs';
+import { allowOrigin, newVoucherKey, seedAddress } from '../lib/add.mjs';
+import { economyCluster, solanaRpc } from '../lib/solana-rpc.mjs';
 import { pointGrantsAt } from '../lib/voucher-key.mjs';
 import { secretNameProblem, secretValueProblem } from '../lib/server/secrets.mjs';
 
@@ -32,6 +33,15 @@ never shows a value, so nothing brings the old one back): it first prints what i
 with a code, and changes nothing; it goes on when run again with --yes <code>. With --json, the printout is
 {planned: true, code, plan, next}.
 Names: A–Z, 0–9 and _, starting with a letter, not GF or GF_*; values up to 5,120 bytes; 32 secrets a game.`;
+
+/** What is wrong with `value` as the server's RPC URL (`name` XSOLANA_RPC_URL or LOOT_RPC_URL), on the economy's cluster. */
+function rpcProblem(dir, name, value) {
+  if (name !== 'XSOLANA_RPC_URL' && name !== 'LOOT_RPC_URL') return null;
+  const rpc = solanaRpc({ XSOLANA_RPC_URL: value }, { file: null, cluster: economyCluster(dir) });
+  return rpc.problem
+    ? `${name} ${rpc.problem.replace(/^XSOLANA_RPC_URL /, '').replace(/; using .*$/, '')}. Nothing was set.`
+    : null;
+}
 
 /** Typed with nothing echoed; Ctrl+C stops. */
 async function hidden(question) {
@@ -175,7 +185,9 @@ export default {
         : values['from-file']
           ? (await readFile(values['from-file'], 'utf8')).replace(/\r?\n$/, '')
           : null;
-      const problem = secretNameProblem(name) ?? (early === null ? null : secretValueProblem(early));
+      const problem =
+        secretNameProblem(name) ??
+        (early === null ? null : (secretValueProblem(early) ?? rpcProblem(dir, name, early)));
       if (problem) throw new Error(problem);
       // a name the live server has already: replaced only after a yes to what it replaces (a new one is set at once)
       const { game, names } = await listSecrets(dir);
@@ -199,21 +211,43 @@ export default {
       const value = made
         ? made.seed
         : (early ?? (process.stdin.isTTY ? await hidden(`Value for ${name} (not shown): `) : await piped()));
+      // the server's RPC: a URL on the economy's cluster, whose origin backend.json lets the server call. An origin not
+      // there yet is added, and the URL waits for the publish that sends it: set before, the page would send its
+      // calls to a server that may not make them
+      if (name === 'XSOLANA_RPC_URL' || name === 'LOOT_RPC_URL') {
+        const bad = rpcProblem(dir, name, value);
+        if (bad) throw new Error(bad);
+        const origin = new URL(value.trim()).origin;
+        const { file, added } = await allowOrigin(dir, origin);
+        if (added) {
+          const where = path.relative(process.cwd(), file) || file;
+          if (out) out({ ok: false, game, name, set: false, added: origin, file: where, next: `${CMD} publish` });
+          else
+            console.log(
+              `Not set yet: the game's server may call only the origins in ${where}, and ${origin} was not one. It is now: publish (${CMD} publish), then run this again, and the server takes the URL with leave to call it.`,
+            );
+          return 0;
+        }
+      }
       const r = await setSecret(dir, name, value);
-      // a new voucher key: the grants the server pays point at it in the economy, so no address is copied by hand
-      const pointed = made && name === 'VOUCHER_SEED' ? await pointGrantsAt(dir, made.address) : null;
-      if (out) out(made ? { ...r, address: made.address, ...(pointed ? { economy: pointed } : {}) } : r);
+      // a voucher key: the grants the server pays point at it in the economy, so no address is copied by hand. A new
+      // one's address is known; a seed brought from elsewhere (.dev.vars, a file, typed) gives its own
+      const seed = !made && name === 'VOUCHER_SEED' && /^[0-9a-fA-F]{64}$/.test(value.trim()) ? value.trim() : null;
+      const live = made ?? (seed ? { address: await seedAddress(seed.toLowerCase()) } : null);
+      const pointed = live && name === 'VOUCHER_SEED' ? await pointGrantsAt(dir, live.address) : null;
+      if (out) out(live ? { ...r, address: live.address, ...(pointed ? { economy: pointed } : {}) } : r);
       else {
         console.log(
           `Set ${name} on ${shown(dir)}'s server: env.${name} from its next request. (${r.names.length} secrets.)`,
         );
         if (made)
           console.log(`It is a new key, made here and kept only on xgames.fun's server. Its address: ${made.address}`);
+        else if (live) console.log(`Its address: ${live.address}`);
         if (pointed?.changed.length)
           console.log(
             `In ${path.relative(process.cwd(), pointed.economy) || pointed.economy}:\n${pointed.changed.map(l => `  ${l}`).join('\n')}\nThe chain takes it once you approve it: ${CMD} loot approve (signed by the key file that owns the economy).`,
           );
-        else if (made && name === 'VOUCHER_SEED' && !pointed?.economy)
+        else if (live && name === 'VOUCHER_SEED' && !pointed?.economy)
           console.log(
             `The game has no economy yet: ${CMD} add vouchers points its grants at this key once it has one.`,
           );

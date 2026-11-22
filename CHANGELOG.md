@@ -4,12 +4,18 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 
 ## 0.10.4 — 2026-11-22
 
-**Ships with `@xgamesfun/solana` 0.29.6**, from an audit of the kit against loot 0.29.0: a shop item's per-person limit
-goes live as written (0.29.3 put it live with no limit), a change to a live economy publishes every part it changes, a
-box's draws, runs of lottery places, halving and rises are simulated as the program pays them, and `check` refuses what
-the program refuses. The approval reads from the chain what it used to make you correct by hand: an NFT's collection,
-and a coin's decimals and token program. Its changelog has the whole list. loot 0.29.0 is unchanged, and so is every
-live economy.
+**Ships with `@xgamesfun/solana` 0.29.7**, from two audits of the kit against loot 0.29.0:
+
+- a shop item's per-person limit goes live as written (0.29.3 put it live with no limit);
+- a change to a live economy publishes every part it changes, never reuses a removed part's id, and keeps "publish+7d"
+  times where they were;
+- `check` refuses what the program refuses, including a change to what can't change once live;
+- a box's draws (a pack that keeps each outcome once among them), lottery places, halving, rises and farm rates are
+  simulated as the program pays them;
+- a booster comes off a token farm through the page client.
+
+The approval reads from the chain what it used to make you correct by hand: an NFT's collection, and a coin's decimals
+and token program. The kit's changelog has the whole list. loot 0.29.0 is unchanged, and so is every live economy.
 
 - **Fixed: a mainnet economy's voucher server paid nobody.** The server's copy of loot's client had no way to know the
   economy's network on xgames.fun, so it read every grant at its devnet address and refused each payout. It now works on
@@ -34,6 +40,26 @@ live economy.
   folders publish skips), so a page that loads one fails there as it would live.
 - **`xcore dev`:** a local player stands in for one signed in with X, so a grant that counts people and
   `VOUCHERS.payOnly: 'x'` can be tried; `XCORE_DEV_SIGNIN=wallet` signs them in with a wallet only.
+- **Fixed: a player banned from the console was still served for the rest of their sign-in's hour.** A token made
+  before a ban verifies until it expires. The voucher server, the database (`api/db`), `withPlayer` in
+  `server/gf-db.js` and rooms now refuse a banned player themselves. A player who is only hidden is served as before.
+- **Rooms no longer pass a player's wallet to the others in the room**; only their id and X handle.
+- **The voucher key follows the grants `PAY.check` pays however it names them** (`const grant = boss ? 'boss' :
+'clear'`), and says when no grant takes vouchers from the new key yet.
+  - `xcore add vouchers` points the grants at the live key made before, so a grant added later needs no new key. On
+    devnet it adds the test key, so claims under `xcore dev` pay with no address copied.
+  - Setting `VOUCHER_SEED` from `.dev.vars`, a file or typed points the grants too, as `--new-key` does.
+  - A key a grant names that this machine can't name is always said.
+- **`add vouchers` run again keeps the owner's code:** helpers and constants written beside `PAY` (kept after the
+  template's code), and a new setting's whole default value (a list was cut at its first comma).
+- **`xcore secret set XSOLANA_RPC_URL` checks the URL** (its network, https) before anything is set or replaced.
+  - When its origin is not in `backend.json` yet, it adds the origin and sets nothing: publish, then run it again.
+    Set before, the page would send its calls to a server not allowed to make them.
+- **`xcore review`** no longer counts a setting read from `env` (`env.MIN_SCORE`) as the server keeping state; only
+  storage through `env` counts.
+- **Publish refuses a published folder that is a link to outside the game**, as it refused links inside it.
+- **`xcore adopt` run again keeps the game's `page.title`.**
+- **`xcore dev` with no `--port` takes the first free port from 8787**, so a second game can run beside the first.
 - **`add vouchers`:** keeps `.dev.vars` out of git in a repository the game sits in (a monorepo's subfolder), and its
   `voucherFor` example names the amount.
 

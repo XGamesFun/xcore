@@ -82,7 +82,7 @@ test('the first in is the host (id 1); the next get ids of their own and the roo
   );
   const signed = await join({ token: 'good' });
   assert.deepEqual(signed.last('welcome').peers.length, 2);
-  assert.deepEqual(host.last('join').peer.player, { id: 'x:42', x: 'fan', wallet: null });
+  assert.deepEqual(host.last('join').peer.player, { id: 'x:42', x: 'fan' });
   assert.equal(host.last('join').peer.name, 'fan', "a signed-in player's X handle is their name");
 });
 

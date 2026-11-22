@@ -319,7 +319,9 @@ xcore secret set XSOLANA_RPC_URL         # the RPC's URL with its key: the serve
   stranger calling `api/rpc` cannot spend your RPC's credits on anything else. The URL is on the economy's cluster: devnet's, or mainnet's for an economy whose file says `"network": "mainnet"`.
 - The server's entry, where `api/rpc` runs, may call only `backend.json`'s origins: `xcore add rpc` adds the RPC's
   (`https://host` alone, never the key) when `XSOLANA_RPC_URL` is in `.dev.vars` or `.env`, and publish says when it
-  is missing.
+  is missing. `xcore secret set XSOLANA_RPC_URL` checks it too: an origin not there yet is added and the URL is not
+  set, so `xcore publish`, then run it again (set before, the page would send its calls to a server that may not make
+  them).
 - Solana's public `https://api.devnet.solana.com` refuses calls from Cloudflare ("Your IP or provider is blocked"):
   use a provider's URL.
 - Under `xcore dev`, put `XSOLANA_RPC_URL` in `.dev.vars` to run this path; in `.env` it is the dev server's own
