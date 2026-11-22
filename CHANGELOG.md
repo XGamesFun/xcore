@@ -2,6 +2,14 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.10.3 — 2026-11-21
+
+**Ships with `@xgamesfun/solana` 0.29.3**, which quotes each economy at its own network's fees. Mainnet's player fee
+is 0.0005 SOL, and 0.29.2 (the pin of xcore 0.10.2) quoted devnet's 0.002 SOL for every economy, so the economy's tools (`check`,
+`simulate`, `cost`, `explain`) quoted each mainnet player action 0.0015 SOL high. Only the quotes were wrong: the program always
+charged what its platform account holds. Nothing else changes: loot 0.29.0, every spec and every live economy are as
+they were.
+
 ## 0.10.2 — 2026-11-21
 
 **Ships with `@xgamesfun/solana` 0.29.2**, which fixes the economy skill's front matter. In 0.29.1 (the pin of xcore
