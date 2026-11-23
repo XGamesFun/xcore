@@ -180,7 +180,9 @@ there; add `evidence/` to the game's `.gitignore`.
    [Inside the play page](#what-the-hosting-takes)), opened from a link with a query string as a shared one is: no
    error thrown, nothing in the console's errors, none of its own files missing, nothing asked for from the root,
    something on screen, and (in the frame) no pop-up, form submit or top-level navigation as it loads (screenshots
-   `phone.png`, `desktop.png` and `framed.png` in `evidence/verify-N/`)
+   `phone.png`, `desktop.png` and `framed.png` in `evidence/verify-N/`). A page whose script never gives the browser
+   a turn (a loop with no end) fails here as "the page stopped answering": the check waits 15 s for each answer it
+   asks of a page, stops at the first view that gives none, and does not run check 4 or the walk below
 4. **it stays inside its origins**: every request is one the hosted page may make; a script, style, font or frame from
    another site, or a connection to an origin `backend.json` does not list, fails it
 
@@ -194,8 +196,10 @@ never a field to type in, a link out of the game or a settings button), or on th
 (`"journey": [{"tap": "#play"}, {"wait": 500}, {"tap": "#claim"}]`). It says what was tapped and what appeared, the
 taps until play answered, the first moment a sign-in, a wallet or SOL was needed (a `GamesFun.loot.call` that signs
 needs a wallet with SOL for its fee), the wallet prompts, the waits it showed, what failed or the frame blocked on the
-way (screenshots `journey-1.png`…), and ends with a few sentences to pass on as they are. It informs and never fails
-the check; publish's own check does not run it. `--json` has it as `firstSession`.
+way (screenshots `journey-1.png`…), and ends with a few sentences to pass on as they are. A first reward is spoken
+of only for a game with an economy; a tap that leaves the page in a loop with no end is said, with the tap, and ends
+the walk. It informs and never fails the check; publish's own check does not run it. `--json` has it as
+`firstSession`.
 
 A backend that does not answer this machine is a note, not a failure. The game's play is its own: the page check says
 it starts clean and stays inside what the hosting allows, nothing more. Publish's gate runs the same check, and a game
@@ -854,7 +858,11 @@ private version, `--new` makes a new game with a new link.
 
 **For scripts and agents**: every command takes `--json`. A failure is then also printed on stdout as
 `{ "ok": false, "error", "code", "state", "next" }`: `code` is why (`usage`, `login`, `files`, `secrets`, `build`,
-`card`, `size`…), `next` the command that moves it on. `login --status --json` and `publish --status --json` name the
+`card`, `size`…; `failed` when it has no word of its own), `next` the command that moves it on; `state` and `next` are
+there when the failure has them. `check --json` and `adopt --json` print their whole report, with the same `ok`,
+`error` and `code` in it when the check fails or the game is refused. A usage mistake (no such command or flag, a
+missing argument) prints its usage on stderr and exits with 2; any other failure exits with 1. `xcore loot <command>
+--json` hands on the economy tools' own JSON as it is. `login --status --json` and `publish --status --json` name the
 sign-in's `state` (`signed-in`, `signed-out`, `expired`, or `unreadable` when the token is kept where this session
 cannot read it, such as the Secret Service over SSH); `publish --status --json` also names the game's `link` (`never`,
 `started`, `public`, `draft`, or `draft-over-public`); `adopt --json` gives `state` (`refused`, `fix`, `ready`) and

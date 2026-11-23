@@ -191,6 +191,12 @@ test(
       r.notes.some(n => /It calls its own server \(api\/room, api\/visits\)/.test(n)),
       r.notes.join('\n'),
     );
+    // where it does answer on this machine is the command the person has, by name
+    assert.ok(
+      r.notes.some(n => /answers there once published \(and under .*xcore(\.mjs)? dev, which runs it\)/.test(n)),
+      r.notes.join('\n'),
+    );
+    assert.doesNotMatch(r.notes.join('\n'), /the kit/);
   },
 );
 
@@ -285,6 +291,8 @@ test(
     assert.equal(three.ok, false);
     assert.match(three.detail, /the game's own pages are linked from the root \(\/level\/2\/\)/);
     assert.doesNotMatch(three.detail, /\/level\/2\/ asked for from the root/);
+    assert.match(three.detail, /not under a folder \(Studio's preview, .*xcore(\.mjs)? dev\)/);
+    assert.doesNotMatch(three.detail, /the kit/);
   },
 );
 
@@ -460,8 +468,19 @@ ${$('shop')}.onclick = () => { ${$('said')}.textContent = 'The shop is open'; };
 ${$('start')}.onclick = () => { ${$('said')}.textContent = 'Go!'; ${$('start')}.remove(); };
 </script>`;
     const dir = await firstVisit(tmp, page, { journey: [{ tap: '#shop' }, { wait: 200 }, { tap: '#start' }] });
+    // this one has an economy: a first reward is something its walk can stop short of
+    await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify({ name: 'First visit', grants: [] }));
     const w = (await pageVerify(dir, { out: path.join(tmp.dir, 'out') })).firstSession;
     assert.equal(w.journey, 'declared in gamesfun.json');
+    assert.equal(w.shortOfReward, true);
+    assert.ok(
+      w.tell.some(l =>
+        /^Before any wallet prompt, the walk stopped at the end of the declared journey, so it did not reach a first reward/.test(
+          l,
+        ),
+      ),
+      w.tell.join('\n'),
+    );
     assert.deepEqual(
       w.steps.map(s => [s.selector, s.tapped, s.appeared]),
       [
@@ -477,12 +496,15 @@ ${$('start')}.onclick = () => { ${$('said')}.textContent = 'Go!'; ${$('start')}.
     const m = (await pageVerify(missing, { out: path.join(tmp2.dir, 'out') })).firstSession;
     assert.equal(m.taps, 1);
     assert.equal(m.stopped, "the declared journey's tap 2 (#claim), which was not on the page");
+    // a game with no economy has no reward to reach: where the walk stopped is said, and nothing of wallets or SOL
+    assert.equal(m.shortOfReward, false);
     assert.ok(
       m.tell.includes(
-        "Before any wallet prompt, the walk stopped at the declared journey's tap 2 (#claim), which was not on the page, so it did not reach a first reward: what claiming one asks (a sign-in, a wallet, SOL for its fee) was not seen.",
+        "The walk stopped at the declared journey's tap 2 (#claim), which was not on the page, so what follows it was not seen.",
       ),
       m.tell.join('\n'),
     );
+    assert.doesNotMatch(m.tell.join('\n'), /first reward|SOL for its fee/);
   },
 );
 
@@ -511,6 +533,80 @@ test(
       w.tell.includes('Tapping “Play” tried to open a pop-up, which the play frame blocks: nothing opens for them.'),
       w.tell.join('\n'),
     );
+  },
+);
+
+// ---- a page that stops answering -----------------------------------------------------------------------------------
+
+/** Run `fn` with a short wait for a page's answer (GF_PAGE_ANSWER_MS), so a page that never answers costs seconds. */
+async function quickToGiveUp(fn) {
+  const was = process.env.GF_PAGE_ANSWER_MS;
+  process.env.GF_PAGE_ANSWER_MS = '5000';
+  try {
+    return await fn();
+  } finally {
+    if (was === undefined) delete process.env.GF_PAGE_ANSWER_MS;
+    else process.env.GF_PAGE_ANSWER_MS = was;
+  }
+}
+
+test(
+  'a page whose script never yields fails "the page starts" in words, at the first view: the check does not wait on it',
+  { skip, timeout: 120_000 },
+  async t => {
+    const tmp = await tempDir();
+    t.after(tmp.cleanup);
+    // a loop with no end, a moment after the page has loaded
+    const dir = await pageWith(tmp, 'setTimeout(() => { for (;;) {} }, 300);');
+    const out = path.join(tmp.dir, 'out');
+    const lines = [];
+    const began = Date.now();
+    const r = await quickToGiveUp(() => pageVerify(dir, { out, log: l => lines.push(l) }));
+    assert.ok(Date.now() - began < 60_000, `it answered in ${Date.now() - began} ms`);
+    assert.equal(r.pass, false);
+    const three = r.checks.find(c => c.n === 3);
+    assert.equal(three.ok, false);
+    assert.match(three.detail, /^phone: the page stopped answering: a script of its own keeps the browser busy/);
+    assert.doesNotMatch(three.detail, /desktop|nothing on screen|Chrome could not run/);
+    assert.deepEqual(
+      [r.checks.find(c => c.n === 4).ok, r.checks.find(c => c.n === 4).detail],
+      [null, 'not run: the page stopped answering'],
+    );
+    assert.equal(r.firstSession, undefined, 'a page that stopped answering is not walked');
+    assert.ok(!lines.some(l => l.startsWith('First session')));
+  },
+);
+
+test(
+  'first session: a tap that leaves the page in a loop with no end is said, with the tap, and the walk ends there',
+  { skip, timeout: 180_000 },
+  async t => {
+    const tmp = await tempDir();
+    t.after(tmp.cleanup);
+    const dir = await firstVisit(
+      tmp,
+      `<button id="play" style="font-size:32px">Play</button>
+<script>${$('play')}.onclick = () => { for (;;) {} };</script>`,
+    );
+    const lines = [];
+    const r = await quickToGiveUp(() => pageVerify(dir, { out: path.join(tmp.dir, 'out'), log: l => lines.push(l) }));
+    const w = r.firstSession;
+    assert.equal(r.pass, true, 'the walk never fails the check');
+    assert.equal(w.froze, 1);
+    assert.equal(w.taps, 1);
+    assert.deepEqual(
+      [w.steps[0].tapped, w.steps[0].froze, w.steps[0].screen],
+      ['“Play” (button)', true, null],
+      JSON.stringify(w.steps),
+    );
+    assert.equal(w.stopped, 'a page that stopped answering after the tap on “Play” (button)');
+    assert.ok(
+      w.tell.some(l =>
+        /^After tap 1 \(“Play”\) the page stopped answering \(.*\), and the walk ended there\.$/.test(l),
+      ),
+      w.tell.join('\n'),
+    );
+    assert.ok(lines.includes('  1. tapped “Play” (button) → the page stopped answering'), lines.join('\n'));
   },
 );
 

@@ -8,7 +8,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { guard, parse, printJson } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { ECONOMY_FILE, NO_SOLANA, solanaCommand, solanaHas } from '../lib/economy.mjs';
 import { addLoot } from '../lib/loot-add.mjs';
@@ -111,13 +111,18 @@ export default {
   usage,
   helpFor: args => (args[0] === 'add' ? ADD_USAGE : usage),
   run: async args => {
-    if (!args.length || args[0] === '--help' || args[0] === '-h') {
+    if (args[0] === '--help' || args[0] === '-h') {
       console.log(usage);
-      return args.length ? 0 : 2;
+      return 0;
     }
+    // no subcommand (--json alone names none): a usage mistake, said as every command says one
+    if (args.every(a => a === '--json'))
+      return guard(() => {
+        throw new UsageError(usage);
+      }, args);
     if (args[0] === 'add')
       return guard(async () => {
-        const { values, positionals } = parse(args.slice(1), {}, usage);
+        const { values, positionals } = parse(args.slice(1), {}, ADD_USAGE);
         const dir = await resolveGame(positionals[0]);
         const r = await addLoot(dir);
         if (values.json)

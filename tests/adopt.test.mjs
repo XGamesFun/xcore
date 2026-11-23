@@ -44,6 +44,23 @@ test('plain static files are their own published folder', async t => {
   );
 });
 
+test('the report says counts and sizes as a person reads them, and heads a folder it could not read with its name alone', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const one = path.join(tmp.dir, 'one');
+  await mkdir(one);
+  await writeFile(path.join(one, 'index.html'), '<!doctype html><title>One</title><p>one file</p>');
+  const lines = reportLines(await adopt(one), { shown: () => 'one' });
+  assert.equal(lines[0], 'one: plain static files.');
+  assert.equal(lines[1], '  published folder: .; 1 file, 48 bytes');
+  const four = reportLines(await adopt(await fixture(tmp, 'static')));
+  assert.match(four[1], /^ {2}published folder: \.; 4 files, \d+(\.\d)? KB$/);
+  // a folder that is not there has no kind to say
+  const none = reportLines(await adopt(path.join(tmp.dir, 'nope')), { shown: () => 'nope' });
+  assert.equal(none[0], 'nope:');
+  assert.ok(none.includes('  - ' + path.join(tmp.dir, 'nope') + ': no such folder'), none.join('\n'));
+});
+
 test('a game with a full screen button (its own, or GamesFun.fullscreen()) is not told to add one', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
@@ -284,6 +301,10 @@ test('a page that calls its own api/ with no server/ is a fix, naming the progra
   );
   assert.match(fix, /web\/api\.js:4 loads \/assets\/hero\.png from the root, in a script/);
   assert.match(fix, /web\/index\.html:\d+ has an import map entry \/vendor\/three\.module\.js from the root/);
+  // where a path from the root breaks on this machine is the command the person has, by name
+  const advice = r.fix.map(f => f.fix).join('\n');
+  assert.match(advice, /served under a folder in xgames\.fun Studio's preview and under .*xcore(\.mjs)? dev/);
+  assert.doesNotMatch(advice, /the kit's dev server/);
   assert.match(r.warn.map(w => w.what).join('\n'), /it asks for the camera or microphone \(web\/api\.js:5\)/);
 });
 
@@ -698,4 +719,45 @@ test("xcore's own sign-in client naming the host's api/ paths is not the page ca
   await cp(new URL('../lib/client/gamesfun.js', import.meta.url), path.join(dir, 'gamesfun.js'));
   const r = await adopt(dir);
   assert.equal(r.fix.filter(f => /calls api\//.test(f.what)).length, 0, r.fix.map(f => f.what).join('\n'));
+});
+
+test('a gamesfun.json that is not valid JSON is refused by name, by every command: never read as no gamesfun.json', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  // a trailing comma: the file is there, and it does not parse
+  const broken = '{ "page": { "out": ".", }';
+  await writeFile(path.join(dir, 'gamesfun.json'), broken);
+  assert.throws(() => pageRoots(dir), /^Error: gamesfun\.json is not valid JSON \(.+\); fix it first$/);
+  await assert.rejects(
+    resolveGame(dir),
+    e => e.code === 'not-json' && /gamesfun\.json is not valid JSON/.test(e.message),
+  );
+  const named = /^xcore: static[\\/]gamesfun\.json is not valid JSON \(.+\); fix it first$/m;
+  for (const args of [
+    ['check', 'static'],
+    ['dev', 'static'],
+    ['add', 'signin', 'static'],
+    ['card', 'static'],
+    ['adopt', 'static'],
+  ]) {
+    const r = run(args, { cwd: tmp.dir });
+    assert.equal(r.status, 1, `${args.join(' ')}: ${r.stdout}${r.stderr}`);
+    assert.match(r.stderr, args[0] === 'adopt' ? /gamesfun\.json is not valid JSON/ : named, args.join(' '));
+  }
+  const json = run(['check', 'static', '--json'], { cwd: tmp.dir });
+  assert.equal(JSON.parse(json.stdout).code, 'not-json');
+  // nothing was written on the way: no sign-in client, no picture, and the file is as the person left it
+  assert.ok(!existsSync(path.join(dir, 'gamesfun.js')));
+  assert.ok(!existsSync(path.join(dir, 'assets', 'card.jpg')));
+  assert.ok(!existsSync(path.join(dir, 'evidence')));
+  assert.equal(await readFile(path.join(dir, 'gamesfun.json'), 'utf8'), broken);
+  // a folder with no gamesfun.json stays what it was: a game not adopted yet
+  const bare = path.join(tmp.dir, 'bare');
+  await cp(path.join(FIXTURES, 'static'), bare, { recursive: true });
+  assert.equal(pageRoots(bare).brought, false);
+  assert.match(
+    run(['check', 'bare'], { cwd: tmp.dir }).stderr,
+    /not a page this checks \(no gamesfun\.json → page: run .* adopt first\)/,
+  );
 });

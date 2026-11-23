@@ -2,12 +2,13 @@
 // and the plan said in plain words.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { saveSecret } from '../lib/credentials.mjs';
 import { credentialKey } from '../lib/publish/client.mjs';
-import { accountPlan, describeAccount, describeGame, gamePlan, setActive } from '../lib/publish/plans.mjs';
-import { run, tempDir } from './helpers.mjs';
+import { accountPlan, CAPPED, describeAccount, describeGame, gamePlan, setActive } from '../lib/publish/plans.mjs';
+import plan from '../commands/plan.mjs';
+import { ROOT, run, tempDir } from './helpers.mjs';
 
 const ORIGIN = 'https://studio.example';
 const LIMITS = {
@@ -99,6 +100,12 @@ test('plan in words: the tier, the month, the limits, capped and the slots', () 
     used: 1,
   });
   assert.match(words, /^Moth: Free, capped for the rest of the month/);
+  // what a cap does is said as the help and the documents say it: the server is off, never "slow"
+  assert.match(
+    words,
+    /\n {2}capped: its server is switched off \(every api\/ request answers 451\), its pages keep loading, and saves and scores slow down, until the month ends or it gets more room\n/,
+  );
+  assert.doesNotMatch(words, /answers slowly|60 requests a minute/);
   assert.match(words, /this month: \$1\.30 of \$1\.00 included/);
   assert.match(words, /50 ms of CPU a request, 600 requests a minute \(120 from one player\)/);
   assert.match(words, /paid slots: 1 of 2 in use/);
@@ -139,6 +146,22 @@ test('plan in words: the tier, the month, the limits, capped and the slots', () 
   assert.match(slots, /\nPaid slots: 1 of 1 in use \(their games run on Creator\)/);
   assert.match(paid, /usage credit \$5\.00/);
   assert.match(account, /Scale {3}Showground {2}\$9\.99 {2}\(granted\)/);
+});
+
+test('what a cap does to a game is one statement: `xcore plan`, its help, the README and docs/SERVER.md agree', async () => {
+  const flat = text => text.replace(/\s+/g, ' ');
+  assert.ok(flat(plan.usage).includes(`the game is capped until the month ends: ${CAPPED}`), plan.usage);
+  const readme = flat(await readFile(path.join(ROOT, 'README.md'), 'utf8'));
+  assert.match(
+    readme,
+    /a game is \*\*capped\*\* until the month ends: \*\*its server is switched off\*\* \(every `api\/\*` request answers 451 /,
+  );
+  assert.match(readme, /and saves and scores slow down .* Its pages keep loading/);
+  const server = flat(await readFile(path.join(ROOT, 'docs', 'SERVER.md'), 'utf8'));
+  assert.match(
+    server,
+    /\*\*A game that is unpublished, taken down or capped\*\* .* has its server switched off: every `api\/\*` request answers `451 /,
+  );
 });
 
 test('plan --json: a refusal carries its code and the command that moves it on', async t => {

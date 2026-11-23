@@ -343,3 +343,42 @@ test('secret set XSOLANA_RPC_URL waits for backend.json’s origin to be publish
   assert.ok(existsSync(path.join(dir, '.gamesfun', 'vouchers.json')));
   assert.equal(JSON.parse(await readFile(path.join(dir, '.gamesfun', 'vouchers.json'), 'utf8')).liveKey, address);
 });
+
+test('an economy file that is not valid JSON refuses a new voucher key before the live one is replaced', async t => {
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = {
+    GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'),
+    GAMESFUN_CREDENTIALS: 'file',
+    GAMESFUN_STUDIO: g.origin,
+    GAMESFUN_NO_UPDATE_CHECK: '1',
+  };
+  await signIn(g, env);
+  const dir = path.join(tmp.dir, 'game');
+  await mkdir(path.join(dir, '.gamesfun'), { recursive: true });
+  await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>g</title>\n');
+  await writeFile(path.join(dir, '.gamesfun', 'publish.json'), JSON.stringify({ [g.origin]: { projectId: 'g-9' } }));
+  // cut short: the file is there, and it does not parse
+  await writeFile(path.join(dir, 'xsolana.json'), '{ "grants": [ { "key": "clear",');
+  const puts = [];
+  g.state.handle = (method, url, json, { authed }) => {
+    if (!/^\/api\/kit\/games\/g-9\/secrets/.test(url)) return null;
+    if (!authed) return [401, { error: 'Sign in first.' }];
+    if (method === 'PUT') puts.push(url);
+    return [200, { ok: true, game: 'g-9', names: ['VOUCHER_SEED'] }];
+  };
+  for (const args of [
+    ['secret', 'set', 'VOUCHER_SEED', '--new-key'],
+    ['secret', 'set', 'VOUCHER_SEED', '--new-key', '--yes', '00000000'],
+  ]) {
+    const r = await runAsync(args, { env, cwd: dir });
+    assert.equal(r.status, 1, r.stdout);
+    assert.match(r.stderr, /^xcore: xsolana\.json is not valid JSON \(.+\); fix it first$/m);
+  }
+  assert.deepEqual(puts, [], 'the key the live server has is not replaced');
+  assert.ok(!existsSync(path.join(dir, '.gamesfun', 'vouchers.json')), 'and no address is kept');
+});

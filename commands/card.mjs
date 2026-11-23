@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
+import { sizeText } from '../lib/util.mjs';
 import {
   CARD_CLEAR,
   CARD_FILE,
@@ -105,7 +106,7 @@ export default {
         return failed ? 1 : 0;
       }
       // paths: the file inside the game as it is published from (with "/"), the game's folder as shown()
-      const wrote = `${r.replaced ? 'Replaced' : 'Wrote'} ${rel(r.file)} in ${shown(dir)}: ${r.width}×${r.height}, ${(r.bytes / 1000).toFixed(0)} KB${r.from ? `, from ${shown(r.from)}` : ''}.`;
+      const wrote = `${r.replaced ? 'Replaced' : 'Wrote'} ${rel(r.file)} in ${shown(dir)}: ${r.width}×${r.height}, ${sizeText(r.bytes)}${r.from ? `, from ${shown(r.from)}` : ''}.`;
       const errors = `${r.errors.slice(0, 3).join('; ')}${r.errors.length > 3 ? ` (and ${r.errors.length - 3} more)` : ''}`;
       // a page that had errors: that comes first, and the command fails unless --force keeps the picture
       const lines = r.errors.length

@@ -280,7 +280,8 @@ test('xcore card refuses a build with no folder it copies as it is, a link out o
   await truncate(huge, 81 * 1024 * 1024);
   const h = run(['card', plain, '--from', huge]);
   assert.equal(h.status, 1);
-  assert.match(h.stderr, /huge\.png is 84\.9 MB; .* card reads a picture of at most 40 MB/);
+  // (its size and the limit on one scale: 81 MB of 1,048,576 bytes each)
+  assert.match(h.stderr, /huge\.png is 81 MB; .* card reads a picture of at most 40 MB/);
 });
 
 test('a game folder reached through a link (/var on a Mac, a home on another volume) is no link out of the game', async t => {
@@ -328,7 +329,7 @@ test(
     await writeFile(art, png(1600, 900, { color: [200, 60, 40] }));
     const r = run(['card', dir, '--from', art]);
     assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stdout, /^Wrote assets\/card\.jpg in .*: 960×960, \d+ KB, from /m);
+    assert.match(r.stdout, /^Wrote assets\/card\.jpg in .*: 960×960, \d+(\.\d)? KB, from /m);
     assert.match(r.stdout, /keep the subject clear of the top third \(the title\) and the bottom left \(the button\)/);
     assert.match(r.stdout, /Open .*card\.jpg and look at it/);
     assert.equal((await preflight(dir)).card.status, 'ok');
@@ -402,6 +403,32 @@ test(
     assert.match(v.stdout, /It is in public\/, the folder .* copies as it is: the build carries it into dist\//);
     assert.equal((await runBuild(vite)).code, 0);
     assert.equal((await preflight(vite)).card.status, 'ok');
+  },
+);
+
+test(
+  'xcore card: a page whose script never yields makes no picture, and says so in words, soon',
+  { skip: noBrowser, timeout: 120_000 },
+  async t => {
+    const tmp = await tempDir();
+    t.after(tmp.cleanup);
+    const dir = path.join(tmp.dir, 'spins');
+    await mkdir(dir);
+    // a loop with no end, a moment after the page has loaded
+    await writeFile(
+      path.join(dir, 'index.html'),
+      '<title>x</title><p>hi</p><script>setTimeout(() => { for (;;) {} }, 200)</script>',
+    );
+    const began = Date.now();
+    const r = run(['card', dir, '--wait', '0.5'], { env: { GF_PAGE_ANSWER_MS: '3000' } });
+    assert.ok(Date.now() - began < 30_000, `it answered in ${Date.now() - began} ms`);
+    assert.equal(r.status, 1);
+    assert.match(
+      r.stderr,
+      /^xcore: the page stopped answering: a script of its own keeps the browser busy.*: no picture was written\.$/m,
+    );
+    assert.doesNotMatch(r.stderr, /page\.screenshot|Call log/);
+    assert.equal(existsSync(path.join(dir, 'assets', 'card.jpg')), false);
   },
 );
 

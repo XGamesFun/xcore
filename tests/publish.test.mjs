@@ -4,11 +4,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync } from 'node:fs';
-import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { adopt } from '../lib/publish/adopt.mjs';
 import { credentialKey, logout, savedLogin } from '../lib/publish/client.mjs';
-import { preflight, publishGame } from '../lib/publish/index.mjs';
+import { preflight, publishGame, readLinks } from '../lib/publish/index.mjs';
 import { buildTree } from '../lib/publish/tree.mjs';
 import { fixture, passing, run, signIn, standIn, tempDir } from './helpers.mjs';
 
@@ -374,4 +374,64 @@ test('a published folder linked from outside the game is refused; one linked ins
     ok.tree.files.some(f => f.path === 'index.html'),
     JSON.stringify(ok.refused),
   );
+});
+
+test('a publish record that does not read refuses the publish: read as no record, it would make a second game', async t => {
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = { GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'), GAMESFUN_CREDENTIALS: 'file' };
+  await signIn(g, env);
+  const dir = await fixture(tmp, 'static');
+  await adopt(dir);
+  assert.deepEqual(await readLinks(dir), {}, 'a folder never published has no record');
+  await publishGame(dir, { origin: g.origin, env, check: passing });
+  const record = path.join(dir, '.gamesfun', 'publish.json');
+  const whole = await readFile(record, 'utf8');
+  assert.deepEqual(
+    (await readdir(path.dirname(record))).filter(f => f.startsWith('publish.json')),
+    ['publish.json'],
+    'the record is written whole and moved into place: nothing is left beside it',
+  );
+  // cut short, as a write that was interrupted leaves it
+  const cut = whole.slice(0, 40);
+  await writeFile(record, cut);
+  g.state.calls.length = 0;
+  await assert.rejects(
+    publishGame(dir, { origin: g.origin, env, check: passing }),
+    e =>
+      e.code === 'publish-record' &&
+      /^\.gamesfun\/publish\.json is not valid JSON \(.+\)\. .*would make a second game/.test(e.message) &&
+      /Put it back from a copy, or write it again as \{"http.*": \{"projectId"/.test(e.message),
+  );
+  assert.deepEqual(g.state.calls, [], 'nothing is asked of xgames.fun');
+  assert.equal(await readFile(record, 'utf8'), cut, 'the record is left as it was found');
+  // the offline check names it with what else publish would refuse, and every command that needs the game does too
+  assert.match((await preflight(dir, { origin: g.origin })).problems.join('\n'), /publish\.json is not valid JSON/);
+  const plan = run(['plan', dir], { env: { ...env, GAMESFUN_STUDIO: g.origin } });
+  assert.equal(plan.status, 1);
+  assert.match(plan.stderr, /publish\.json is not valid JSON/);
+  assert.doesNotMatch(plan.stderr, /publish it first/);
+  // put back, the next publish updates the same game
+  await writeFile(record, whole);
+  await publishGame(dir, { origin: g.origin, env, check: passing });
+  assert.equal(g.state.beganWith, 'g1');
+});
+
+test('an economy file or a backend.json that is not valid JSON is named among what publish refuses', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  await adopt(dir);
+  await writeFile(path.join(dir, 'xsolana.json'), '{ "network": "mainnet", "grants": [');
+  await writeFile(path.join(dir, 'backend.json'), '{ "origins": [ }');
+  const said = (await preflight(dir)).problems.join('\n');
+  assert.match(said, /^xsolana\.json is not valid JSON \(.+\)$/m);
+  assert.match(said, /^backend\.json is not valid JSON \(.+\)$/m);
+  await writeFile(path.join(dir, 'xsolana.json'), '{ "grants": [] }');
+  await writeFile(path.join(dir, 'backend.json'), '{ "version": 1, "origins": [] }');
+  assert.deepEqual((await preflight(dir)).problems, []);
 });

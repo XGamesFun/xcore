@@ -724,7 +724,7 @@ xgames.fun says it takes server code. Otherwise it publishes the files alone and
 the bundle without publishing:
 
 ```
-my-vault: 278 files, 10.0 MB, nothing refused. Left out: .gamesfun/, .gitignore, gamesfun.json, server/.
+my-vault: 278 files, 10 MB, nothing refused. Left out: .gamesfun/, .gitignore, gamesfun.json, server/.
   server code: server/index.js bundled from 1 file (server/index.js) into one 4.2 KB file, sha256 98b594a47bc6…,
   Durable Objects Vault (env.VAULT); server/ and gamesfun.json are not public files
 ```
