@@ -28,16 +28,18 @@ docs/SERVER.md, "Paying a result", has the rule.
 - **xgames.fun's keeper**, when the server already decides who won and the prize is fixed by place: the server calls
   `env.GF.loot.report`; the owner certifies the host key in Studio once, and nobody keeps a key.
 - **The server's own key**, when the amount depends on the result, when the server replays or bounds runs, for entry
-  fees or a prize pool, or past 120 results an hour. Then, in order:
+  fees or a prize pool, or past 120 results an hour. Then, in this order (docs/SERVER.md, "Your own key", has each step
+  in full):
   1. `xcore add vouchers <folder>` writes `server/vouchers.js` and a test key for `xcore dev` (its seed in `.dev.vars`).
   2. Write `PAY.check` with the person (what their server checks before it pays; nothing is paid until it is written)
      and count payouts in `PAY.paid`.
-  3. They publish.
+  3. They publish: a secret is set on a server xgames.fun already has.
   4. They run `xcore secret set VOUCHER_SEED --new-key`: the live key, made on their machine and sent only to
-     xgames.fun, which keeps it. It prints the address. If the server has a key already, it prints what replacing it
-     breaks and a code first.
-  5. That address goes in the grant's `vouchers` (`xcore loot check`), the change goes live (`xcore loot approve`,
-     signed by the key file that owns the economy, after their yes) and they publish again.
+     xgames.fun, which keeps it. It puts the key's address in the grants `PAY.check` names in `xsolana.json` and says
+     each change, so no address is copied by hand. If the server has a key already, it prints what replacing it breaks
+     and a code first.
+  5. The change goes live (`xcore loot approve`, signed by the key file that owns the economy, after their yes) and
+     they publish again.
 
 ## What a payout rests on
 

@@ -1,10 +1,9 @@
 // `xcore db info|query|export|import|restore`: the game's own database (gamesfun.json → database), on this machine
 // (the one `xcore dev` runs) or, with --live, on xgames.fun (../lib/db.mjs).
-import { createInterface } from 'node:readline/promises';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { dbExport, dbImport, dbInfo, dbQuery, dbRestore, importOf, liveChange, queryProblem } from '../lib/db.mjs';
-import { codeMatches, sameCommand, wrongCode } from '../lib/consent.mjs';
+import { consented } from '../lib/consent.mjs';
 import { economyFile } from '../lib/economy.mjs';
 import { pageRoots } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -58,39 +57,10 @@ function table(rows) {
 }
 
 /**
- * A change to the live database (../lib/consent.mjs): with --yes <code>, it goes on when the code is this change's and
- * is refused when it is another's. Without it, the printout (`lines`) and its code; at a terminal the person may type
- * `word` to go on, and elsewhere (a script, an agent) nothing changes. → true to go on, or the exit code to stop with
+ * A change to the live database, asked first (../lib/consent.mjs consented). At a terminal the person may type the
+ * change's `word` (write, import, restore) instead of running it again with the code.
  */
-async function consented({ change, lines, word, nothing, values, args }) {
-  if (values.yes !== undefined) {
-    if (!codeMatches(values.yes, change.code)) throw wrongCode();
-    return true;
-  }
-  const next = `${sameCommand('db', args)} --yes ${change.code}`;
-  if (values.json) {
-    printJson({ ok: true, planned: true, code: change.code, plan: change.plan, next });
-    return 0;
-  }
-  console.log(lines.join('\n'));
-  if (!process.stdin.isTTY) {
-    console.log(`${nothing}. To go on, run this again with the code:\n  ${next}`);
-    return 0;
-  }
-  const rl = createInterface({ input: process.stdin, output: process.stderr });
-  try {
-    const typed = (
-      await rl.question(`Type ${word} to go on (or run it again with --yes ${change.code}), anything else to stop: `)
-    )
-      .trim()
-      .toLowerCase();
-    if (typed === word) return true;
-  } finally {
-    rl.close();
-  }
-  console.log(`${nothing}.`);
-  return 1;
-}
+const asked = ({ change, ...rest }) => consented({ sub: 'db', plan: change.plan, code: change.code, ...rest });
 const onGame = c => `(game ${c.plan.game} on ${c.plan.origin})`;
 
 export default {
@@ -152,7 +122,7 @@ export default {
           const why = queryProblem(arg, { write: true });
           if (why) throw Object.assign(new Error(why), { code: 'bad-sql' });
           const change = await liveChange(dir, 'write', { sql: arg, params });
-          const go = await consented({
+          const go = await asked({
             change,
             lines: [
               `This writes to ${where} ${onGame(change)}, which your players use:`,
@@ -189,7 +159,7 @@ export default {
           // what would be refused anyway (not there, too big to send) is refused before anyone is asked
           await importOf(arg, { live });
           const change = await liveChange(dir, 'import', { file: arg });
-          const go = await consented({
+          const go = await asked({
             change,
             lines: [
               `This runs a file of SQL on ${where} ${onGame(change)}, which your players use:`,
@@ -229,7 +199,7 @@ export default {
         // the printout as JSON: what xgames.fun said it goes back to, and the chain's warning
         change.plan = { ...change.plan, preview: p.preview ?? null, economy, warning };
       const undone = p.preview?.migrations ?? [];
-      const go = await consented({
+      const go = await asked({
         change,
         lines: [
           `${where} ${onGame(change)} would go back to how it was at ${at}${p.preview?.bookmark ? ` (bookmark ${p.preview.bookmark})` : ''}. Everything written after that is lost; ${CMD} db export --live keeps a copy first.`,

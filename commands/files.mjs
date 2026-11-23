@@ -1,17 +1,28 @@
 // `xcore files ls|put|get|rm|usage`: the game's project files (env.GF.files), on this machine (the ones `xcore dev`
 // serves) or, with --live, on xgames.fun (../lib/files.mjs).
 import { existsSync } from 'node:fs';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { named, resolveGame } from '../lib/games.mjs';
-import { filesGet, filesList, filesPut, filesRemove, filesUsage, sizeText as mb } from '../lib/files.mjs';
-import { CMD } from '../lib/command.mjs';
+import {
+  filesGet,
+  filesList,
+  filesPut,
+  filesRemove,
+  filesUsage,
+  liveFile,
+  putOf,
+  sizeText as mb,
+} from '../lib/files.mjs';
+import { consented } from '../lib/consent.mjs';
+import { CMD, typedPath } from '../lib/command.mjs';
+import { sha256 } from '../lib/util.mjs';
 
 const usage = `Usage: xcore files ls [prefix/] [--dir <game>] [--live] [--json]
-       xcore files put <file> [path] [--public] [--type <mime>] [--dir <game>] [--live] [--json]
+       xcore files put <file> [path] [--public] [--type <mime>] [--dir <game>] [--live [--yes <code>]] [--json]
        xcore files get <path> [--out <file>] [--force] [--dir <game>] [--live] [--json]
-       xcore files rm <path> [--dir <game>] [--live] [--json]
+       xcore files rm <path> [--dir <game>] [--live [--yes <code>]] [--json]
        xcore files usage [--dir <game>] [--live] [--json]
 
 The game's project files: files you or the game's server write, never players (replays, generated levels, content
@@ -26,7 +37,15 @@ published); with --live, the game's files on xgames.fun (each call kept in the g
   rm <path>          delete one
   usage              the bytes kept, against the game's cap (Free: 100 MB)
 A path is letters, digits, . _ and -, with / between folders: levels/forest-3.json.
---dir <game> names the game's folder (default: the one you are in).`;
+--dir <game> names the game's folder (default: the one you are in).
+A new path is put at once. Writing over a file xgames.fun has already (put --live), or deleting one (rm --live), can't
+be undone: xgames.fun keeps one copy of a file and no earlier one. It first prints what it replaces or deletes with a
+code, and changes nothing; it goes on when run again with --yes <code>. A code printed for another change is refused.
+With --json, the printout is {planned: true, code, plan, next}. The files on this machine change at once.`;
+
+/** A file xgames.fun has, in the words of a printout: "1.2 MB, public, image/png". */
+const facts = f =>
+  [...(f.bytes === undefined ? [] : [mb(f.bytes)]), f.public ? 'public' : 'private', f.type].join(', ');
 
 export default {
   name: 'files',
@@ -43,6 +62,7 @@ export default {
           out: { type: 'string' },
           force: { type: 'boolean' },
           dir: { type: 'string' },
+          yes: { type: 'string' },
         },
         usage,
       );
@@ -64,7 +84,44 @@ export default {
         if (r.after) console.log(`… more after ${r.after}`);
         return 0;
       }
+      // the words a printout before a live change shares
+      const liveGame = f => `${named(dir)}'s project files on xgames.fun (game ${f.game})`;
+      const keepFirst = p => `${CMD} files get ${typedPath(p)} --live keeps a copy first`;
       if (verb === 'put') {
+        if (live) {
+          // what would be refused anyway (not there, too big to send, no path) is refused before anyone is asked
+          const sending = await putOf(a, b ?? null, { live, type: values.type ?? null });
+          const there = await liveFile(dir, sending.path);
+          // a path xgames.fun has already: written over only after a yes to what it replaces (a new one is put at once)
+          if (there.file) {
+            const plan = {
+              action: 'replace',
+              origin: there.origin,
+              game: there.game,
+              path: there.path,
+              was: there.file,
+              file: path.basename(a),
+              bytes: sending.bytes,
+              sha256: sha256(await readFile(a)),
+              type: sending.type,
+              public: !!values.public,
+            };
+            const go = await consented({
+              sub: 'files',
+              args,
+              values,
+              plan,
+              lines: [
+                `${liveGame(there)} have ${there.path} already (${facts(there.file)}). This writes over it:`,
+                `  file    ${plan.file} (${facts(plan)})`,
+                `  sha256  ${plan.sha256}`,
+                `The file there now is gone for good: xgames.fun keeps one copy of a file and no earlier one. ${keepFirst(there.path)}.`,
+              ],
+              nothing: 'Nothing was put',
+            });
+            if (go !== true) return go;
+          }
+        }
         const r = await filesPut(dir, a, b ?? null, { live, isPublic: !!values.public, type: values.type ?? null });
         if (json) return json(r);
         console.log(
@@ -88,6 +145,26 @@ export default {
         return 0;
       }
       if (verb === 'rm') {
+        if (live) {
+          const there = await liveFile(dir, a);
+          if (!there.file) {
+            if (json) return json({ ok: true, live: true, deleted: false });
+            console.log(`${a} was not there ${where}.`);
+            return 0;
+          }
+          const go = await consented({
+            sub: 'files',
+            args,
+            values,
+            plan: { action: 'delete', origin: there.origin, game: there.game, path: a, ...there.file },
+            lines: [
+              `This deletes ${a} (${facts(there.file)}) from ${liveGame(there)}.`,
+              `It is gone for good: xgames.fun keeps one copy of a file and no earlier one. ${keepFirst(a)}.`,
+            ],
+            nothing: 'Nothing was deleted',
+          });
+          if (go !== true) return go;
+        }
         const r = await filesRemove(dir, a, { live });
         if (json) return json(r);
         console.log(r.deleted ? `Deleted ${a} ${where}.` : `${a} was not there ${where}.`);

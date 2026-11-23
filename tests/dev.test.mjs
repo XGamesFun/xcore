@@ -4,13 +4,15 @@
 /* global GamesFun -- the page's, inside page.evaluate */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { markPage, relayRefuses, startDev, DEV_MARK } from '../lib/dev/index.mjs';
 import { createPlatformStore } from '../lib/dev/platform.mjs';
 import { findChrome, playwrightChromium, ensureBrowser } from '../lib/browser.mjs';
-import { ROOT, tempDir } from './helpers.mjs';
+import { BIN, ROOT, tempDir } from './helpers.mjs';
 import { addRpc } from '../lib/add.mjs';
 import { lootProgram } from '../lib/economy.mjs';
 
@@ -195,7 +197,7 @@ async function http(url, init) {
   try {
     json = JSON.parse(text);
   } catch {}
-  return { status: r.status, text, json };
+  return { status: r.status, text, json, headers: Object.fromEntries(r.headers) };
 }
 
 test('xcore dev serves the game marked, the platform, the RPC forward, and no server where there is none', async t => {
@@ -253,6 +255,33 @@ test('xcore dev serves the game marked, the platform, the RPC forward, and no se
     req.end('{"name":"Eve"}');
   });
   assert.equal(rebound, 403, 'the dev host answers only localhost');
+  // a socket the same: an upgrade under a name that is not this machine's is refused, before the game's server sees it
+  const upgrade = host =>
+    new Promise((resolve, reject) => {
+      const u = new URL(`${dev.url}api/rooms`);
+      const req = httpRequest(
+        {
+          hostname: u.hostname,
+          port: u.port,
+          path: u.pathname,
+          headers: {
+            ...(host ? { host } : {}),
+            connection: 'Upgrade',
+            upgrade: 'websocket',
+            'sec-websocket-version': '13',
+            'sec-websocket-key': Buffer.alloc(16, 7).toString('base64'),
+          },
+        },
+        res => (res.resume(), resolve(res.statusCode)),
+      );
+      req.on('upgrade', (res, socket) => (socket.destroy(), resolve(res.statusCode)));
+      req.on('error', reject);
+      req.end();
+    });
+  assert.equal(await upgrade('evil.example'), 403, 'nor a socket');
+  assert.equal(await upgrade(`evil.example:${new URL(dev.origin).port}`), 403, 'whatever port it names');
+  assert.equal(await upgrade(null), 404, 'this machine’s own is read: this game has no server to take it');
+  assert.equal(page.headers['x-content-type-options'], 'nosniff', 'the page goes out with the play host’s headers');
   const put = await http(`${dev.origin}/platform/v1/saves/main`, {
     method: 'PUT',
     headers: { ...auth, 'content-type': 'application/json' },
@@ -266,6 +295,39 @@ test('xcore dev serves the game marked, the platform, the RPC forward, and no se
   assert.equal(none.status, 404);
   assert.match(none.json.message, /no server/);
   assert.equal((await http(`${dev.origin}/elsewhere.js`)).status, 404, 'from the root, outside the game: as hosted');
+});
+
+test('xcore dev with no --port starts at 8787, or the first free pair after it: the page’s port, and the next for its files', async t => {
+  const tmp = await tempDir();
+  await writeFile(path.join(tmp.dir, 'index.html'), '<!doctype html><title>moth</title>');
+  const child = spawn(process.execPath, [BIN, 'dev', tmp.dir, '--json'], {
+    env: { ...process.env, GAMESFUN_KIT: '' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const closed = once(child, 'close');
+  t.after(async () => {
+    child.kill();
+    await closed;
+    await tmp.cleanup();
+  });
+  let out = '',
+    err = '';
+  child.stderr.on('data', c => (err += c));
+  const where = await new Promise((resolve, reject) => {
+    child.stdout.on('data', c => {
+      out += c;
+      try {
+        resolve(JSON.parse(out));
+      } catch {}
+    });
+    closed.then(([code]) => reject(new Error(`xcore dev stopped (${code}): ${err}`)));
+  });
+  const page = Number(new URL(where.origin).port);
+  assert.equal(Number(new URL(where.files).port), page + 1, 'its files on the next port');
+  // another game in dev may hold 8787 on this machine: then it is the next pair, and the next, never an odd step
+  assert.ok(page >= 8787 && page < 8787 + 20 && (page - 8787) % 2 === 0, `the page is on ${page}`);
+  const readme = await readFile(path.join(ROOT, 'README.md'), 'utf8');
+  assert.ok(readme.includes('`http://127.0.0.1:8787/game/`'), 'the README names the same port');
 });
 
 test(

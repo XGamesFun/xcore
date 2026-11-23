@@ -14,10 +14,13 @@ no accounts of its own: xgames.fun holds them.
 - **Start sign-in from a click.** When `onCode` / `sign_in_code` / `SignInCode` fires with `window: false`, show the
   code and the site; with `window: true` the player already has a way to sign in on screen (a window, or the small
   panel `gamesfun.js` draws where none opens), so a quiet line is enough and an overlay would cover the game.
-- **Read the player after `GamesFun.ready`, and follow `onChange` / `player_changed` / `PlayerChanged`**, not only
-  the sign-in call's answer. On the game's own host (`<name>-play.xgames.fun`, where a post's card on X and xgames.fun's
-  wallet hand-off open it) xgames.fun is asked who is here as the page loads, and a player who chose this game in this
-  browser is signed in with no tap.
+- **Read the player as the game starts and follow every change**, not only the sign-in call's answer. A web game
+  awaits `GamesFun.ready` and follows `GamesFun.onChange`. Godot and Unity have no ready to await: read
+  `GamesFun.player` (Godot; null with nobody) or `GamesFun.Player` (Unity; the JSON text `"null"` with nobody) and
+  follow the `player_changed` signal or the `PlayerChanged` event, which also brings a player found as the page loads.
+  On the game's own host (`<name>-play.xgames.fun`, where a post's card on X and xgames.fun's wallet hand-off open it)
+  xgames.fun is asked who is here as the page loads, and a player who chose this game in this browser is signed in with
+  no tap.
 - **On its own host, the Sign in tap takes the tab to X and back** (phone and computer), so the game starts again,
   signed in. Call `signIn` in the click handler itself with nothing awaited before it, because a browser opens X only
   from the tap. `GamesFun.signInEnded` says `'cancelled'` or `'failed'` when it came back with nobody. Tell the person.
@@ -32,10 +35,13 @@ no accounts of its own: xgames.fun holds them.
 ## Data the game keeps for everyone
 
 Levels players make, profiles, a world's state, where the game used a localhost database or a JSON file:
-`xcore add database <folder>`, then `GamesFun.db` calls. Read RULES at the top of `server/database.js` with the person:
-anything a player must not set for themselves (a prize, a verified score) gets `write: 'server'` and is written by the
-game's server code, because the page is the player's to change. A database they already host stays behind their own
-backend, with its address and password out of the page. `xcore db` reads it here or live (`--live`).
+`xcore add database <folder>`, then `GamesFun.db` calls. Read the rules in `gamesfun.json` → `database.collections`
+with the person (who reads and who writes each collection; a player's own documents only, until a rule says more):
+anything a player must not set for themselves (a prize, a verified score) gets `"write": "server"` and is written by
+the game's server code, because the page is the player's to change. A game with a `server/` of its own gets
+`server/gf-db.js` and `server/migrations/` instead: its server's code reads and writes the tables, and the page reaches
+them only through its routes. A database they already host stays behind their own backend, with its address and
+password out of the page. `xcore db` reads it here or live (`--live`).
 
 ## Multiplayer
 

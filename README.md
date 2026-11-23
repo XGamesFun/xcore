@@ -33,7 +33,7 @@ xcore add database ./my-game               # a database of its own (D1), put up 
 xcore db query "SELECT * FROM players"     # read it here, or --live on xgames.fun
 xcore files put ./level.json levels/1.json --public --live   # a file its server and page read
 xcore add multiplayer ./my-game            # rooms players share (Godot's own multiplayer runs over them)
-xcore backend use custom ./my-game --url https://api.my-game.example   # only if it calls a backend you run
+xcore backend use custom ./my-game --url https://api.example.com   # only if it calls a backend you run
 xcore loot add ./my-game                   # only if it gets an economy (a Solana economy on loot)
 xcore add vouchers ./my-game               # its server pays results it checked from a grant, with its own key
 xcore review ./my-game                     # the security review: what a cheater gets (--live once published)
@@ -61,7 +61,7 @@ A game-making kit, for a game that starts from an idea, is coming as `@xgamesfun
 | **Inside the play page**   | xgames.fun shows the game in a frame (`sandbox="allow-scripts allow-same-origin allow-pointer-lock"`, `allow="autoplay; fullscreen; gamepad; clipboard-write"`): no form submits, no pop-ups and no top-level navigation, so a `<form>`, `window.open` or a link that leaves does nothing there. Sign-in, the wallet and full screen go through `gamesfun.js`, which the play page answers. `xcore check` loads the game in this frame too, and fails a page that tries one of them as it loads. Test a flow inside the play page, not only the bare game.                                                                             |
 | **Its server, if any**     | `server/` and `gamesfun.json` → `server`: a Cloudflare Worker that answers the game's `/api/*`, with up to 8 Durable Objects and the platform binding `env.GF` (sign-in, saves, scores, loot reports). [docs/SERVER.md](docs/SERVER.md). Bundled into one file on publish; never a public file.                                                                                                                                                                                                                                                                                                                                        |
 | **A backend of its own**   | Any public `https://` or `wss://` origin, listed in `backend.json` → `origins` (at most 8, public names only, no IP address, no localhost). The play host lets the page reach exactly those.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| **Solana**                 | Through the game's own devnet RPC (`xcore add rpc`: its server's `api/rpc`), else the play host's `/loot/v1/rpc` (xgames.fun's shared devnet relay, counted toward the game's plan), with the page client in the game (`gf/loot/`, from `@xgamesfun/solana`).                                                                                                                                                                                                                                                                                                                                                                          |
+| **Solana**                 | Through the game's own RPC on the economy's cluster (`xcore add rpc`: its server's `api/rpc`), else the play host's `/loot/v1/rpc` (xgames.fun's shared relay, counted toward the game's plan: devnet's, and for an economy on mainnet one that answers only the game's signed-in players), with the page client in the game (`gf/loot/`, from `@xgamesfun/solana`).                                                                                                                                                                                                                                                                   |
 | **What the page may load** | Scripts, style sheets, fonts and frames from its own files only (inline scripts, `eval`, WebAssembly and Web Workers from the game's own files are allowed; a page is not cross-origin isolated, so `SharedArrayBuffer` is not available: export engines single-threaded). Connections to its own origin and to `backend.json`'s origins; pictures and sounds from its own files and from those `https://` origins. No `<base>`, no form posts, no `<object>`. Camera, microphone, location, payments and USB are off; fullscreen, pointer lock, gamepads, audio and WebGL are not limited by the page's headers.                      |
 | **Paths the host owns**    | `/api/*` (the game's server, when it has one), `/platform/v1/*`, the multiplayer signaling (`/signal/v1`), the live watch (`/watch/v1`), world saves (`/world/v1/`), player keys (`/player/v1/`) and `/loot/v1/*`. A file of the game under one of them is never served.                                                                                                                                                                                                                                                                                                                                                               |
 | **Files**                  | Everything in the published folder goes up except hidden files and folders, and, at its top level, `evidence/`, `node_modules/`, `server/`, `supabase/`, `gamesfun.json` and the makers' notes (`README.md`, `NOTES.md`, `LAUNCH.md`, `FRICTION.md`, `CLAUDE.md`, `AGENTS.md`, `TODO.md`) (`.gitignore` is not read): move development material out of it, or give it a name that starts with a dot. Hidden files and folders never go up. A file whose extension the host does not know is served as `application/octet-stream` with `nosniff` (fine for data read with `fetch()`; a browser will not run it as a script or a style). |
@@ -206,15 +206,15 @@ whose check fails goes up as a private draft only.
 `xcore dev <folder>` serves the game on this machine the way xgames.fun will host it, with everything a published game
 has behind it, so the whole game runs before it is published:
 
-| On this machine               |                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `http://127.0.0.1:8787/game/` | the published files (it runs `page.build` first, unless `--no-build`), with the play host's headers                                                                                                                                                                                                                                                                                                                |
-| `/game/api/*`                 | the game's `server/` under workerd, the runtime xgames.fun runs it on: Durable Objects with their storage kept, WebSockets, `env.GF`, the game's database (a local D1 in `.gamesfun/dev/d1/`, its migrations applied), and its secrets from `.dev.vars`. A change under `server/` or to `.dev.vars` reloads it. Miniflare (with workerd, about 140 MB) is installed once, the first time a game with a server runs |
-| `/platform/v1/*`              | sign-in, saves and leaderboards: `gamesfun.js` signs in a local player (each tab its own, so two tabs play a room together), and `env.GF.verifyPlayer` accepts its token. Saves and scores are kept in `.gamesfun/dev-platform.json`, never published, and held to the limits of the plan it imitates (below)                                                                                                      |
-| `/api/player/v1/*`            | xgames.fun's side of the page's own sign-in, as the published game gets it on its own host: the question a page asks with no tap (`session?slug=`: a tab that signed in is signed in again after a reload, and after `xcore dev` starts again), Sign out that sticks (`session/forget`), and Sign in's trip to X and back (`x/begin`, `google/begin`); and the sign-in client at `/platform/v1/signin/v1.js`       |
-| `/platform/v1/live`           | the game's live settings (`gf.live`, below): its announcement, config and maintenance, from `.gamesfun/live.json` (read again on each request, never published). With maintenance on there, the game's pages show the holding page and its `api/` and `/platform/v1/*` answer `503` with code `maintenance`, as hosted                                                                                             |
-| `http://127.0.0.1:8788/`      | the game's public project files (`env.GF.files`, `xcore files`), kept in `.gamesfun/dev/files/`: another origin, as `<slug>.xgamesusercontent.com` is to the published game                                                                                                                                                                                                                                        |
-| `/loot/v1/rpc`                | the economy's Solana devnet RPC: xgames.fun's shared relay (what a published page talks to unless the game brings its own: `xcore add rpc`), or your own with `XSOLANA_RPC_URL` in `.env` (its URL is never shown; a call the shared relay would refuse is said in the terminal). The economy's calls answer once it is live on devnet (`xcore loot approve`)                                                      |
+| On this machine               |                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `http://127.0.0.1:8787/game/` | the published files (it runs `page.build` first, unless `--no-build`), with the play host's headers                                                                                                                                                                                                                                                                                                                                                                         |
+| `/game/api/*`                 | the game's `server/` under workerd, the runtime xgames.fun runs it on: Durable Objects with their storage kept, WebSockets, `env.GF`, the game's database (a local D1 in `.gamesfun/dev/d1/`, its migrations applied), and its secrets from `.dev.vars`. A change under `server/` or to `.dev.vars` reloads it. Miniflare (with workerd, about 180 MB) is installed once, the first time a game with a server runs                                                          |
+| `/platform/v1/*`              | sign-in, saves and leaderboards: `gamesfun.js` signs in a local player (each tab its own, so two tabs play a room together), and `env.GF.verifyPlayer` accepts its token. Saves and scores are kept in `.gamesfun/dev-platform.json`, never published, and held to the limits of the plan it imitates (below)                                                                                                                                                               |
+| `/api/player/v1/*`            | xgames.fun's side of the page's own sign-in, as the published game gets it on its own host: the question a page asks with no tap (`session?slug=`: a tab that signed in is signed in again after a reload, and after `xcore dev` starts again), Sign out that sticks (`session/forget`), and Sign in's trip to X and back (`x/begin`, `google/begin`); and the sign-in client at `/platform/v1/signin/v1.js`                                                                |
+| `/platform/v1/live`           | the game's live settings (`gf.live`, below): its announcement, config and maintenance, from `.gamesfun/live.json` (read again on each request, never published). With maintenance on there, the game's pages show the holding page and its `api/` and `/platform/v1/*` answer `503` with code `maintenance`, as hosted                                                                                                                                                      |
+| `http://127.0.0.1:8788/`      | the game's public project files (`env.GF.files`, `xcore files`), kept in `.gamesfun/dev/files/`: another origin, as `<slug>.xgamesusercontent.com` is to the published game                                                                                                                                                                                                                                                                                                 |
+| `/loot/v1/rpc`                | the economy's Solana RPC, on its cluster: xgames.fun's shared devnet relay (what a published page talks to unless the game brings its own: `xcore add rpc`), or your own with `XSOLANA_RPC_URL` in `.env` (its URL is never shown; a call the shared relay would refuse is said in the terminal). An economy on mainnet needs your own here: its relay answers a published game's signed-in players only. The economy's calls answer once it is live (`xcore loot approve`) |
 
 Games made with any engine get all of it through `gamesfun.js` (`xcore add signin`): on a plain local server it stands
 in with this browser's storage; under `xcore dev` it uses the real thing.
@@ -258,8 +258,9 @@ engine takes:
 The same calls everywhere: sign in and out, the player (`id`, `name`, `level`, `wallet`, `x`; `id` is the player's
 account, `x:<X id>` or for a Google account `g:<id>`, an id different in every game, and never the wallet, which is
 `wallet`, empty when the account has none), saves (any JSON, 64 KB each, 16 a player), leaderboards (submit, top, the
-player's own), the game's database (below) and its own server (`api`). Every call answers `{data, error, status}` and
-none throws, so a game plays on as a guest wherever xgames.fun is not there.
+player's own), the game's database (below) and its own server (`api`). Saves, leaderboards, the database and `api`
+answer `{data, error, status}`; `signIn()` answers the player, or null for nobody, and `signOut()` answers null (in
+Unity, JSON text: `"null"`). None throws, so a game plays on as a guest wherever xgames.fun is not there.
 
 **Full screen.** Most players meet a game in a post on X or on a phone, where it shows in a small frame first; `xcore
 adopt` warns when a game has no way to go full screen. A button that calls `GamesFun.fullscreen()` from the click
@@ -341,13 +342,15 @@ Where the sign-in comes from:
     that carried that choice) is signed in with no tap: `GamesFun.ready` answers with them (it waits for the answer,
     1.5 s at most), `GamesFun.player` and `GamesFun.token` (for the game's own server) are set, and
     `GamesFun.onChange` is told, exactly as after a sign-in. When xgames.fun names nobody, the game is signed out and
-    nothing more is asked.
+    nothing more is asked. Godot and Unity have no `ready` to await: the player is `GamesFun.player` (Godot) or
+    `GamesFun.Player` (Unity), and the `player_changed` signal or the `PlayerChanged` event says when they are found,
+    as `onChange` does.
   - **The tap on Sign in** (`GamesFun.signIn()`, `GamesFun.signIn('google')`) takes the game's own tab to xgames.fun,
     on to X (or Google) and back to this page's address without its fragment
     (`https://xgames.fun/api/player/v1/x/begin?slug=<name>&back=<this page>`), on a phone and a computer alike: one
     tap, the provider's own screen, and the game again, signed in. The page loads afresh on the way back, so **the
     game starts again and what it held in memory is gone** (and so is anything after a `#` in its address); the player
-    is there when `GamesFun.ready` answers. Call it in the click handler itself, with no `await` or timer before it:
+    is there when `GamesFun.ready` answers (in Godot and Unity, when `player_changed` or `PlayerChanged` comes). Call it in the click handler itself, with no `await` or timer before it:
     xgames.fun goes straight on to X only when the browser shows the move was the player's own tap. A game that must
     not start again asks to stay, `GamesFun.signIn({stay: true})` (or for the whole page,
     `globalThis.GAMESFUN_SIGNIN_STAY = true` before `gamesfun.js`, or `data-signin-stay` on its `<script>`), and gets a
@@ -402,6 +405,9 @@ signOutButton.onclick = () => gf.signOut(); // and xgames.fun is told to forget 
 // gf.token goes to the game's own server: gf.api() sends it, env.GF.verifyPlayer checks it
 ```
 
+In Godot and Unity, which have no `ready`, the same is reading `GamesFun.player` (Unity `GamesFun.Player`) as the game
+starts and following `GamesFun.player_changed` (Unity `GamesFun.PlayerChanged`) in place of `onChange`.
+
 **A reload keeps the sign-in.** Inside the token's hour the tab keeps it, as the top window of the game's own host or
 its own domain (never in a frame), and asks nothing; when the hour is up where xgames.fun is not asked (a domain of
 the game's own), the game is told the player is signed out.
@@ -423,7 +429,8 @@ top window it also asks its own host for a sign-in client at one address, `/plat
 answers it with the client of the `xcore` that runs it); a frame does not ask for it, and runs the carried one. When a
 client comes there in time, it runs; where the address answers nothing, or not in time, the carried one runs and the
 game behaves the same. `GamesFun.signInClient` says which: `{version, shared}`. It is one request, to the page's own
-origin only, and it holds up neither the page nor the game's start: `GamesFun.ready` waits a second for it at most.
+origin only, and it holds up neither the page nor the game's start: `GamesFun.ready` waits a second for it at
+most, and the Godot and Unity glue wait on `ready` before they tell the game who is here.
 
 The game's `server/` checks the token with `env.GF.verifyPlayer`,
 first thing, before any work: a request without one answers 401 at once, since strangers' requests that do work count
@@ -549,7 +556,8 @@ packs (Free 100 MB, Creator 10 GB, Scale 100 GB; 25 MB a file). Its server write
 xcore files put ./levels/forest-3.json levels/forest-3.json --public --live   # served at https://<slug>.xgamesusercontent.com/levels/forest-3.json
 xcore files ls levels/ --live
 xcore files get replays/run-1.json --live --out run-1.json
-xcore files rm levels/old.json --live
+xcore files rm levels/old.json --live                 # prints what it would delete, with a code, and deletes nothing
+xcore files rm levels/old.json --live --yes <code>    # deletes it
 xcore files usage --live
 ```
 
@@ -558,6 +566,11 @@ player's sign-in or call the game's `api/`, and anything that could carry a scri
 download, never a page. The game's page may load its pictures, sounds and fonts and `fetch` its data. Players never
 write here. Without `--live`, `xcore files` works on the files `xcore dev` gives the server, kept in
 `.gamesfun/dev/files/` and served on a port of their own.
+
+xgames.fun keeps one copy of a file and no earlier one, so a file written over or deleted there is gone for good. A
+new path is put at once. `put --live` to a path xgames.fun has already, and `rm --live`, first print what would be
+lost (the file there, its size and type) with a code, and change nothing; the same command with `--yes <code>` goes
+on, and a code printed for another change is refused. `xcore files get <path> --live` keeps a copy first.
 
 ### Multiplayer: `xcore add multiplayer`
 
@@ -612,7 +625,7 @@ the page never holds its address or password.
 Three ways, any of them, or none:
 
 - **One you already run**:
-  `xcore backend use custom <folder> --url https://api.my-game.example [--origin wss://live.my-game.example]` writes
+  `xcore backend use custom <folder> --url https://api.example.com [--origin wss://live.example.com]` writes
   `backend.json` with the URL's origin and its `wss://` twin, plus any `--origin` you add (another host, a CDN for its
   pictures). No client is copied: the game's own code calls it. The backend answers CORS for the game's origin (the
   published link's, and `http://127.0.0.1:<port>` under `xcore dev`). No key, unless one made to be public.
@@ -670,15 +683,24 @@ const spec = await (await fetch('xsolana.json')).json();
 ```
 
 `solanaApp` takes `rpcUrl: PAGE_RPC`, the page's own `/loot/v1/rpc`. `gf/loot/wallets.js` gives the page the
-player's wallet through the Wallet Standard, with no package:
+player's wallet through the Wallet Standard, with no package. Each call is for devnet unless it is told the economy's
+cluster:
 
-| Export                            |                                                                                                                                                |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `solanaWallets({ waitMs = 300 })` | → the wallets in this browser that can sign Solana devnet transactions (an empty list when there are none: say so, and keep the game playable) |
-| `connectWallet(wallet)`           | → the player's account; the wallet shows its own prompt, and it throws if they say no                                                          |
-| `PAGE_RPC`                        | the page's own `/loot/v1/rpc` (xgames.fun's relay once published)                                                                              |
+| Export                                                |                                                                                                                                                         |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `solanaWallets({ waitMs = 300, cluster = 'devnet' })` | → the wallets in this browser that can sign Solana transactions on that cluster (an empty list when there are none: say so, and keep the game playable) |
+| `connectWallet(wallet, { cluster = 'devnet' })`       | → the player's account on that cluster; the wallet shows its own prompt, and it throws if they say no                                                   |
+| `PAGE_RPC`                                            | the page's own `/loot/v1/rpc` (xgames.fun's relay once published), for devnet                                                                           |
+| `pageRpc(cluster)`                                    | the same relay for an economy on `cluster`: `PAGE_RPC` on devnet, `PAGE_RPC` with `?cluster=mainnet` on mainnet                                         |
+| `chainOf(cluster)`                                    | the cluster's name as a wallet takes it: `'solana:devnet'` or `'solana:mainnet'`                                                                        |
 
 `walletStandardSigner(wallet, account)` from `gf/loot/play/index.js` turns them into the signer `solanaApp` takes.
+
+**An economy on mainnet** (`"network": "mainnet"` in `xsolana.json`) names its cluster in every one of those:
+`solanaWallets({ cluster: 'mainnet' })`, `connectWallet(wallet, { cluster: 'mainnet' })`,
+`walletStandardSigner(wallet, account, chainOf('mainnet'))` and `pageRpc('mainnet')` in place of `PAGE_RPC`. Its relay
+answers only a player signed in to the game, so every call to it carries the player's sign-in as well. `GamesFun.loot`
+(below) reads the cluster from the economy's file and does all of this: on mainnet, wire the economy through it.
 
 **From Godot, Unity or any page with `gamesfun.js`** (`xcore add signin`), `GamesFun.loot` does all of that with JSON in
 and out (big numbers as text), so an engine calls it like the rest of xgames.fun:
@@ -752,12 +774,14 @@ game's server checks the result, and then one of two signers vouches for it.
 with no key for you to keep. When the amount depends on the result (paid by score), when the server replays or bounds
 runs before paying, when there are entry fees or a prize pool, or when results come faster than 120 an hour, give the
 server its own key: `xcore add vouchers` writes `server/vouchers.js` (its `PAY.check` is what your server checks) and a
-test key in `.dev.vars` for `xcore dev`. In order: `xcore publish`, `xcore secret set VOUCHER_SEED --new-key` (the live
-key: made here, sent only to xgames.fun and never kept on your machine; it points the grants your server pays at it in
-`xsolana.json`), `xcore loot approve`, `xcore publish`. A voucher pays only a wallet the player proved is theirs (signed
-in with it, or linked with `gf.loot.link()`), and since a wallet is free, pay rewards worth farming only to players
-signed in with X (`VOUCHERS.payOnly`). A grant names up to three keys, so the keeper and your own can pay the same grant
-while you move from one to the other. [docs/SERVER.md](docs/SERVER.md), "Paying a result", has both, side by side.
+test key in `.dev.vars` for `xcore dev`. In order: write `PAY.check`, `xcore publish`,
+`xcore secret set VOUCHER_SEED --new-key` (the live key: made here, sent only to xgames.fun and never kept on your
+machine; it points the grants `PAY.check` names at it in `xsolana.json`), `xcore loot approve`, `xcore publish`
+([docs/SERVER.md](docs/SERVER.md), "Your own key", has each step). A voucher pays only a wallet the player proved is
+theirs (signed in with it, or linked with `gf.loot.link()`), and since a wallet is free, pay rewards worth farming only
+to players signed in with X (`VOUCHERS.payOnly`). A grant names up to three keys, so the keeper and your own can pay
+the same grant while you move from one to the other. [docs/SERVER.md](docs/SERVER.md), "Paying a result", has both,
+side by side.
 
 ### Review: `xcore review`
 
@@ -987,7 +1011,8 @@ xcore coin launch … --yes <code>                   # the same command, with th
   escapes every character that would hide or move text in a terminal.
 - `xcore coin drop` gives up a launch that was begun and never sent. `--venue pumpfun` and `--pair <SYMBOL>` choose
   the other venue and what the coin trades against (the default: Meteora, SOL). The ticker is 2 to 10 letters or
-  digits, launched in capitals. xgames.fun lets an account launch three coins a day.
+  digits, launched in capitals; `--symbol` is another name for `--ticker`. `--description <text>` gives the coin a
+  description. xgames.fun lets an account launch three coins a day.
 - Then name the coin in the economy: `xcore loot token <mint>` prints its entry for `xsolana.json`'s `tokens`.
 
 The same from a browser wallet: the game's console (xgames.fun/console), Token tab. A devnet coin trades nothing of

@@ -649,7 +649,9 @@ test('add database to a game with a server: the block, an example migration and 
   assert.match(r.steps.join('\n'), /import \{ db, withPlayer \} from '\.\/gf-db\.js'/);
   assert.deepEqual((await addDatabase(dir)).written, [], 'run again: already up to date');
   // the person's own migration: no example is written over or beside it
-  const mine = await fixture(await tempDir(), 'static');
+  const second = await tempDir();
+  t.after(second.cleanup);
+  const mine = await fixture(second, 'static');
   await mkdir(path.join(mine, 'server', 'migrations'), { recursive: true });
   await writeFile(path.join(mine, 'server', 'index.js'), SERVER);
   await writeFile(path.join(mine, 'server', 'migrations', '0001_mine.sql'), 'CREATE TABLE m (x);');

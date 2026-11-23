@@ -34,29 +34,30 @@ They hold at every step, so no step needs a rule of its own.
 
 - **Consent where it can't be undone.** Some commands print exactly what they would do with a code, send nothing, and
   act only when run again with `--yes <code>`: `loot approve` (an economy going live), `coin launch`, a change to the
-  live database (`db query --write --live`, `db import --live`, `db restore --live`), and replacing or deleting a
-  secret the live server has (`secret set` over an existing name, `secret delete`). They move money, hand over keys,
-  lose a key for good or change players' data, and none can be taken back. Show the person the printout, and run it
-  with the code only after they have read it and said yes; a code fits only the printout it came with. Everything
-  else is reversible and runs when the person asked for that change: publish (a new version, or a private draft when
-  checks fail), a domain, an embed (it applies in about a minute), `plan activate` and `deactivate` (a slot moves, no
-  money does). A step that costs the creator a click is fine. A player's path is different: a tap added for a narrow
-  threat costs real players, so that guard goes on the server.
+  live database (`db query --write --live`, `db import --live`, `db restore --live`), replacing or deleting a secret
+  the live server has (`secret set` over an existing name, `secret delete`), and writing over or deleting a project
+  file xgames.fun has (`files put --live` over an existing path, `files rm --live`). They move money, hand over keys,
+  lose a key or a file for good or change players' data, and none can be taken back. Show the person the printout, and
+  run it with the code only after they have read it and said yes; a code fits only the printout it came with.
+  Everything else is reversible and runs when the person asked for that change: publish (a new version, or a private
+  draft when checks fail), a domain, an embed (it applies in about a minute), `plan activate` and `deactivate` (a slot
+  moves, no money does). A step that costs the creator a click is fine. A player's path is different: a tap added for a
+  narrow threat costs real players, so that guard goes on the server.
 - **Custody.** Every key has one intended holder: the owner's key file on their machine, the live voucher key on
   xgames.fun, the test seed in `.dev.vars`. Its bytes anywhere else (the page, the game's folder or git, this chat, a
   log, a server that shouldn't hold it) are a leak, so you don't open, print, copy or ask for one. How the economy's key
   file is made and used is the xsolana-economy skill's.
 - **Their game stays theirs.** The smallest change to their source. Their build's output is made again on every build,
-  and the copies xcore keeps (`gf/loot/`, `gf/platform/`) are replaced whenever xcore brings them up to date, so a
-  change goes in their source or config.
-  Say only what you know: an economy is not legal, safe, an investment or ready for real money because you say so.
+  and the copies xcore keeps (`gf/loot/`, `gamesfun.js`, a Godot or Unity project's GamesFun files) are replaced
+  whenever xcore brings them up to date, so a change goes in their source or config.
 - **A refusal is the rule.** When a tool, the host or the chain refuses (a sign-in not given, a launch not this key's,
   a check that fails), stop and tell them what it said, with the fix it names. Working around a refusal hides the
   problem it found.
 
 **Say in your own words**, keeping every number, everything a command prints for the person. Three kinds of fact go
 **as written**, because a paraphrase can overclaim: what a cheater gets and the key-leak ceiling (review), and the legal
-flags. Pass on each "Ask the person" question before building on its answer.
+flags. Pass on each "Ask the person" question before building on its answer. Say only what you know: an economy is not
+legal, safe, an investment or ready for real money because you say so.
 
 ## 1. Adopt and fix
 

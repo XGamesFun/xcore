@@ -159,6 +159,20 @@ test('saves: a page’s player keeps 1/128 of the game’s bytes; a full game ke
   void dir;
 });
 
+test('saves: a player keeps 16; one more is refused, while a save they have is still written over', async t => {
+  const { s } = await storeOf(t);
+  const keys = PLANS.free.saves.keysPerPlayer;
+  assert.equal(keys, 16);
+  for (let i = 1; i <= keys; i++) assert.equal((await s.run('saves.put', ['dev:a', `slot-${i}`, i])).ok, true, i);
+  const over = await s.run('saves.put', ['dev:a', 'slot-17', 17]);
+  assert.deepEqual([over.code, over.why], ['too-many', 'A player may have 16 saves.']);
+  assert.equal((await s.run('saves.list', ['dev:a'])).keys.length, keys, 'none was kept past the plan');
+  assert.equal((await s.run('saves.put', ['dev:a', 'slot-16', 'again'])).ok, true, 'writing over one they have');
+  assert.equal((await s.run('saves.delete', ['dev:a', 'slot-1'])).ok, true);
+  assert.equal((await s.run('saves.put', ['dev:a', 'slot-17', 17])).ok, true, 'room again once one is deleted');
+  assert.equal((await s.run('saves.put', ['dev:b', 'slot-1', 1])).ok, true, 'each player their own 16');
+});
+
 test('writes a minute: a page’s player 60 saves and 30 scores; the server the plan’s 600', async t => {
   const { s, tick, minute } = await storeOf(t);
   for (let i = 0; i < RULES.page.saveWritesPerPlayerMinute; i++)

@@ -56,55 +56,72 @@ const b64url = value => Buffer.from(JSON.stringify(value)).toString('base64url')
 const jwt = payload => `${b64url({ alg: 'HS256', typ: 'JWT' })}.${b64url(payload)}.${'s'.repeat(43)}`;
 const alnum = n => 'aB3dE5gH7jK9mN2pQ4sT6vW8yZ0cF1hL'.repeat(4).slice(0, n);
 
+const hex = n => '0123456789abcdef'.repeat(8).slice(0, n);
+/** [kind, a file's text that holds one]: the keys xgames.fun's own scan refuses. */
+const HOST_KEYS = [
+  ['private key block', '-----BEGIN ' + 'PRIVATE KEY-----\nMIIE…'],
+  ['private key block', '-----BEGIN RSA ' + 'PRIVATE KEY-----'],
+  ['OpenAI or Anthropic key', `const k = "${'sk-' + 'proj-' + alnum(40)}";`],
+  ['OpenAI or Anthropic key', `key: '${'sk-' + 'ant-api03-' + alnum(40)}'`],
+  ['OpenAI or Anthropic key', `"${'sk-' + alnum(48)}"`],
+  ['Meshy key', `${'msy_' + alnum(32)}`],
+  ['AWS access key', `${'AKIA' + 'ABCDEFGHIJKLMNOP'}`],
+  ['GitHub token', `${'ghp_' + alnum(36)}`],
+  ['GitHub token', `${'github_pat_' + alnum(40)}`],
+  ['Slack token', `${'xoxb-' + '1234567890-abcdefghij'}`],
+  ['Google API key', `${'AIza' + alnum(35)}`],
+  ['Stripe secret key', `${'sk_' + 'live_' + alnum(24)}`],
+  ['Stripe secret key', `${'rk_' + 'test_' + alnum(24)}`],
+  ['Supabase secret key', `${'sb_' + 'secret_' + alnum(24)}`],
+  ['Supabase access token', `${'sbp_' + alnum(40)}`],
+  ['database address with a password', `const db = "${'postgres://' + 'app:hunter2pass@db.example.net:5432/x'}";`],
+  ['xgames.fun publish token', `${'gfk_' + alnum(40)}`],
+  ['secret assigned a literal', `const CLIENT_SECRET = "${alnum(24)}";`],
+  ['secret assigned a literal', `{"apiKey": "${alnum(32)}"}`],
+];
+/** The same for keys with a provider's own shape. */
+const PROVIDER_KEYS = [
+  ['Hugging Face token', `t = "${'hf_' + alnum(34)}"`],
+  ['npm token', `t = "${'npm_' + alnum(36)}"`],
+  ['GitLab token', `t = "${'glpat-' + alnum(20)}"`],
+  ['SendGrid key', `t = "${'SG.' + alnum(22) + '.' + alnum(43)}"`],
+  ['Stripe webhook secret', `t = "${'whsec_' + alnum(32)}"`],
+  ['Shopify token', `t = "${'shpat_' + hex(32)}"`],
+  ['Google OAuth client secret', `t = "${'GOCSPX-' + alnum(28)}"`],
+  ['DigitalOcean token', `t = "${'dop_v1_' + hex(64)}"`],
+  ['Telegram bot token', `t = "${'1234567890:AA' + alnum(33)}"`],
+  [
+    'an RPC URL with its key (helius, alchemy, quicknode, infura)',
+    `rpc = "https://mainnet.helius-rpc.com/?api-key=${hex(32)}"`,
+  ],
+  [
+    'an RPC URL with its key (helius, alchemy, quicknode, infura)',
+    `rpc = "https://solana-mainnet.g.alchemy.com/v2/${alnum(32)}"`,
+  ],
+  [
+    'a Solana keypair in code (fromSecretKey)',
+    `Keypair.fromSecretKey(Uint8Array.from([${Array.from({ length: 64 }, (_, i) => i).join(',')}]))`,
+  ],
+];
+/** And for the key formats xcore and Solana tools write themselves. */
+const OWN_KEYS = [
+  ['signing key seed (hex)', `VOUCHER_SEED=${'c3'.repeat(32)}\n`],
+  ['key file (pub and seed)', `{"pub":"4KQMYSRB7QiBgEDcgNNoCtWCQREaEZpvZP59pVgQCFng","seed":"${'d4'.repeat(32)}"}`],
+  [
+    'secret key bytes in code',
+    `const secretKey = new Uint8Array([${Array.from({ length: 64 }, (_, i) => (i * 37) % 256).join(', ')}]);`,
+  ],
+  ['Solana secret key (base58)', `key ${base58(pseudoRandom(64, 1000))} here`],
+];
+
 test('every kind of key the scan promises to refuse is refused', () => {
-  const cases = [
-    ['private key block', '-----BEGIN ' + 'PRIVATE KEY-----\nMIIE…'],
-    ['private key block', '-----BEGIN RSA ' + 'PRIVATE KEY-----'],
-    ['OpenAI or Anthropic key', `const k = "${'sk-' + 'proj-' + alnum(40)}";`],
-    ['OpenAI or Anthropic key', `key: '${'sk-' + 'ant-api03-' + alnum(40)}'`],
-    ['OpenAI or Anthropic key', `"${'sk-' + alnum(48)}"`],
-    ['AWS access key', `${'AKIA' + 'ABCDEFGHIJKLMNOP'}`],
-    ['GitHub token', `${'ghp_' + alnum(36)}`],
-    ['GitHub token', `${'github_pat_' + alnum(40)}`],
-    ['Slack token', `${'xoxb-' + '1234567890-abcdefghij'}`],
-    ['Google API key', `${'AIza' + alnum(35)}`],
-    ['Stripe secret key', `${'sk_' + 'live_' + alnum(24)}`],
-    ['Stripe secret key', `${'rk_' + 'test_' + alnum(24)}`],
-    ['Supabase secret key', `${'sb_' + 'secret_' + alnum(24)}`],
-    ['database address with a password', `const db = "${'postgres://' + 'app:hunter2pass@db.example.net:5432/x'}";`],
-    ['xgames.fun publish token', `${'gfk_' + alnum(40)}`],
-    ['secret assigned a literal', `const CLIENT_SECRET = "${alnum(24)}";`],
-    ['secret assigned a literal', `{"apiKey": "${alnum(32)}"}`],
-  ];
-  for (const [kind, text] of cases) assert.ok(kinds('game.js', text).includes(kind), `${kind}: ${text.slice(0, 40)}…`);
+  for (const [kind, text] of HOST_KEYS)
+    assert.ok(kinds('game.js', text).includes(kind), `${kind}: ${text.slice(0, 40)}…`);
 });
 
 test("keys with a provider's own shape are refused (each made here, at run time)", () => {
-  const hex = n => '0123456789abcdef'.repeat(8).slice(0, n);
-  const cases = [
-    ['Hugging Face token', `t = "${'hf_' + alnum(34)}"`],
-    ['npm token', `t = "${'npm_' + alnum(36)}"`],
-    ['GitLab token', `t = "${'glpat-' + alnum(20)}"`],
-    ['SendGrid key', `t = "${'SG.' + alnum(22) + '.' + alnum(43)}"`],
-    ['Stripe webhook secret', `t = "${'whsec_' + alnum(32)}"`],
-    ['Shopify token', `t = "${'shpat_' + hex(32)}"`],
-    ['Google OAuth client secret', `t = "${'GOCSPX-' + alnum(28)}"`],
-    ['DigitalOcean token', `t = "${'dop_v1_' + hex(64)}"`],
-    ['Telegram bot token', `t = "${'1234567890:AA' + alnum(33)}"`],
-    [
-      'an RPC URL with its key (helius, alchemy, quicknode, infura)',
-      `rpc = "https://mainnet.helius-rpc.com/?api-key=${hex(32)}"`,
-    ],
-    [
-      'an RPC URL with its key (helius, alchemy, quicknode, infura)',
-      `rpc = "https://solana-mainnet.g.alchemy.com/v2/${alnum(32)}"`,
-    ],
-    [
-      'a Solana keypair in code (fromSecretKey)',
-      `Keypair.fromSecretKey(Uint8Array.from([${Array.from({ length: 64 }, (_, i) => i).join(',')}]))`,
-    ],
-  ];
-  for (const [kind, text] of cases) assert.ok(kinds('game.js', text).includes(kind), `${kind}: ${text.slice(0, 40)}…`);
+  for (const [kind, text] of PROVIDER_KEYS)
+    assert.ok(kinds('game.js', text).includes(kind), `${kind}: ${text.slice(0, 40)}…`);
   // what games and libraries really carry stays allowed
   for (const text of [
     'static fromSecretKey(secretKey, options) { return new Keypair(secretKey); }',
@@ -113,6 +130,26 @@ test("keys with a provider's own shape are refused (each made here, at run time)
     'const ratio = "1920:1080";',
   ])
     assert.deepEqual(kinds('lib.js', text), [], text);
+});
+
+test('no pattern goes untried: the scan refuses a key of every kind lib/secret-patterns.mjs lists', () => {
+  const tried = [...HOST_KEYS, ...PROVIDER_KEYS, ...OWN_KEYS];
+  for (const [kind, text] of OWN_KEYS) assert.ok(kinds('game.js', text).includes(kind), kind);
+  assert.deepEqual(
+    SECRET_PATTERNS.map(([kind]) => kind).filter(kind => !tried.some(([k]) => k === kind)),
+    [],
+    'a pattern with no key above that it refuses',
+  );
+});
+
+test('a secret assigned a literal is refused under each name the scan reads as a secret’s', () => {
+  for (const word of ['SECRET', 'API_KEY', 'APIKEY', 'PRIVATE_KEY', 'ACCESS_TOKEN', 'SERVICE_ROLE', 'PASSWORD'])
+    for (const text of [
+      `const ${word} = "${alnum(24)}";`,
+      `DB_${word}_V2='${alnum(24)}'`,
+      `{"${word.toLowerCase()}": "${alnum(24)}"}`,
+    ])
+      assert.deepEqual(kinds('config.js', text), ['secret assigned a literal'], text);
 });
 
 test('a Solana secret key is refused however it is written, and a 64-byte keypair array too', () => {

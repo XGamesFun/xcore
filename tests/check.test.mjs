@@ -9,6 +9,7 @@ import { adopt } from '../lib/publish/adopt.mjs';
 import { findChrome, playwrightChromium, playwrightCli } from '../lib/browser.mjs';
 import { FRAME_BLOCKS, pageVerify } from '../lib/check.mjs';
 import { PLAY_FRAME_ALLOW, PLAY_FRAME_SANDBOX } from '../lib/play-policy.mjs';
+import { hostedRefusal } from '../lib/publish/hosting.mjs';
 import { buildTree } from '../lib/publish/tree.mjs';
 import { fixture, ROOT, tempDir } from './helpers.mjs';
 
@@ -517,15 +518,99 @@ test('the check and the dev host leave out what publish leaves out, so a page th
   const { servePage } = await import('../lib/check.mjs');
   const tmp = await tempDir();
   t.after(tmp.cleanup);
-  await mkdir(path.join(tmp.dir, 'node_modules/three'), { recursive: true });
-  await writeFile(path.join(tmp.dir, 'node_modules/three/three.js'), 'export {};');
-  await writeFile(path.join(tmp.dir, 'README.md'), 'notes');
-  await writeFile(path.join(tmp.dir, 'index.html'), '<!doctype html><title>x</title>');
-  await mkdir(path.join(tmp.dir, 'levels'), { recursive: true });
-  await writeFile(path.join(tmp.dir, 'levels/README.md'), 'a level’s notes, published');
+  const files = {
+    'node_modules/three/three.js': 'export {};',
+    'README.md': 'notes',
+    'index.html': '<!doctype html><title>x</title>',
+    'levels/README.md': 'a level’s notes, published',
+    // hidden files and folders, at the top and below it: the server's secrets on this machine among them
+    '.dev.vars': 'VOUCHER_SEED=not-for-a-browser',
+    '.git/config': '[core]',
+    '.gamesfun/publish.json': '{}',
+    'levels/.draft.json': '{}',
+    'levels/.cache/1.json': '{}',
+  };
+  for (const [p, text] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(tmp.dir, p)), { recursive: true });
+    await writeFile(path.join(tmp.dir, p), text);
+  }
   const site = await servePage(tmp.dir);
   t.after(site.close);
   const published = (await buildTree(tmp.dir)).tree.files.map(f => f.path);
-  for (const p of ['node_modules/three/three.js', 'README.md', 'index.html', 'levels/README.md'])
-    assert.equal((await fetch(`${site.url}${p}`)).status === 200, published.includes(p), p);
+  const players = ['index.html', 'levels/README.md'];
+  for (const p of Object.keys(files)) {
+    assert.equal(published.includes(p), players.includes(p), `published: ${p}`);
+    assert.equal((await fetch(`${site.url}${p}`)).status, players.includes(p) ? 200 : 404, `served: ${p}`);
+  }
+});
+
+test('every file of a game goes out with the play host’s headers: its type by its name, and never second-guessed', async t => {
+  const { servePage } = await import('../lib/check.mjs');
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  for (const [p, text] of [
+    ['index.html', '<!doctype html><title>x</title>'],
+    ['game.js', 'export {};'],
+    ['art/hero.png', 'PNG'],
+    ['src/main.ts', 'export {};'],
+    ['data/level.bin', 'bytes'],
+  ]) {
+    await mkdir(path.dirname(path.join(tmp.dir, p)), { recursive: true });
+    await writeFile(path.join(tmp.dir, p), text);
+  }
+  const site = await servePage(tmp.dir);
+  t.after(site.close);
+  for (const [p, type] of [
+    ['index.html', 'text/html; charset=utf-8'],
+    ['game.js', 'text/javascript; charset=utf-8'],
+    ['art/hero.png', 'image/png'],
+    // no type of its own: bytes, which nosniff keeps a browser from running as a script or a style
+    ['src/main.ts', 'application/octet-stream'],
+    ['data/level.bin', 'application/octet-stream'],
+  ]) {
+    const r = await fetch(`${site.url}${p}`);
+    const sent = name => r.headers.get(name);
+    assert.equal(r.status, 200, p);
+    assert.equal(sent('content-type'), type, p);
+    assert.equal(sent('x-content-type-options'), 'nosniff', p);
+    assert.equal(sent('referrer-policy'), 'no-referrer', p);
+    assert.equal(sent('cross-origin-resource-policy'), 'same-origin', p);
+    assert.equal(sent('permissions-policy'), 'camera=(), microphone=(), geolocation=(), payment=(), usb=()', p);
+    const policy = sent('content-security-policy').split('; ');
+    for (const rule of ["default-src 'self'", "object-src 'none'", "base-uri 'none'", "form-action 'none'"])
+      assert.ok(policy.includes(rule), `${p}: ${rule}`);
+  }
+});
+
+test('what a page may load from another site: nothing it runs, pictures and sounds from a declared https origin, calls to a declared one', () => {
+  const backend = ['https://api.example.com', 'wss://rooms.example.com'];
+  const refused = (origin, kind) => hostedRefusal(origin, kind, { backend });
+  // what a browser runs or frames comes from the game's own files, declared or not
+  for (const kind of ['script', 'stylesheet', 'font', 'document', 'frame', 'iframe', 'object', 'manifest'])
+    for (const origin of ['https://api.example.com', 'https://cdn.example.net'])
+      assert.match(refused(origin, kind), /from its own files only; put a copy in the game$/, `${kind} ${origin}`);
+  // a picture or a sound: only from an origin backend.json lists, and only over https
+  for (const [kind, what] of [
+    ['image', 'a picture'],
+    ['img', 'a picture'],
+    ['media', 'a sound or video'],
+  ]) {
+    assert.equal(refused('https://api.example.com', kind), null, kind);
+    for (const origin of ['https://cdn.example.net', 'wss://rooms.example.com', 'http://api.example.com'])
+      assert.equal(refused(origin, kind), `${what} from ${origin}, not in backend.json origins`, kind);
+  }
+  // a call (fetch, a socket): only to an origin backend.json lists
+  for (const kind of ['fetch', 'xhr', 'websocket']) {
+    for (const origin of backend) assert.equal(refused(origin, kind), null, `${kind} ${origin}`);
+    assert.equal(
+      refused('https://cdn.example.net', kind),
+      'a connection to https://cdn.example.net, not in backend.json origins',
+      kind,
+    );
+  }
+  assert.equal(
+    hostedRefusal('https://api.example.com', 'image'),
+    'a picture from https://api.example.com, not in backend.json origins',
+    'with no origin declared',
+  );
 });

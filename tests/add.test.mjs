@@ -1209,8 +1209,9 @@ test('rpc: the game’s server passes either cluster’s loot transactions', asy
   for (const p of R.loot) assert.ok(R.scanPrograms.includes(p), p);
 });
 
-test('vouchers on mainnet: the steps never suggest the test key, and say to take it out when a grant names it', async () => {
+test('vouchers on mainnet: the steps never suggest the test key, and say to take it out when a grant names it', async t => {
   const tmp = await tempDir();
+  t.after(tmp.cleanup);
   const dir = await fixture(tmp, 'static');
   const spec = {
     network: 'mainnet',
