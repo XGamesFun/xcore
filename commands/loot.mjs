@@ -4,14 +4,14 @@
 // Solana RPC setting (XSOLANA_RPC_URL, ../lib/solana-rpc.mjs) unless the environment already names one; `approve` goes
 // to the person's own RPC or to the tools' own default, never to the shared relay (see `rpcFor`). `add` is this package's
 // own: the page client into a game where its page is served (a brought game: the folder its build copies as it is;
-// ../lib/publish/adopt.mjs addLoot).
+// ../lib/loot-add.mjs).
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { guard, parse, printJson } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { ECONOMY_FILE, NO_SOLANA, solanaCommand, solanaHas } from '../lib/economy.mjs';
-import { addLoot } from '../lib/publish/adopt.mjs';
+import { addLoot } from '../lib/loot-add.mjs';
 import { economyCluster, solanaRpc } from '../lib/solana-rpc.mjs';
 import { CMD } from '../lib/command.mjs';
 import { NO_REVIEW } from '../lib/review.mjs';
