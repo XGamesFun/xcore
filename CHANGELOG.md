@@ -2,6 +2,16 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.10.6 — 2026-11-22
+
+**Ships with `@xgamesfun/solana` 0.29.10**, whose page client and instruction builders are split into modules (no
+behaviour change; a game's `gf/loot/` copy has more, smaller files). No behaviour changed here either:
+
+- `lib/review.mjs`, `lib/design-code.mjs` and `lib/publish/adopt.mjs` are split by section into `lib/review/`,
+  `lib/design-code/` and `lib/publish/adopt/`. Each old path still exports the same names. `xcore loot add`'s code is
+  in `lib/loot-add.mjs`.
+- The import cycles between review and design-code, and between add and voucher-key, are gone.
+
 ## 0.10.5 — 2026-11-22
 
 Ships with `@xgamesfun/solana` 0.29.8, a cleanup of the kit's code and docs (no behaviour changed). A cleanup here too: no behaviour changed. Notes about past versions and dates left the code and the docs (this file keeps the
