@@ -42,6 +42,8 @@ function standIn() {
     if (host === 'xgames.test') {
       // the Studio: the sign-in window's page, and the play page that frames the game
       const port = req.headers.host.split(':')[1];
+      // goSlow: the first page of the sign-in window (/go itself) answers late, as a slow network's would
+      if (url.pathname === '/go' && s.goSlow) await new Promise(r => setTimeout(r, s.goSlow));
       if (url.pathname.startsWith('/go')) return send(200, '<p>sign in here</p>', 'text/html');
       if (url.pathname === '/play/moth')
         return send(
@@ -370,6 +372,27 @@ test(
     await own.goto(`http://moth-play.xgames.test:${g.port}/`);
     await own.evaluate(() => GamesFun.ready);
     assert.ok(!g.s.seen.includes('GET moth-play.xgames.test/platform/v1/site'));
+  },
+);
+
+test(
+  'a sign-in window still loading its first page when the request is answered goes on to the request’s page',
+  { skip, timeout: 60_000 },
+  async t => {
+    const g = await standIn();
+    t.after(g.close);
+    const browser = await chrome();
+    t.after(() => browser.close());
+    const page = await browser.newPage();
+    await page.goto(`http://play.mygame.test:${g.port}/`);
+    await page.evaluate(() => GamesFun.ready);
+    // the request is answered at once, xgames.fun's /go a second and a half later
+    g.s.goSlow = 1500;
+    const popup = page.waitForEvent('popup');
+    await page.click('#in');
+    const win = await popup;
+    await win.waitForURL(new RegExp(`/go/ABCD-EFGH\\?with=x$`), { waitUntil: 'commit', timeout: 10_000 });
+    assert.deepEqual(g.s.requests, [{ slug: 'moth', with: 'x' }]);
   },
 );
 
