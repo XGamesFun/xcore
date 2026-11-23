@@ -1,8 +1,10 @@
 # GamesFun: sign-in, saves, leaderboards and the game's own database on xgames.fun, for a Godot 4 Web export.
 # Written by `xcore add signin` (autoloaded as GamesFun in project.godot); `xcore add signin` again brings it up to date.
-# It loads xgames.fun's page client (gamesfun.js, carried inside this file) into the page and calls it. Every call
-# answers a Dictionary {data, error, status}; outside a Web export (the editor, a desktop build) the error says so and
-# the game plays on. Export for the Web with Thread Support off: xgames.fun pages are not cross-origin isolated.
+# It loads xgames.fun's page client (gamesfun.js, carried inside this file) into the page and calls it. A call that
+# asks for something (saves, scores, the database, api, loot) answers a Dictionary {data, error, status}; sign_in
+# answers the player or null, fullscreen {on, how}, join_room a peer or null. Outside a Web export (the editor, a
+# desktop build) the error says so, nobody is signed in, and the game plays on. Export for the Web with Thread Support
+# off: xgames.fun pages are not cross-origin isolated.
 #
 #   var player = await GamesFun.sign_in()          # from a button press: the player signs in -> Dictionary or null
 #                                                  # (on the game's own link the tab goes to X and back, and the game
@@ -27,7 +29,7 @@ extends Node
 signal player_changed(player)
 signal sign_in_code(info)
 
-## The signed-in player ({id, name, level, wallet, x}), or null.
+## The signed-in player ({id, name, level, wallet, x, google}), or null.
 var player = null
 
 var _bridge = null
@@ -108,7 +110,8 @@ func _on_code(args):
 
 
 func _set_player(p):
-	if typeof(p) != TYPE_DICTIONARY:
+	# a player is a Dictionary; one with "error" is _run's answer for a call that did not run (no Web export): nobody
+	if typeof(p) != TYPE_DICTIONARY or p.has("error"):
 		p = null
 	if JSON.stringify(p) == JSON.stringify(player):
 		return
@@ -127,9 +130,10 @@ func _run(path: String, args: Array):
 	return result
 
 
-## The player's sign-in, from a button press (a window may open). how: "x" or "google". -> Dictionary or null
-## `how`: "x" or "google". `stay`: true never leaves the page (a window instead); left out (or false), on the game's
-## own link the tap takes the tab to X and back, and the game starts again, signed in (framed by another site: a window).
+## The player's sign-in, from a button press (a window may open). -> the player (a Dictionary), or null when nobody
+## signed in, as outside a Web export. `how`: "x" or "google". `stay`: true never leaves the page (a window instead);
+## left out (or false), on the game's own link the tap takes the tab to X and back, and the game starts again, signed
+## in (framed by another site: a window).
 func sign_in(how := "x", stay = null):
 	var opts = {"how": how}
 	if stay != null:
@@ -201,11 +205,11 @@ func db_add(collection: String, value):
 
 
 ## opts: {"owner": "me" | "server" | a player's id, "limit": 50, "after": the last answer's "after", "order": "new" | "old"}
-## The answer's "after" is null on the last page. An "offset" but 0 is refused (it is gone: page with "after"), here as
-## well, so a loop that paged with it stops in the editor too.
+## The answer's "after" is null on the last page. A list is paged with "after", never by offset: an "offset" but 0 is
+## refused here as in the page, so a loop that pages with one stops in the editor too.
 func db_list(collection: String, opts := {}):
 	if opts.has("offset") and opts["offset"] != null and str(opts["offset"]) != "" and float(str(opts["offset"])) != 0.0:
-		return {"data": null, "error": "db_list takes no offset any more: pass the last answer's after for the next page", "status": 0, "code": "offset"}
+		return {"data": null, "error": "db_list takes no offset: pass the last answer's after for the next page", "status": 0, "code": "offset"}
 	return await _run("db.list", [collection, opts])
 
 
@@ -283,8 +287,9 @@ func room_link(code: String) -> String:
 
 ## Join (or open) a room: a MultiplayerPeer to set as multiplayer.multiplayer_peer, or null (room_error says why).
 ## The first player in is the server (id 1). opts: {"name": "...", "host": true | false}: host true opens a new room
-## only (a Host button), false joins one only (a Join button: as over ENet, no one there is an error); unset either. Outside a Web export (the editor, "Run Multiple
-## Instances"), the same code makes a local ENet game on this machine: the first instance serves, the others join.
+## only (a Host button), false joins one only (a Join button: as over ENet, no one there is an error); unset either.
+## Outside a Web export (the editor, "Run Multiple Instances"), the same code makes a local ENet game on this machine:
+## the first instance serves, the others join.
 func join_room(code: String, opts := {}):
 	room_error = ""
 	code = code.strip_edges().to_upper()

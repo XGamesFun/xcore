@@ -242,7 +242,7 @@ test(
     // offset is gone: refused before anything is sent, so a loop that paged with it stops
     const offset = await page.evaluate(() => GamesFun.db.list('levels', { offset: 50 }));
     assert.deepEqual([offset.data, offset.code, offset.status], [null, 'offset', 0]);
-    assert.match(offset.error, /no offset any more: pass the last answer's after/);
+    assert.match(offset.error, /takes no offset: pass the last answer's after/);
     assert.equal(g.s.queries.length, 4, 'not sent');
     // 0, or none, is the first page, as it always was: 0.1.0 code that passed offset: 0 reads it
     for (const offset of [0, '0', null]) {

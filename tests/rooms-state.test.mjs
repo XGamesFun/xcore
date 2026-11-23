@@ -1,5 +1,6 @@
-// A room's seats while a hello waits on xgames.fun's sign-in check (lib/client/server/rooms.js): the room is read again
-// after it, so two players hosting one code at once never both get seat 1, and a room never passes ROOM.maxPlayers.
+// A room's seats while a hello waits on xgames.fun's sign-in check (lib/client/server/rooms.js): the room and the socket
+// are read again after it, so two players hosting one code at once never both get seat 1, a room never passes
+// ROOM.maxPlayers, one socket never takes two seats, and a socket that left takes none.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
@@ -50,16 +51,29 @@ function slowRoom() {
       verifyPlayer: () => new Promise(resolve => waiting.push(() => resolve({ ok: true, sub: 'x:1', x: null }))),
     },
   });
-  const hello = m => {
-    const ws = new Socket();
-    ctx.sockets.push(ws);
+  /** A hello with a token, from a new socket or from `ws` again. */
+  const hello = (m, ws = new Socket()) => {
+    if (!ctx.sockets.includes(ws)) ctx.sockets.push(ws);
     return { ws, done: r.webSocketMessage(ws, JSON.stringify({ t: 'hello', token: 'tok', ...m })) };
   };
   const release = async () => {
     await new Promise(r => setTimeout(r, 0));
     for (const f of waiting.splice(0)) f();
   };
-  return { hello, release };
+  /** The socket closes: gone from the room's sockets, and the room is told. */
+  const leave = async ws => {
+    ws.closed = { code: 1000 };
+    ctx.sockets = ctx.sockets.filter(s => s !== ws);
+    await r.webSocketClose(ws);
+  };
+  return { hello, release, leave };
+}
+/** A player already in the room (the host), to see what the room tells the others. */
+async function seatedHost({ hello, release }) {
+  const host = hello({});
+  await release();
+  await host.done;
+  return host.ws;
 }
 
 test('two players hosting one code at once: one is the host, the other is told the room is taken', async () => {
@@ -90,4 +104,39 @@ test('players joining at once never pass maxPlayers', async t => {
     [false, true],
     'one host, id 1; the other an id of its own',
   );
+});
+
+test('one socket that says hello twice takes one seat: the room hears of one join, and of that one leaving', async () => {
+  const room = slowRoom();
+  const host = await seatedHost(room);
+  const first = room.hello({ name: 'Bo' });
+  const second = room.hello({ name: 'Bo' }, first.ws);
+  await room.release();
+  await Promise.all([first.done, second.done]);
+  const joins = host.sent.filter(m => m.t === 'join').map(m => m.peer.id);
+  assert.equal(joins.length, 1, 'one join');
+  assert.equal(first.ws.sent.filter(m => m.t === 'welcome').length, 1, 'one welcome');
+  assert.equal(first.ws.attachment.id, joins[0], 'the seat the room was told of');
+  await room.leave(first.ws);
+  assert.deepEqual(
+    host.sent.filter(m => m.t === 'leave').map(m => m.id),
+    joins,
+    'everyone who joined has left',
+  );
+});
+
+test('a socket that leaves while its hello waits takes no seat: the room hears of no join', async () => {
+  const room = slowRoom();
+  const host = await seatedHost(room);
+  const gone = room.hello({ name: 'Bo' });
+  await room.leave(gone.ws);
+  await room.release();
+  await gone.done;
+  assert.deepEqual(
+    host.sent.filter(m => m.t === 'join' || m.t === 'leave'),
+    [],
+    'nobody joined',
+  );
+  assert.ok(!gone.ws.attachment.id, 'no seat');
+  assert.equal(gone.ws.sent.length, 0, 'nothing is sent to a socket that left');
 });

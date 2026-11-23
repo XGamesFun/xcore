@@ -4,13 +4,14 @@
 // bodies it holds in memory. What is refused here is what the published game is refused; nothing more.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { GF_METHODS } from '../lib/server/contract.mjs';
 import { createPlatformStore } from '../lib/dev/platform.mjs';
 import { startDev } from '../lib/dev/index.mjs';
 import { createFileStore } from '../lib/dev/files.mjs';
 import { PLANS, RULES, devPlan, planLine } from '../lib/dev/plans.mjs';
-import { run, tempDir } from './helpers.mjs';
+import { ROOT, run, tempDir } from './helpers.mjs';
 
 const MB = 1024 * 1024;
 
@@ -51,6 +52,24 @@ test('the plans: one table, Free by default, and a plan that is not one is refus
   const bad = run(['dev', '--plan', 'gold']);
   assert.equal(bad.status, 2);
   assert.match(bad.stderr, /--plan is free, creator or scale/);
+});
+
+test('env.GF is the contract’s list of methods: the stand-in passes each one on, and the platform answers each and no other', async t => {
+  const { s } = await storeOf(t);
+  // every call lib/dev/gf-local.js (env.GF under xcore dev) passes to the dev host, by its name
+  const local = await readFile(path.join(ROOT, 'lib', 'dev', 'gf-local.js'), 'utf8');
+  const passed = [...local.matchAll(/\bcall\(this\.#?env, '([\w.]+)'/g), ...local.matchAll(/gf\.local\/([\w.]+)/g)];
+  assert.deepEqual([...new Set(passed.map(m => m[1]))].sort(), [...GF_METHODS].sort());
+  assert.equal(new Set(GF_METHODS).size, GF_METHODS.length, 'each named once');
+  const asked = async op =>
+    (await s.handleHost(new Request(`http://gf.local/${op}`, { method: 'POST', body: '[]' }))).json();
+  for (const op of GF_METHODS) {
+    const a = await asked(op);
+    assert.equal(typeof a.ok, 'boolean', op);
+    assert.doesNotMatch(String(a.why ?? ''), /^env\.GF has no /, op);
+  }
+  for (const op of ['scores.clear', 'saves', 'constructor', 'toString'])
+    assert.deepEqual(await asked(op), { ok: false, code: 'unknown', why: `env.GF has no ${op}.` });
 });
 
 test('boards a page makes: "high" only, two a player, half the plan’s boards; the server makes the rest', async t => {
