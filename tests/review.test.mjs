@@ -2,7 +2,9 @@
 // server only times it, and a decided one, where the server runs the reef from a seed it keeps); the server's two
 // analyses, the payout ledger (its ceiling arithmetic, and each payout-* finding firing and not firing) and key custody
 // (each place a key is, firing and not), the live probe against a stand-in game on this machine, the economy's own review through a
-// stand-in @xgamesfun/solana, `xcore loot review`, and the line publish says when the review is out of date.
+// stand-in @xgamesfun/solana, `xcore loot review`, and the line publish says when the review is out of date. Then the
+// reading itself: one unsafe payout and one safe one, each written several ways; what it says of its own method; and
+// what it does when a file or a check cannot be read.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -14,7 +16,9 @@ import { ownWords } from '../commands/loot.mjs';
 import { liveFlag } from '../commands/review.mjs';
 import {
   apiRoutes,
+  codeOnly,
   liveReview,
+  METHOD,
   NO_REVIEW,
   payoutCeiling,
   payoutFindings,
@@ -23,6 +27,7 @@ import {
   readVouchers,
   reviewGame,
   reviewNudge,
+  serverReview,
   withoutComments,
   counts,
 } from '../lib/review.mjs';
@@ -166,7 +171,7 @@ test('the two sample servers: no server finding in either; the economy review of
   assert.match(c.stdout, /^review: PASS 0 high/);
   assert.match(c.stdout, /evidence .*review-2/);
   assert.match(c.stdout, /^paid route grant:found-whale: bounds; bounded$/m);
-  assert.match(c.stdout, /^server: 1 paid routes in the ledger, 1 keys in custody; 5 api\/ routes named/m);
+  assert.match(c.stdout, /^server: 1 paid route in the ledger, 1 key in custody; 5 api\/ routes named/m);
   const kit = JSON.parse(
     await readFile(new URL('../node_modules/@xgamesfun/solana/package.json', import.meta.url), 'utf8'),
   ).version;
@@ -297,6 +302,11 @@ test("a server that checks players' tokens itself must name the game's audience"
     "import { createRemoteJWKSet, jwtVerify } from 'jose';\nconst keys = createRemoteJWKSet(new URL('https://xgames.fun/api/player/v1/key'));\nexport const who = t => jwtVerify(t, keys, { issuer: 'xgames.fun' });\n",
   );
   assert.ok(ids(await review(dir)).includes('high token-any-game'));
+  // the same beside server/vouchers.js as xcore writes it, which names a game in words of its own (`game: g.project`)
+  const asSampled = await readFile(path.join(dir, 'server', 'vouchers.js'), 'utf8');
+  await cp(path.join(ROOT, 'lib', 'client', 'server', 'vouchers.js'), path.join(dir, 'server', 'vouchers.js'));
+  assert.ok(ids(await review(dir)).includes('high token-any-game'));
+  await writeFile(path.join(dir, 'server', 'vouchers.js'), asSampled);
   await writeFile(
     own,
     "import { createRemoteJWKSet, jwtVerify } from 'jose';\nconst keys = createRemoteJWKSet(new URL('https://xgames.fun/api/player/v1/key'));\nexport const who = t => jwtVerify(t, keys, { issuer: 'xgames.fun', audience: 'game:moth' });\n",
@@ -744,6 +754,13 @@ test('the ledger against the grants: payOnly and perPerson (payout-signer, payou
   r = await review(dir);
   assert.deepEqual(ids(r), []);
   assert.deepEqual([r.ledger[0].signer, r.ledger[0].where, r.ledger[0].identity], ['keeper', 'server/room.js', 'x']);
+  // (who wins is its callers' to say, and the review read none: said as not read)
+  assert.deepEqual(r.unread, [
+    {
+      what: 'server/room.js',
+      why: 'what decides the result it reports to the keeper is in the code that calls its function, which was not read',
+    },
+  ]);
   // a route that reports the winners the page names: the request decides who is paid
   await writeFile(
     path.join(dir, 'server', 'room.js'),
@@ -1403,4 +1420,479 @@ test('review: a setting read from env is no state; storage through env is', () =
   assert.equal(check("return body.score > Number(env.MIN_SCORE) ? { grant: 'clear' } : { why: 'low' };"), true);
   assert.equal(check("const r = await env.DB.prepare('x').first();\n return { grant: 'clear' };"), false);
   assert.equal(check("return seen(env) && { grant: 'clear' };"), false);
+});
+
+// ---- The reading itself ----------------------------------------------------------------------------------------------
+
+const TEMPLATE = path.join(ROOT, 'lib', 'client', 'server', 'vouchers.js');
+/** server/vouchers.js with `pay` as its PAY and `above` over it; the rest as the bounded sample has it. */
+async function vouchersWith(pay, above = '') {
+  const own = await readFile(path.join(SAMPLES, 'bounded', 'server', 'vouchers.js'), 'utf8');
+  return `// The game's own voucher key.\n${above}\n${pay}\n\n${own.slice(own.indexOf('export const VOUCHERS'))}`;
+}
+const check = body => `export const PAY = {\n  async check({ body, player, env }) {\n    ${body}\n  },\n};`;
+const NOT_A_WHALE = "if (body?.creature !== 'whale') return { why: 'Only a whale earns an NFT.' };";
+// what the page says it found, paid on its word; and a whale the server's own clock timed
+const ON_ITS_WORD = "{ grant: 'found-whale', round: `${player.sub}:${body.runId}`, amount: 'grant' }";
+const TIMED = "{ grant: 'found-whale', round: `${player.sub}:whale`, amount: 'grant' }";
+const NO_TIDE = "return { why: 'No whale in a tide this server timed.' };";
+const CLOCK = "import { clockOf } from './tides.js';";
+
+// [how it is written, PAY, what stands above it, the server's other files]
+const UNSAFE = [
+  ['as the template shows a check', check(`${NOT_A_WHALE}\n    return ${ON_ITS_WORD};`)],
+  [
+    'its parameters under names of its own ({ body: b, player: p })',
+    "export const PAY = {\n  async check({ body: b, player: p }) {\n    if (b?.creature !== 'whale') return { why: 'Only a whale earns an NFT.' };\n    return { grant: 'found-whale', round: `${p.sub}:${b.runId}`, amount: 'grant' };\n  },\n};",
+  ],
+  [
+    'a helper in another file of server/',
+    check('return whale(body, player);'),
+    "import { whale } from './whale.js';",
+    { 'whale.js': `export function whale(body, player) {\n  ${NOT_A_WHALE}\n  return ${ON_ITS_WORD};\n}\n` },
+  ],
+  [
+    'an arrow whose body is an expression',
+    `export const PAY = {\n  check: async ({ body, player }) =>\n    body?.creature === 'whale'\n      ? ${ON_ITS_WORD}\n      : { why: 'Only a whale earns an NFT.' },\n};`,
+  ],
+  [
+    'a setting taken out of env by its name',
+    check(
+      `const { PRIZE_CREATURE = 'whale' } = env;\n    if (body?.creature !== PRIZE_CREATURE) return { why: 'Only a whale earns an NFT.' };\n    return ${ON_ITS_WORD};`,
+    ),
+  ],
+  [
+    'named in PAY and written beside it ({ check })',
+    'export const PAY = { check };',
+    `async function check({ body, player }) {\n  ${NOT_A_WHALE}\n  return ${ON_ITS_WORD};\n}`,
+  ],
+  [
+    'the word "this" in a message',
+    check(
+      `if (body?.creature !== 'whale') return { why: \`A \${body?.creature} does not earn this.\` };\n    return ${ON_ITS_WORD};`,
+    ),
+  ],
+  [
+    'a brace in a message',
+    check(
+      `if (body?.creature !== 'whale') return { why: 'Only a whale earns an NFT :}' };\n    return ${ON_ITS_WORD};`,
+    ),
+  ],
+  [
+    'a brace and a quote in a regular expression',
+    check(`if (!/^[a-z'}{]+$/.test(String(body?.creature))) return { why: 'Odd name.' };\n    return ${ON_ITS_WORD};`),
+  ],
+  [
+    'a fetch whose answer nobody reads',
+    check(
+      `${NOT_A_WHALE}\n    await fetch('https://stats.example.org/whale', { method: 'POST', body: JSON.stringify({ who: player.sub }) });\n    return ${ON_ITS_WORD};`,
+    ),
+  ],
+  [
+    'another method of PAY, through this',
+    `export const PAY = {\n  async check({ body, player }) {\n    return this.whale(body, player);\n  },\n  whale(body, player) {\n    ${NOT_A_WHALE}\n    return ${ON_ITS_WORD};\n  },\n};`,
+  ],
+  [
+    'env handed to a helper that never reads it',
+    check('return whale(env, body, player);'),
+    `function whale(env, body, player) {\n  ${NOT_A_WHALE}\n  return ${ON_ITS_WORD};\n}`,
+  ],
+  [
+    'state named only in a comment, and the sentence of the template left in one',
+    check(
+      `// return { why: 'This game pays no results yet: write PAY.check at the top of server/vouchers.js.' };\n    // later: await env.RUNS.get(body.runId)\n    ${NOT_A_WHALE}\n    return ${ON_ITS_WORD};`,
+    ),
+  ],
+];
+const SAFE = [
+  [
+    'as the sample has it',
+    check(`${NOT_A_WHALE}\n    if (!(await clockOf(env).has(player.sub, 'whale'))) ${NO_TIDE}\n    return ${TIMED};`),
+    CLOCK,
+  ],
+  [
+    'all it was handed, given whole to a helper in another file',
+    `export const PAY = {\n  async check(ctx) {\n    const { body, player } = ctx;\n    ${NOT_A_WHALE}\n    if (!(await timedWhale(ctx))) ${NO_TIDE}\n    return ${TIMED};\n  },\n};`,
+    "import { timedWhale } from './timed.js';",
+    {
+      'timed.js': `${CLOCK}\nexport const timedWhale = ({ env, player }) => clockOf(env).has(player.sub, 'whale');\n`,
+    },
+  ],
+  [
+    'a binding taken in the parameters (env: { TIDE_CLOCK })',
+    `export const PAY = {\n  async check({ body, player, env: { TIDE_CLOCK } }) {\n    ${NOT_A_WHALE}\n    const clock = TIDE_CLOCK.get(TIDE_CLOCK.idFromName('main'));\n    if (!(await clock.has(player.sub, 'whale'))) ${NO_TIDE}\n    return ${TIMED};\n  },\n};`,
+  ],
+  [
+    'env under another name (env: bindings)',
+    `export const PAY = {\n  async check({ body, player, env: bindings }) {\n    ${NOT_A_WHALE}\n    if (!(await clockOf(bindings).has(player.sub, 'whale'))) ${NO_TIDE}\n    return ${TIMED};\n  },\n};`,
+    CLOCK,
+  ],
+  [
+    'an arrow that hands all of it to a function below',
+    'export const PAY = {\n  check: ctx => timedWhale(ctx),\n};',
+    `${CLOCK}\nasync function timedWhale({ body, player, env }) {\n  ${NOT_A_WHALE}\n  if (!(await clockOf(env).has(player.sub, 'whale'))) ${NO_TIDE}\n  return ${TIMED};\n}`,
+  ],
+  [
+    'a binding handed to a helper, and the same under a name of its own',
+    check(
+      `${NOT_A_WHALE}\n    const tides = env.TIDE_CLOCK;\n    if (!(await has(tides, player.sub))) ${NO_TIDE}\n    return ${TIMED};`,
+    ),
+    "const has = (clock, who) => clock.get(clock.idFromName('main')).has(who, 'whale');",
+  ],
+  [
+    'a message with a brace and the word env in it, and no semicolons',
+    `export const PAY = {\n  async check({ body, player, env }) {\n    if (body?.creature !== 'whale') return { why: 'Only a whale {not this} earns an NFT: ask env.' }\n    const seen = await clockOf(env).has(player.sub, 'whale')\n    if (!seen) return { why: \`No whale for \${player.sub} }\` }\n    return ${TIMED}\n  },\n}`,
+    CLOCK,
+  ],
+];
+
+test('one unsafe payout, however its check is written: paid on the request alone, a high finding', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  for (const [i, [how, pay, above, files = {}]] of UNSAFE.entries()) {
+    const dir = await sample(tmp, 'bounded', `u${i}`);
+    await writeFile(path.join(dir, 'server', 'vouchers.js'), await vouchersWith(pay, above));
+    for (const [f, text] of Object.entries(files)) await writeFile(path.join(dir, 'server', f), text);
+    const economy = path.join(dir, 'xsolana.json');
+    const r = await serverReview(dir, { spec: JSON.parse(await readFile(economy, 'utf8')), economy });
+    assert.deepEqual(
+      r.findings.filter(f => f.severity === 'high').map(f => `${f.id} ${f.cases}`),
+      ['payout-input request-decides'],
+      how,
+    );
+    assert.deepEqual([r.ledger[0].source, r.ledger[0].decides], ['request', 'body'], how);
+    assert.deepEqual(r.unread, [], how);
+  }
+});
+
+test('one safe payout, however its check is written: decided by state the server keeps, no finding', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  for (const [i, [how, pay, above, files = {}]] of SAFE.entries()) {
+    const dir = await sample(tmp, 'bounded', `s${i}`);
+    await writeFile(path.join(dir, 'server', 'vouchers.js'), await vouchersWith(pay, above));
+    for (const [f, text] of Object.entries(files)) await writeFile(path.join(dir, 'server', f), text);
+    const economy = path.join(dir, 'xsolana.json');
+    const r = await serverReview(dir, { spec: JSON.parse(await readFile(economy, 'utf8')), economy });
+    assert.deepEqual(
+      r.findings.filter(f => f.source === 'server').map(f => f.id),
+      [],
+      how,
+    );
+    // read as state from what the code does with a binding, not taken so because env went out of sight
+    assert.deepEqual(
+      [r.ledger[0].source, r.ledger[0].seen, r.ledger[0].assumed],
+      ['env', 'it uses env.TIDE_CLOCK', false],
+      how,
+    );
+    assert.deepEqual(r.unread, [], how);
+  }
+});
+
+test('strings, templates, regular expressions and comments are not code: blanked in place, a template’s ${…} kept', () => {
+  const text =
+    "const a = 'x } y'; // c {\nconst r = /[/}'\"]+/g.test(s) ? `a ${b ? `in ${c}` : '}'} this` : a / b;\n/* env */ f(`${env.DB}`);";
+  const bare = codeOnly(text);
+  assert.equal(bare.length, text.length);
+  assert.deepEqual(
+    bare.split('\n').map(l => l.length),
+    text.split('\n').map(l => l.length),
+  );
+  assert.doesNotMatch(bare, /[{}]|this|\bc\b \{|x . y/);
+  // what a template works out is code, in brackets that still pair
+  assert.match(bare, /\(b \? ` {4}\(c\)` : ' '\)/);
+  assert.match(bare, /f\(` \(env\.DB\)`\)/);
+  assert.match(bare, /: a \/ b;/, 'a division is no regular expression');
+  // with comments alone taken out, every literal stays as it is
+  assert.equal(withoutComments(text), text.replace('// c {', '      ').replace('/* env */', '         '));
+  // a // inside a regular expression is no comment
+  assert.equal(
+    withoutComments('const u = s.replace(/^https?:\\/\\//, ""); f(x)'),
+    'const u = s.replace(/^https?:\\/\\//, ""); f(x)',
+  );
+  // the template's sentence in a comment does not make a written check the template
+  const written = readVouchers(
+    "export const PAY = {\n  // return { why: 'This game pays no results yet: write PAY.check.' };\n  async check({ body }) {\n    return { grant: 'g', round: body.r, amount: 'grant' };\n  },\n};",
+  );
+  assert.equal(written.template, false);
+  assert.equal(paysFromRequest(written.check), true);
+});
+
+test('an economy file or a gamesfun.json that is there and cannot be read is a high finding by its name, never a pass', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded');
+  const economy = path.join(dir, 'xsolana.json');
+  // the check pays on the page's word: a FAIL while the economy can be read
+  await writeFile(
+    path.join(dir, 'server', 'vouchers.js'),
+    await vouchersWith(check(`${NOT_A_WHALE}\n    return ${ON_ITS_WORD};`)),
+  );
+  assert.equal((await review(dir)).ok, false);
+  // cut short: not JSON any more
+  await writeFile(economy, '{ "version": 2, "grants": [ { "key": "found-whale", ');
+  let r = await review(dir);
+  assert.equal(r.ok, false);
+  assert.deepEqual(ids(r), ['high file-unreadable']);
+  assert.equal(one(r, 'file-unreadable').route, 'xsolana.json');
+  assert.match(
+    one(r, 'file-unreadable').message,
+    /^xsolana\.json is there and cannot be read: it is not valid JSON \(.+\)\. Nothing in it was reviewed: no grant, no limit, no key/,
+  );
+  assert.match(
+    one(r, 'file-unreadable').fix,
+    /^Mend xsolana\.json so that it is a JSON object, then run .* review again\.$/,
+  );
+  assert.deepEqual(
+    r.unread.map(u => u.what),
+    ['xsolana.json'],
+  );
+  // the rest of the review ran: the server was read, and the installed tools are named as they are
+  assert.equal(r.server.facts.pay, 'written');
+  assert.equal(r.economy.available, false);
+  const kit = JSON.parse(
+    await readFile(new URL('../node_modules/@xgamesfun/solana/package.json', import.meta.url), 'utf8'),
+  ).version;
+  assert.equal(r.economy.version, kit);
+  const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
+  assert.match(md, /^\*\*FAIL\*\*: 1 high, 0 medium, 0 low, 0 info; 1 part not read\. Fix every high finding/m);
+  assert.match(md, /## Not read\n\n.*\n\n- xsolana\.json: it is not valid JSON/);
+  assert.ok(md.includes(`@xgamesfun/solana ${kit}`), 'no "no @xgamesfun/solana" while it is installed');
+  const c = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
+  assert.equal(c.status, 1);
+  assert.match(c.stdout, /^review: FAIL 1 high, 0 medium, 0 low, 0 info; 1 part not read · evidence /);
+  assert.match(c.stdout, /^ {2}not read: xsolana\.json: it is not valid JSON/m);
+  // JSON that is no object is no economy either
+  await writeFile(economy, '[]');
+  r = await review(dir);
+  assert.match(
+    one(r, 'file-unreadable').message,
+    /^xsolana\.json is there and cannot be read: it holds no JSON object\./,
+  );
+  // the game's own settings: where its page and its economy are is read from them
+  const other = await sample(tmp, 'bounded', 'settings');
+  await writeFile(path.join(other, 'gamesfun.json'), '{ "plan": "free", ');
+  r = await review(other);
+  assert.equal(r.ok, false);
+  assert.deepEqual(ids(r), ['high file-unreadable']);
+  assert.equal(one(r, 'file-unreadable').route, 'gamesfun.json');
+  assert.match(one(r, 'file-unreadable').message, /The review went on as for a folder with no settings/);
+  // and one that is not there at all is no finding
+  assert.deepEqual(ids(await review(await sample(tmp, 'bounded', 'plain'))), []);
+});
+
+test('every result says how it was read and what a PASS means: the same lines on the screen, in review.md and in review.json', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded');
+  assert.ok(METHOD.length <= 4);
+  assert.match(METHOD[0], /^What was read: the economy file .*, the code in server\/ and the page's files/);
+  assert.match(METHOD[1], /^How: as text, by patterns\. None of the game's code is run and none is parsed/);
+  assert.match(
+    METHOD[2],
+    /^A PASS means no high finding in what was read\. It is not proof that the game is safe to pay/,
+  );
+  assert.match(METHOD[3], /^Where the reading of a payout stops: /);
+  const r = await review(dir);
+  assert.equal(r.ok, true);
+  assert.deepEqual(r.method, METHOD);
+  assert.deepEqual(r.unread, []);
+  assert.deepEqual(JSON.parse(await readFile(path.join(r.outDir, 'review.json'), 'utf8')).method, METHOD);
+  const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
+  const c = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
+  for (const line of METHOD) {
+    assert.ok(md.includes(`\n- ${line}\n`), line);
+    assert.ok(c.stdout.includes(`\n  ${line}\n`), line);
+  }
+  assert.ok(md.indexOf(METHOD[0]) < md.indexOf('## Ask the person'), 'under the verdict, before anything else');
+  assert.match(md, /^\*\*PASS\*\*: 0 high, .* info\. No high finding\.$/m);
+  assert.deepEqual(JSON.parse(run(['review', dir, '--json'], { env: { GAMESFUN_SOLANA: '' } }).stdout).method, METHOD);
+  // a count says what it counts: one route, one key
+  assert.match(c.stdout, /^economy: xsolana\.json, 1 route reviewed by /m);
+  assert.match(c.stdout, /^server: 1 paid route in the ledger, 1 key in custody; 5 api\/ routes named/m);
+  assert.match(
+    run(['review', '--help']).stdout,
+    /as text, by patterns, and runs none of it: a PASS means no high finding/,
+  );
+});
+
+test('what the review could not read is said beside the verdict; a check that answers through code it did not read is a high finding', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded');
+  const vouchers = path.join(dir, 'server', 'vouchers.js');
+  // PAY.check hands the answer to a package's function: what it checks is out of sight
+  await writeFile(
+    vouchers,
+    await vouchersWith(check('return whale(body, player);'), "import { whale } from 'reef-rules';"),
+  );
+  let r = await review(dir);
+  assert.deepEqual(ids(r), ['high pay-unreadable']);
+  assert.equal(r.server.facts.pay, 'written');
+  assert.match(
+    one(r, 'pay-unreadable').message,
+    /^PAY\.check in server\/vouchers\.js answers through `whale`, which this review did not read .*: what the server checks before paying was not reviewed\.$/,
+  );
+  assert.deepEqual(r.unread, [
+    { what: 'server/vouchers.js', why: 'PAY.check answers through `whale`, which was not read' },
+  ]);
+  assert.equal(r.ledger[0].source, 'unreadable');
+  assert.match(
+    r.tell.find(x => x.from === 'server').text,
+    /^“Found a Whale”: it rests on code this review did not read/,
+  );
+  // env handed to code it did not read (a class of a package): taken as state, as before, and the PASS says so
+  await writeFile(
+    vouchers,
+    await vouchersWith(
+      check(`${NOT_A_WHALE}\n    if (!(await new Tides(env).has(player.sub))) ${NO_TIDE}\n    return ${TIMED};`),
+      "import { Tides } from 'reef-tides';",
+    ),
+  );
+  r = await review(dir);
+  assert.equal(r.ok, true);
+  assert.deepEqual(ids(r), []);
+  assert.deepEqual(
+    [r.ledger[0].source, r.ledger[0].assumed, r.ledger[0].seen],
+    ['env', true, 'it hands env to Tides, which this review did not read'],
+  );
+  assert.deepEqual(r.unread, [
+    {
+      what: 'server/vouchers.js',
+      why: 'PAY.check hands env to `Tides`, which was not read: taken as reading state the server keeps',
+    },
+  ]);
+  const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
+  assert.match(md, /^\*\*PASS\*\*: 0 high, .* info; 1 part not read\. No high finding\.$/m);
+  assert.match(
+    md,
+    /## Not read\n\nThe verdict does not cover these: read them yourself\.\n\n- server\/vouchers\.js: PAY\.check hands env to `Tides`/,
+  );
+  assert.match(md, /\| state the server keeps \(taken so: env goes to code not read\) \|/);
+  const c = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
+  assert.equal(c.status, 0);
+  assert.match(c.stdout, /^review: PASS 0 high, .* info; 1 part not read · evidence /);
+  assert.match(c.stdout, /^ {2}not read: server\/vouchers\.js: PAY\.check hands env to `Tides`, which was not read/m);
+  // a check that refuses everything in words of its own pays nothing: said so, and nothing more
+  await writeFile(
+    vouchers,
+    await vouchersWith(
+      "export const PAY = {\n  async check() {\n    return { why: 'The reef is closed for the winter.' };\n  },\n};",
+    ),
+  );
+  r = await review(dir);
+  assert.deepEqual(ids(r), ['info payout-signer']);
+  assert.deepEqual(cases(r, 'payout-signer'), ['pays-nothing']);
+  assert.deepEqual([r.server.facts.pay, r.ledger[0].source], ['written', 'nothing']);
+  assert.match(
+    r.tell.find(x => x.from === 'server').text,
+    /pays nothing yet: the server's check .* answers no grant\.$/,
+  );
+  assert.deepEqual(r.unread, []);
+  // PAY kept in a file the review does not read it in (server/vouchers.ts, types and all)
+  await rename(vouchers, path.join(dir, 'server', 'vouchers.ts'));
+  r = await review(dir);
+  assert.ok(ids(r).includes('high pay-unreadable'), ids(r).join(', '));
+  assert.match(
+    one(r, 'pay-unreadable').message,
+    /^server\/vouchers\.ts declares PAY, and this review reads PAY\.check only in server\/vouchers\.js/,
+  );
+  assert.deepEqual(r.unread, [
+    { what: 'server/vouchers.ts', why: 'it declares PAY, which is read only in server/vouchers.js' },
+  ]);
+});
+
+test('a route of the game’s own that signs with voucherFor is a paid route the review reads, beside a PAY.check still the template', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded');
+  // server/vouchers.js as xcore add vouchers writes it, and a route that pays whatever wallet the page names
+  await cp(TEMPLATE, path.join(dir, 'server', 'vouchers.js'));
+  const route = wallet =>
+    `import { handleVouchers, voucherFor, walletOf } from './vouchers.js';\nimport { handleTides } from './tides.js';\n\nexport { GameVouchers } from './vouchers.js';\nexport { TideClock } from './tides.js';\n\nasync function handleFound(request, env) {\n  if (!/\\/api\\/found\\/?$/.test(new URL(request.url).pathname)) return null;\n  const token = (request.headers.get('authorization') ?? '').replace(/^Bearer\\s+/i, '');\n  const player = await env.GF.verifyPlayer(token);\n  if (!player.ok) return Response.json({ ok: false, why: 'Sign in first.' }, { status: 401 });\n  const body = await request.json();\n  if (body?.creature !== 'whale') return Response.json({ ok: false, why: 'Only a whale earns an NFT.' });\n  return Response.json(await voucherFor(env, { grant: 'found-whale', wallet: ${wallet}, round: \`\${player.sub}:\${body.runId}\`, amount: 'grant', person: player.x?.id }));\n}\n\nexport default {\n  async fetch(request, env) {\n    return (await handleVouchers(request, env)) ?? (await handleFound(request, env)) ?? (await handleTides(request, env)) ?? new Response('not found', { status: 404 });\n  },\n};\n`;
+  await writeFile(path.join(dir, 'server', 'index.js'), route('body.wallet'));
+  let r = await review(dir);
+  assert.equal(r.ok, false);
+  assert.equal(r.server.facts.pay, 'template');
+  assert.deepEqual(cases(r, 'payout-input'), ['request-decides', 'request-names-wallet']);
+  assert.deepEqual(
+    [r.ledger[0].signer, r.ledger[0].where, r.ledger[0].source, r.ledger[0].decides, r.ledger[0].recipient],
+    ['server', 'server/index.js', 'request', 'body', 'request'],
+  );
+  const told = r.tell.filter(x => x.from === 'server').map(x => x.text);
+  assert.ok(!told.some(x => /pays nothing yet/.test(x)), told.join('\n'));
+  assert.match(told[0], /^“Found a Whale” is paid on the page's word/);
+  assert.equal(r.server.work.claims, true);
+  // the same route paying the wallet the player proved: the request still decides, and the sign-in is no state
+  await writeFile(path.join(dir, 'server', 'index.js'), route('await walletOf(env, player)'));
+  r = await review(dir);
+  assert.deepEqual(cases(r, 'payout-input'), ['request-decides']);
+  // and one that asks its own clock first: state the server keeps
+  await writeFile(
+    path.join(dir, 'server', 'index.js'),
+    route('await walletOf(env, player)').replace(
+      '  return Response.json(await voucherFor(',
+      "  if (!(await env.TIDE_CLOCK.get(env.TIDE_CLOCK.idFromName('main')).has(player.sub, 'whale'))) return Response.json({ ok: false });\n  return Response.json(await voucherFor(",
+    ),
+  );
+  r = await review(dir);
+  assert.deepEqual(cases(r, 'payout-input'), []);
+  assert.deepEqual(
+    [r.ledger[0].where, r.ledger[0].source, r.ledger[0].seen],
+    ['server/index.js', 'env', 'it uses env.TIDE_CLOCK'],
+  );
+});
+
+test('one check that pays two grants: the amount and the wallet of each are read from the answer that names it', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded');
+  await editJson(path.join(dir, 'xsolana.json'), s => {
+    s.tokens.push({ key: 'shell', source: 'game', name: 'Shell', symbol: 'SHELL', decimals: 0 });
+    s.grants.push({
+      key: 'shells',
+      name: 'Shells for a dive',
+      prize: { gives: 'tokens', amount: 500, from: 'mint', currency: 'shell' },
+      vouchers: [...s.grants[0].vouchers],
+      limits: { perPerson: 5, perDay: 1000 },
+      trust: 'bounds',
+      id: 2,
+    });
+  });
+  // shells: whatever the page says the dive collected; the whale: a tide the server timed
+  await writeFile(
+    path.join(dir, 'server', 'vouchers.js'),
+    await vouchersWith(
+      check(
+        `if (body?.kind === 'shells') return { grant: 'shells', round: \`\${player.sub}:\${body.dive}\`, amount: body.shells };\n    ${NOT_A_WHALE}\n    if (!(await clockOf(env).has(player.sub, 'whale'))) ${NO_TIDE}\n    return ${TIMED};`,
+      ),
+      CLOCK,
+    ),
+  );
+  const r = await review(dir);
+  assert.deepEqual(
+    r.ledger.map(x => [x.route, x.amount, x.recipient]),
+    [
+      ['grant:found-whale', 'grant', 'proven'],
+      ['grant:shells', 'request', 'proven'],
+    ],
+  );
+  assert.deepEqual(
+    r.findings.filter(f => f.id === 'payout-input').map(f => [f.route, f.severity, f.cases]),
+    [['grant:shells', 'medium', ['request-amount']]],
+  );
+  // a grant no answer names is paid by nothing here: said of that grant, not read off another's
+  await edit(path.join(dir, 'server', 'vouchers.js'), t => t.replace("grant: 'shells'", "grant: 'pearls'"));
+  const q = await review(dir);
+  assert.deepEqual(
+    q.ledger.map(x => [x.route, x.signer]),
+    [
+      ['grant:found-whale', 'server'],
+      ['grant:shells', 'none'],
+    ],
+  );
+  assert.match(
+    q.findings.find(f => f.id === 'payout-signer' && f.route === 'grant:shells').message,
+    /nothing in this game signs one: what signs here \(server \(server\/vouchers\.js\)\) names other grants only/,
+  );
 });
