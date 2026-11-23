@@ -1,7 +1,8 @@
 // The game's project files: the path and type rules, the store env.GF.files
 // answers from on this machine (.gamesfun/dev/files/), the public files on an origin of their own with the files
-// domain's headers, `xcore files` here and --live against a stand-in xgames.fun, and env.GF.files from a game's server
-// under `xcore dev` (that last needs Miniflare: GAMESFUN_SERVER_DEPS, as tests/dev.test.mjs).
+// domain's headers, `xcore files` here and --live against a stand-in xgames.fun (where writing over a file or deleting
+// one prints first and needs --yes <code>), and env.GF.files from a game's server under `xcore dev` (that last needs
+// Miniflare: GAMESFUN_SERVER_DEPS, as tests/dev.test.mjs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
@@ -300,11 +301,34 @@ test('xcore files on this machine: put, ls, get, rm, usage', async t => {
   r = await xc(['put', 'level.json', 'a/../b.json']);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /no "\." or "\.\." part/);
+  // what the store refuses is a refusal here too, in its words, never a result: a file that is not there, a page
+  // made public
+  r = await xc(['get', 'levels/none.json', '--out', path.join(tmp.dir, 'none.json')]);
+  assert.deepEqual([r.status, r.stdout], [1, '']);
+  assert.equal(r.stderr, 'xcore: No such file.\n');
+  assert.equal(existsSync(path.join(tmp.dir, 'none.json')), false, 'nothing was written for it');
+  await writeFile(path.join(dir, 'page.html'), '<script>alert(1)</script>');
+  r = await xc(['put', 'page.html', '--public', '--json']);
+  assert.equal(r.status, 1);
+  assert.deepEqual(
+    (({ ok, code }) => ({ ok, code }))(JSON.parse(r.stdout)),
+    { ok: false, code: 'type' },
+    'refused as the store refuses it',
+  );
+  assert.equal((await xc(['ls', '--json'])).stdout.includes('page.html'), false, 'and not kept');
+  // on this machine a delete goes at once: no code
   r = await xc(['rm', 'levels/forest-3.json']);
   assert.match(r.stdout, /Deleted levels\/forest-3\.json on this machine/);
+  r = await xc(['rm', 'levels/forest-3.json']);
+  assert.match(r.stdout, /levels\/forest-3\.json was not there on this machine/);
 });
 
-test('xcore files --live: refused until xgames.fun lists "files", then through the owner routes', async t => {
+/**
+ * A signed-in stand-in xgames.fun that keeps game g1's project files as xgames.fun's owner routes do: one copy of each,
+ * a put writes over it, a file that is not there answers 404 with code "not-found". → {g, env, dir, kept (path → its
+ * file), seen (each call to the files routes), xc (the command, --live)}
+ */
+async function liveFiles(t, files) {
   const tmp = await tempDir(),
     g = await standIn();
   t.after(async () => {
@@ -317,13 +341,15 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
     GAMESFUN_STUDIO: g.origin,
   };
   await signIn(g, env);
-  const dir = await game(tmp, { 'hero.png': 'PNG!' });
+  const dir = await game(tmp, files);
   await mkdir(path.join(dir, '.gamesfun'), { recursive: true });
   await writeFile(
     path.join(dir, '.gamesfun', 'publish.json'),
     JSON.stringify({ [g.origin]: { projectId: 'g1', slug: 'moth' } }),
   );
-  const seen = [];
+  const kept = new Map(),
+    seen = [];
+  const at = '/api/kit/games/g1/files/';
   g.state.handle = (method, url, json, { req, raw, authed }) => {
     if (!url.startsWith('/api/kit/games/g1/files')) return null;
     if (!authed) return [401, { error: 'Sign in first.' }];
@@ -336,32 +362,67 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
       ...(method === 'PUT' ? { length: req.headers['content-length'], gfLength: req.headers['x-gf-length'] } : {}),
       body: raw.toString(),
     });
-    if (url === '/api/kit/games/g1/files-usage') return [200, { ok: true, bytes: 4, files: 1, cap: 104857600 }];
+    if (url === '/api/kit/games/g1/files-usage')
+      return [
+        200,
+        {
+          ok: true,
+          bytes: [...kept.values()].reduce((n, f) => n + f.body.length, 0),
+          files: kept.size,
+          cap: 104857600,
+        },
+      ];
     if (url.startsWith('/api/kit/games/g1/files?'))
       return [
         200,
         {
           ok: true,
-          items: [{ path: 'art/hero.png', bytes: 4, type: 'image/png', public: true, updatedAt: 1 }],
+          items: [...kept].map(([p, f]) => ({
+            path: p,
+            bytes: f.body.length,
+            type: f.type,
+            public: f.public,
+            updatedAt: 1,
+          })),
           after: null,
         },
       ];
-    if (method === 'PUT')
+    const p = decodeURIComponent(url.slice(at.length));
+    if (method === 'PUT') {
+      kept.set(p, { body: raw, type: req.headers['content-type'], public: req.headers['x-gf-public'] === '1' });
       return [
         200,
-        { ok: true, path: 'art/hero.png', bytes: 4, url: 'https://moth.xgamesusercontent.com/art/hero.png' },
+        {
+          ok: true,
+          path: p,
+          bytes: raw.length,
+          ...(kept.get(p).public ? { url: `https://moth.xgamesusercontent.com/${p}` } : {}),
+        },
       ];
-    // as xgames.fun answers a download: always an attachment, the file's own type in x-gf-type
-    if (method === 'GET')
-      return [
-        200,
-        Buffer.from('PNG!'),
-        { 'content-type': 'application/octet-stream', 'x-gf-type': 'image/png', 'x-gf-public': '1' },
-      ];
-    if (method === 'DELETE') return [200, { ok: true, deleted: true }];
-    return null;
+    }
+    const file = kept.get(p);
+    if (method === 'DELETE') return [200, { ok: true, deleted: kept.delete(p) }];
+    if (!file) return [404, { error: 'That file is not there.', code: 'not-found' }];
+    // as xgames.fun answers a download: always an attachment, the file's own type in x-gf-type, and its length when
+    // the platform gave one (a test sets `unsized` on a file for when it did not)
+    return [
+      200,
+      file.body,
+      {
+        'content-type': 'application/octet-stream',
+        'x-gf-type': file.type,
+        'x-gf-public': file.public ? '1' : '0',
+        ...(file.unsized ? {} : { 'content-length': String(file.body.length) }),
+      },
+    ];
   };
   const xc = args => runAsync(['files', ...args, '--live'], { env, cwd: dir });
+  const sent = method => seen.filter(c => c.method === method).length;
+  return { tmp, g, env, dir, kept, seen, sent, xc };
+}
+
+test('xcore files --live: refused until xgames.fun lists "files", then through the owner routes', async t => {
+  const { tmp, g, dir, kept, seen, xc } = await liveFiles(t, { 'hero.png': 'PNG!' });
   let r = await xc(['usage']);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /does not keep project files yet .*"files"/);
@@ -370,6 +431,7 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
     server: { contracts: ['gf-server-v1'], features: ['d1', 'files'] },
     files: { domain: 'xgamesusercontent.com' },
   };
+  // a path xgames.fun does not have yet is put at once
   r = await xc(['put', 'hero.png', 'art/hero.png', '--public']);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /https:\/\/moth\.xgamesusercontent\.com\/art\/hero\.png/);
@@ -388,7 +450,7 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
   r = await xc(['put', 'world.bin']);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /This file is 4\.4 MB\..*at most 4\.3 MB a request\. A bigger one .*env\.GF\.files\.put/s);
-  assert.equal(seen.length, before, 'not sent');
+  assert.equal(seen.length, before, 'not sent, and nothing asked');
   r = await xc(['ls', 'art']);
   assert.match(r.stdout, /public\s+4 bytes\s+art\/hero\.png/);
   assert.equal(seen.at(-1).url, '/api/kit/games/g1/files?prefix=art%2F');
@@ -396,11 +458,127 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Got art\/hero\.png .*image\/png\)/);
   assert.equal(await readFile(path.join(tmp.dir, 'h.png'), 'utf8'), 'PNG!');
-  r = await xc(['rm', 'art/hero.png']);
-  assert.match(r.stdout, /Deleted art\/hero\.png on xgames\.fun/);
-  assert.equal(seen.at(-1).method, 'DELETE');
   r = await xc(['usage']);
   assert.match(r.stdout, /1 file, 4 bytes of 100\.0 MB/);
+  assert.equal(kept.size, 1);
+});
+
+test('xcore files rm --live: a file xgames.fun has is deleted only with the code its printout ends with', async t => {
+  const { g, kept, sent, xc } = await liveFiles(t);
+  g.state.me = { server: { features: ['files'] } };
+  for (const p of ['art/hero.png', 'art/old.png'])
+    kept.set(p, { body: Buffer.from('PNG!'), type: 'image/png', public: true });
+  // without a code: what it deletes, that nothing brings it back, the code and the command; nothing is deleted
+  let r = await xc(['rm', 'art/hero.png']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(
+    r.stdout,
+    /^This deletes art\/hero\.png \(4 bytes, public, image\/png\) from .*'s project files on xgames\.fun \(game g1\)\.\nIt is gone for good: xgames\.fun keeps one copy of a file and no earlier one\. .*files get art\/hero\.png --live keeps a copy first\.\nNothing was deleted\. To go on, run this again with the code:\n {2}.*files rm art\/hero\.png --live --yes [0-9a-f]{8}\n$/,
+  );
+  const code = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
+  r = await xc(['rm', 'art/hero.png', '--json']);
+  const planned = JSON.parse(r.stdout);
+  assert.deepEqual(
+    [r.status, planned.ok, planned.planned, planned.code],
+    [0, true, true, code],
+    'the same change, the same code',
+  );
+  assert.deepEqual(planned.plan, {
+    action: 'delete',
+    origin: g.origin,
+    game: 'g1',
+    path: 'art/hero.png',
+    type: 'image/png',
+    public: true,
+    bytes: 4,
+  });
+  assert.match(planned.next, new RegExp(`files rm art/hero\\.png --live --yes ${code}$`));
+  // a code printed for another file, a made-up one and a bare --yes are all refused
+  for (const args of [
+    ['rm', 'art/old.png', '--yes', code],
+    ['rm', 'art/hero.png', '--yes', '00000000'],
+  ]) {
+    r = await xc(args);
+    assert.equal(r.status, 1, args.join(' '));
+    assert.match(r.stderr, /That code is not for this change/);
+  }
+  r = await xc(['rm', 'art/hero.png', '--yes']);
+  assert.equal(r.status, 2, 'a bare --yes is a usage error');
+  assert.deepEqual([sent('DELETE'), kept.size], [0, 2], 'nothing was deleted by any of them');
+  // the file changed on xgames.fun since the printout (the game's server wrote it again): the code is no longer its
+  kept.get('art/hero.png').body = Buffer.from('PNG!!');
+  r = await xc(['rm', 'art/hero.png', '--yes', code]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /That code is not for this change/);
+  kept.get('art/hero.png').body = Buffer.from('PNG!');
+  // with its code
+  r = await xc(['rm', 'art/hero.png', '--yes', code]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.stdout, 'Deleted art/hero.png on xgames.fun.\n');
+  assert.deepEqual([sent('DELETE'), [...kept.keys()]], [1, ['art/old.png']]);
+  // a file whose size xgames.fun did not say is asked about the same, without it
+  kept.get('art/old.png').unsized = true;
+  r = await xc(['rm', 'art/old.png', '--json']);
+  assert.deepEqual(
+    [r.status, JSON.parse(r.stdout).plan],
+    [0, { action: 'delete', origin: g.origin, game: 'g1', path: 'art/old.png', type: 'image/png', public: true }],
+  );
+  r = await xc(['rm', 'art/old.png']);
+  assert.match(r.stdout, /^This deletes art\/old\.png \(public, image\/png\) from /);
+  // a file that is not there has nothing to lose: said at once, with no code and no delete sent
+  r = await xc(['rm', 'art/hero.png']);
+  assert.deepEqual([r.status, r.stdout], [0, 'art/hero.png was not there on xgames.fun.\n']);
+  r = await xc(['rm', 'art/hero.png', '--json']);
+  assert.deepEqual(JSON.parse(r.stdout), { ok: true, live: true, deleted: false });
+  assert.equal(sent('DELETE'), 1);
+});
+
+test('xcore files put --live over a file xgames.fun has: written over only with the code; a new path is put at once', async t => {
+  const { g, dir, kept, sent, xc } = await liveFiles(t, { 'forest.json': '{"tiles":[1,2]}' });
+  g.state.me = { server: { features: ['files'] } };
+  kept.set('levels/forest.json', { body: Buffer.from('{"tiles":[]}'), type: 'application/json', public: true });
+  const put = (...more) => xc(['put', 'forest.json', 'levels/forest.json', '--public', ...more]);
+  let r = await put();
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(
+    r.stdout,
+    /^.*'s project files on xgames\.fun \(game g1\) have levels\/forest\.json already \(12 bytes, public, application\/json\)\. This writes over it:\n {2}file {4}forest\.json \(15 bytes, public, application\/json\)\n {2}sha256 {2}[0-9a-f]{64}\nThe file there now is gone for good: xgames\.fun keeps one copy of a file and no earlier one\. .*files get levels\/forest\.json --live keeps a copy first\.\nNothing was put\. To go on, run this again with the code:\n {2}.*files put forest\.json levels\/forest\.json --public --live --yes [0-9a-f]{8}\n$/,
+  );
+  const code = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
+  r = await put('--json');
+  const planned = JSON.parse(r.stdout);
+  assert.equal(planned.code, code);
+  assert.deepEqual(planned.plan, {
+    action: 'replace',
+    origin: g.origin,
+    game: 'g1',
+    path: 'levels/forest.json',
+    was: { type: 'application/json', public: true, bytes: 12 },
+    file: 'forest.json',
+    bytes: 15,
+    sha256: planned.plan.sha256,
+    type: 'application/json',
+    public: true,
+  });
+  // the code is for this file's bytes, served this way: private instead, or the file edited since, is another change
+  r = await xc(['put', 'forest.json', 'levels/forest.json', '--yes', code]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /That code is not for this change/);
+  await writeFile(path.join(dir, 'forest.json'), '{"tiles":[9,9]}');
+  r = await put('--yes', code);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /That code is not for this change/);
+  assert.deepEqual([sent('PUT'), kept.get('levels/forest.json').body.toString()], [0, '{"tiles":[]}'], 'nothing put');
+  await writeFile(path.join(dir, 'forest.json'), '{"tiles":[1,2]}');
+  r = await put('--yes', code);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^Put levels\/forest\.json on xgames\.fun \(15 bytes, public\)/);
+  assert.deepEqual([sent('PUT'), kept.get('levels/forest.json').body.toString()], [1, '{"tiles":[1,2]}']);
+  // a path xgames.fun does not have loses nothing: put at once, code or none
+  r = await xc(['put', 'forest.json', 'levels/forest-2.json']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^Put levels\/forest-2\.json on xgames\.fun \(15 bytes, only the game’s server reads it\)/);
+  assert.equal(sent('PUT'), 2);
 });
 
 test('publish: a server that uses env.GF.files is refused until xgames.fun lists "files"', async t => {

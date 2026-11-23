@@ -1,11 +1,15 @@
 // The guidance an agent reads (skills/bring-your-own-game: SKILL.md and its references; docs/BEFORE-YOU-BUILD.md) held
 // to the command line it describes: a size budget on the skill, every `xcore <command>` and every --flag it names
 // real, every "<N> invariants"-style count matching its list, every link there, and no tool of the unreleased kit.
+// And facts every document is held to: a command that asks for `--yes <code>` is one the skill says to ask the person
+// about, an address given to `xcore backend use custom` is one the command takes, and docs/SERVER.md names every
+// env.GF call a game's server gets.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { backendOrigin } from '../lib/publish/scan.mjs';
 import { ROOT } from './helpers.mjs';
 
 const SKILL_DIR = path.join(ROOT, 'skills', 'bring-your-own-game');
@@ -133,4 +137,83 @@ test('every link in the skill and its references leads to a file', () => {
       if (/^[a-z]+:/.test(target)) continue;
       assert.ok(existsSync(path.resolve(path.dirname(file), target)), `${rel(file)} links to ${target}`);
     }
+});
+
+test('every command that goes on only with --yes <code> is in the skill’s list of what needs the person’s yes', async () => {
+  const consent = read(SKILL)
+    .split('\n- ')
+    .find(item => item.startsWith("**Consent where it can't be undone.**"));
+  assert.ok(consent, 'the skill has its consent invariant');
+  assert.match(consent, /Everything\s+else\s+is\s+reversible/, 'which says the rest can be undone');
+  const gated = [];
+  for (const [name, c] of await commands()) {
+    // each form of the command in its usage block (`xcore db import <file.sql> [dir] [--live [--yes <code>]]`), with
+    // the lines it runs on to
+    const forms = [];
+    for (const line of String(c.usage ?? '')
+      .split('\n\n')[0]
+      .split('\n'))
+      if (/^(Usage:)?\s+xcore /.test(line)) forms.push(line);
+      else if (forms.length) forms[forms.length - 1] += ` ${line.trim()}`;
+    for (const form of forms.filter(f => f.includes('--yes'))) {
+      const sub = form
+        .trim()
+        .replace(/^Usage:\s*/, '')
+        .split(/\s+/)[2];
+      gated.push(/^[a-z]/.test(sub ?? '') ? `${name} ${sub}` : name);
+    }
+  }
+  // (loot approve is the economy tools' own, and the skill names it beside these)
+  assert.deepEqual(
+    gated.filter(named => !consent.includes(`\`${named}`)),
+    [],
+    'a command that asks for a code and is not in the list',
+  );
+  for (const named of [
+    'coin launch',
+    'db query',
+    'db import',
+    'db restore',
+    'secret set',
+    'secret delete',
+    'files put',
+    'files rm',
+  ])
+    assert.ok(gated.includes(named), `${named} asks for a code`);
+});
+
+test('an address the documents give `xcore backend use custom` is one the command takes', () => {
+  const files = [
+    path.join(ROOT, 'README.md'),
+    ...readdirSync(path.join(ROOT, 'docs')).map(f => path.join(ROOT, 'docs', f)),
+    ...DOCS,
+  ];
+  let found = 0;
+  for (const file of new Set(files))
+    for (const [, address] of read(file).matchAll(/--(?:url|origin) ((?:https?|wss?):\/\/[^\s`\]>)]+)/g)) {
+      found++;
+      assert.doesNotThrow(() => backendOrigin(address), `${rel(file)}: ${address}`);
+    }
+  assert.ok(found >= 2, 'the README shows the command with an address');
+});
+
+test('every env.GF call a game’s server gets in xcore dev is in docs/SERVER.md’s table of them', () => {
+  // the calls, as lib/dev/gf-local.js sends them to the dev host: 'saves.get', 'scores.list', 'info', …
+  const calls = [
+    ...read(path.join(ROOT, 'lib', 'dev', 'gf-local.js')).matchAll(/call\([^,]+, '([\w.]+)'|gf\.local\/([\w.]+)/g),
+  ].map(m => m[1] ?? m[2]);
+  assert.ok(calls.includes('scores.list') && calls.includes('verifyPlayer'), `the calls are read: ${calls}`);
+  const server = read(path.join(ROOT, 'docs', 'SERVER.md'));
+  const table = server
+    .slice(server.indexOf('### `env.GF`, the platform'))
+    .split('\n\n')
+    .find(part => part.startsWith('| Call'));
+  const rows = table.split('\n').map(row => row.split('|')[1] ?? '');
+  const missing = [...new Set(calls)].filter(op => {
+    const [area, method] = op.includes('.') ? op.split('.') : [null, op];
+    return !rows.some(cell =>
+      area ? cell.includes(`GF.${area}.`) && new RegExp(`\\.${method}\\(`).test(cell) : cell.includes(`GF.${method}(`),
+    );
+  });
+  assert.deepEqual(missing, [], 'a call the table does not name');
 });

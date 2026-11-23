@@ -1,7 +1,8 @@
 // Shared by the tests: temporary folders, the fixtures (web games made without xgames.fun), the command, and a stand-in
 // xgames.fun that signs in and takes a publish in memory.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { existsSync, rmSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import os from 'node:os';
@@ -20,8 +21,22 @@ export const BIN = path.join(ROOT, 'bin', 'xcore.mjs');
 delete process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
 delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
 
+// Every folder tempDir made, removed once more as the test file's process ends. A test's own cleanup can run before
+// what still writes there has stopped (node:test runs a test's after hooks in the order they were registered, and a dev
+// host or a store closed after it writes its file one last time), which puts the folder back.
+const made = new Set();
+process.on('exit', () => {
+  for (const dir of made)
+    try {
+      rmSync(dir, { recursive: true, force: true });
+    } catch {
+      /* still held open (Windows): left to the system's own temp cleaning */
+    }
+});
+
 export async function tempDir(prefix = 'gamesfun-test-') {
   const dir = await mkdtemp(path.join(os.tmpdir(), prefix));
+  made.add(dir);
   return { dir, cleanup: () => rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }) };
 }
 
@@ -68,13 +83,26 @@ export const passing = async () => ({
 /**
  * A stand-in xgames.fun: the token exchange and logout, and the publish calls, in memory. A test may set
  * state.reach (the token exchange's {scope, games}: what the approval page gave the sign-in), state.me (more of GET
- * /api/kit/me's answer: server, features), state.refuse ({at: 'begin' | 'complete', status,
+ * /api/kit/me's answer: server, features, its own limits), state.refuse ({at: 'begin' | 'complete', status,
  * body}: that publish step answers it), and state.handle(method, url, json, {req, raw, authed}) → [status, body] | [status, body,
  * headers] | null for routes of its own (the database's and the files' owner routes). state.published is the last
  * publish's body; state.uploads maps each uploaded blob's sha256 to its bytes.
+ * A file's bytes go up inside the call, as xgames.fun takes a small one. With state.direct = true they go as it takes
+ * a big one: the call answers an address in its storage with the method and headers to use, the bytes are PUT there
+ * (state.putStatus: that PUT answers it instead), and a second call names the upload by its key. state.staged maps
+ * each key to what was put.
  */
 export async function standIn() {
-  const state = { codes: new Map(), tokens: new Set(), blobs: new Set(), calls: [], version: 0, uploads: new Map() };
+  const state = {
+    codes: new Map(),
+    tokens: new Set(),
+    blobs: new Set(),
+    calls: [],
+    version: 0,
+    uploads: new Map(),
+    signed: new Map(),
+    staged: new Map(),
+  };
   const server = createServer(async (req, res) => {
     const chunks = [];
     for await (const c of req) chunks.push(c);
@@ -108,7 +136,17 @@ export async function standIn() {
         ...(state.reach ?? {}),
       });
     }
-    if (!state.tokens.has(auth)) return send(401, { error: 'Sign in first: npx gamesfun login' });
+    // an address in storage: it carries no sign-in, only the headers it was handed out with
+    const address = /^\/storage\/([0-9a-f-]{36})$/.exec(req.url);
+    if (address && req.method === 'PUT') {
+      const signed = state.signed.get(address[1]);
+      if (!signed || Object.entries(signed).some(([name, value]) => req.headers[name] !== value))
+        return send(403, { error: 'SignatureDoesNotMatch' });
+      if (state.putStatus) return send(state.putStatus, { error: 'storage' });
+      state.staged.set(address[1], raw);
+      return send(200, {});
+    }
+    if (!state.tokens.has(auth)) return send(401, { error: 'Sign in first.' });
     if (req.url === '/api/kit/token' && req.method === 'DELETE') {
       state.tokens.delete(auth);
       return send(200, { revoked: true });
@@ -143,11 +181,24 @@ export async function standIn() {
     }
     const m = /^\/api\/kit\/publish\/p1\/blobs\/([0-9a-f]{64})$/.exec(req.url);
     if (m) {
-      if (json.content == null) return send(200, { upload: null });
-      if (sha256(Buffer.from(json.content, 'base64')) !== m[1]) return send(400, { error: 'bad' });
-      state.blobs.add(m[1]);
-      state.uploads.set(m[1], Buffer.from(json.content, 'base64'));
-      return send(200, { stored: true });
+      // a file the account holds already (another publish stored it meanwhile) is not asked for
+      if (state.blobs.has(m[1])) return send(200, { present: true });
+      const keep = bytes => {
+        if (bytes.length !== json.bytes || sha256(bytes) !== m[1]) return send(400, { error: 'bad' });
+        state.blobs.add(m[1]);
+        state.uploads.set(m[1], bytes);
+        return send(200, { stored: true });
+      };
+      if (json.upload != null)
+        return state.staged.has(json.upload) ? keep(state.staged.get(json.upload)) : send(400, { error: 'bad' });
+      if (json.content != null) return keep(Buffer.from(json.content, 'base64'));
+      if (!state.direct) return send(200, { upload: null });
+      const key = randomUUID(),
+        headers = { 'content-type': 'application/octet-stream', 'x-upload-signature': randomUUID() };
+      state.signed.set(key, headers);
+      return send(200, {
+        upload: { key, url: `http://127.0.0.1:${server.address().port}/storage/${key}`, method: 'PUT', headers },
+      });
     }
     // a test may make the last step time out, as xgames.fun's gateway does past the route's limit
     if (req.url === '/api/kit/publish/p1' && state.refuse?.at === 'complete')
@@ -174,7 +225,16 @@ export async function standIn() {
     send(404, { error: 'no' });
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
-  return { state, origin: `http://127.0.0.1:${server.address().port}`, close: () => new Promise(r => server.close(r)) };
+  return {
+    state,
+    origin: `http://127.0.0.1:${server.address().port}`,
+    // whatever is still open goes with it: a publish that failed part-way can have calls in flight
+    close: () =>
+      new Promise(r => {
+        server.closeAllConnections();
+        server.close(r);
+      }),
+  };
 }
 
 /** Sign in against a stand-in: the "browser" approves at once, as the person would. */

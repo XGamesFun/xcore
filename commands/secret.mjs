@@ -6,7 +6,7 @@ import { resolveGame, shown } from '../lib/games.mjs';
 import { deleteSecret, listSecrets, setSecret } from '../lib/publish/secrets.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
 import { CMD } from '../lib/command.mjs';
-import { changeCode, codeMatches, sameCommand, wrongCode } from '../lib/consent.mjs';
+import { consented } from '../lib/consent.mjs';
 import { allowOrigin, newVoucherKey, seedAddress } from '../lib/add.mjs';
 import { economyCluster, solanaRpc } from '../lib/solana-rpc.mjs';
 import { pointGrantsAt } from '../lib/voucher-key.mjs';
@@ -74,21 +74,11 @@ async function hidden(question) {
   });
 }
 /**
- * Replacing or deleting a secret the live server has: with --yes <code>, it goes on when the code is this change's and
- * is refused when it is another's; without it, the printout and its code, and nothing changes. The code is over the
- * game, the name and where the new value comes from, never the value itself. → true to go on, or the exit code
+ * Replacing or deleting a secret the live server has, asked first (../lib/consent.mjs consented). The code is over the
+ * game, the name and where the new value comes from, never the value itself. It goes on with the code only: there is
+ * no word to type at a terminal.
  */
-function consented({ plan, lines, nothing, values, args }) {
-  const code = changeCode(Object.values(plan));
-  if (values.yes !== undefined) {
-    if (!codeMatches(values.yes, code)) throw wrongCode();
-    return true;
-  }
-  const next = `${sameCommand('secret', args)} --yes ${code}`;
-  if (values.json) printJson({ ok: true, planned: true, code, plan, next });
-  else console.log(`${lines.join('\n')}\n${nothing}. To go on, run this again with the code:\n  ${next}`);
-  return 0;
-}
+const asked = change => consented({ sub: 'secret', ...change });
 
 /** Where a set's value comes from, as a word in its plan (never the value). */
 function sourceOf(values) {
@@ -157,7 +147,7 @@ export default {
           else console.log(`${name} was not set: nothing to delete.`);
           return 0;
         }
-        const go = consented({
+        const go = await asked({
           plan: { action: 'delete', origin: studioOrigin(), game, name },
           lines: [
             `This deletes ${name} from ${shown(dir)}'s server on xgames.fun (game ${game}). From its next request the server has no env.${name}, and the value is gone for good: xgames.fun never shows a secret, so nothing can bring it back.`,
@@ -193,7 +183,7 @@ export default {
       const { game, names } = await listSecrets(dir);
       if (names.includes(name)) {
         const key = !!values['new-key'];
-        const go = consented({
+        const go = await asked({
           plan: { action: 'replace', origin: studioOrigin(), game, name, from: sourceOf(values) },
           lines: [
             `${shown(dir)}'s server on xgames.fun (game ${game}) has ${name} already. This replaces its value with ${sourceOf(values)}, from the server's next request.`,

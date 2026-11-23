@@ -816,85 +816,89 @@ test(
   },
 );
 
-test('a room online sends a frame of messages as one, and reads a batch back as one event each', async t => {
-  const g = await standIn();
-  t.after(g.close);
-  const browser = await chrome();
-  t.after(() => browser.close());
-  const page = await browser.newPage();
-  // a stand-in socket: what the page sends is kept, and the room's welcome answers its hello
-  await page.addInitScript(() => {
-    window.WebSocket = class {
-      constructor(url) {
-        this.url = url;
-        this.sent = [];
-        this.readyState = 0;
-        window.ws = this;
-        setTimeout(() => ((this.readyState = 1), this.onopen()));
-      }
-      send(m) {
-        if (typeof m === 'string' && m.includes('"hello"'))
-          return setTimeout(() =>
-            this.onmessage({ data: JSON.stringify({ t: 'welcome', id: 1, host: 1, code: 'ROOM42', peers: [] }) }),
-          );
-        this.sent.push(typeof m === 'string' ? JSON.parse(m) : [...new Uint8Array(m)]);
-      }
-      close() {}
-    };
-  });
-  await page.goto(`http://moth-play.xgames.test:${g.port}/`);
-  const sent = await page.evaluate(async () => {
-    window.room = (await GamesFun.rooms.join('ROOM42')).data;
-    for (let i = 0; i < 30; i++) room.sendBytes(new Uint8Array([i]), 0);
-    room.send({ a: 1 }, 2);
-    room.send({ b: 2 });
-    await new Promise(r => setTimeout(r, 50));
-    return window.ws.sent.splice(0);
-  });
-  assert.equal(sent.length, 2, 'thirty packets and two messages: two sends, in order');
-  const head = new DataView(new Uint8Array(sent[0]).buffer);
-  assert.equal(head.getInt32(0, true), -2147483648);
-  assert.equal(sent[0].length, 4 + 30 * 9);
-  assert.deepEqual(sent[0].slice(4, 13), [0, 0, 0, 0, 1, 0, 0, 0, 0], 'to 0, 1 byte, 0');
-  assert.deepEqual(sent[1], {
-    t: 'msgs',
-    m: [
-      { to: 2, d: { a: 1 } },
-      { to: 0, d: { b: 2 } },
-    ],
-  });
-  // sends in the next few milliseconds wait for the same message (about 60 a second, whatever the screen's rate)
-  const later = await page.evaluate(async () => {
-    room.sendBytes(new Uint8Array([1]), 0);
-    await null;
-    room.sendBytes(new Uint8Array([2]), 0);
-    await null;
-    room.sendBytes(new Uint8Array([3]), 0);
-    await new Promise(r => setTimeout(r, 60));
-    return window.ws.sent.splice(0).map(m => m.length);
-  });
-  assert.deepEqual(later, [5, 4 + 2 * 9]);
-  const got = await page.evaluate(() => {
-    const out = [];
-    room.on('bytes', (from, u8) => out.push([from, [...u8]]));
-    room.on('message', (from, d) => out.push([from, d]));
-    const b = new Uint8Array(4 + 9 + 10);
-    const v = new DataView(b.buffer);
-    v.setInt32(0, -2147483648, true);
-    v.setInt32(4, 5, true);
-    v.setUint32(8, 1, true);
-    b[12] = 7;
-    v.setInt32(13, 6, true);
-    v.setUint32(17, 2, true);
-    b.set([8, 9], 21);
-    window.ws.onmessage({ data: b.buffer });
-    window.ws.onmessage({ data: JSON.stringify({ t: 'msgs', from: 5, d: [1, { z: 2 }] }) });
-    return out;
-  });
-  assert.deepEqual(got, [
-    [5, [7]],
-    [6, [8, 9]],
-    [5, 1],
-    [5, { z: 2 }],
-  ]);
-});
+test(
+  'a room online sends a frame of messages as one, and reads a batch back as one event each',
+  { skip, timeout: 60_000 },
+  async t => {
+    const g = await standIn();
+    t.after(g.close);
+    const browser = await chrome();
+    t.after(() => browser.close());
+    const page = await browser.newPage();
+    // a stand-in socket: what the page sends is kept, and the room's welcome answers its hello
+    await page.addInitScript(() => {
+      window.WebSocket = class {
+        constructor(url) {
+          this.url = url;
+          this.sent = [];
+          this.readyState = 0;
+          window.ws = this;
+          setTimeout(() => ((this.readyState = 1), this.onopen()));
+        }
+        send(m) {
+          if (typeof m === 'string' && m.includes('"hello"'))
+            return setTimeout(() =>
+              this.onmessage({ data: JSON.stringify({ t: 'welcome', id: 1, host: 1, code: 'ROOM42', peers: [] }) }),
+            );
+          this.sent.push(typeof m === 'string' ? JSON.parse(m) : [...new Uint8Array(m)]);
+        }
+        close() {}
+      };
+    });
+    await page.goto(`http://moth-play.xgames.test:${g.port}/`);
+    const sent = await page.evaluate(async () => {
+      window.room = (await GamesFun.rooms.join('ROOM42')).data;
+      for (let i = 0; i < 30; i++) room.sendBytes(new Uint8Array([i]), 0);
+      room.send({ a: 1 }, 2);
+      room.send({ b: 2 });
+      await new Promise(r => setTimeout(r, 50));
+      return window.ws.sent.splice(0);
+    });
+    assert.equal(sent.length, 2, 'thirty packets and two messages: two sends, in order');
+    const head = new DataView(new Uint8Array(sent[0]).buffer);
+    assert.equal(head.getInt32(0, true), -2147483648);
+    assert.equal(sent[0].length, 4 + 30 * 9);
+    assert.deepEqual(sent[0].slice(4, 13), [0, 0, 0, 0, 1, 0, 0, 0, 0], 'to 0, 1 byte, 0');
+    assert.deepEqual(sent[1], {
+      t: 'msgs',
+      m: [
+        { to: 2, d: { a: 1 } },
+        { to: 0, d: { b: 2 } },
+      ],
+    });
+    // sends in the next few milliseconds wait for the same message (about 60 a second, whatever the screen's rate)
+    const later = await page.evaluate(async () => {
+      room.sendBytes(new Uint8Array([1]), 0);
+      await null;
+      room.sendBytes(new Uint8Array([2]), 0);
+      await null;
+      room.sendBytes(new Uint8Array([3]), 0);
+      await new Promise(r => setTimeout(r, 60));
+      return window.ws.sent.splice(0).map(m => m.length);
+    });
+    assert.deepEqual(later, [5, 4 + 2 * 9]);
+    const got = await page.evaluate(() => {
+      const out = [];
+      room.on('bytes', (from, u8) => out.push([from, [...u8]]));
+      room.on('message', (from, d) => out.push([from, d]));
+      const b = new Uint8Array(4 + 9 + 10);
+      const v = new DataView(b.buffer);
+      v.setInt32(0, -2147483648, true);
+      v.setInt32(4, 5, true);
+      v.setUint32(8, 1, true);
+      b[12] = 7;
+      v.setInt32(13, 6, true);
+      v.setUint32(17, 2, true);
+      b.set([8, 9], 21);
+      window.ws.onmessage({ data: b.buffer });
+      window.ws.onmessage({ data: JSON.stringify({ t: 'msgs', from: 5, d: [1, { z: 2 }] }) });
+      return out;
+    });
+    assert.deepEqual(got, [
+      [5, [7]],
+      [6, [8, 9]],
+      [5, 1],
+      [5, { z: 2 }],
+    ]);
+  },
+);
