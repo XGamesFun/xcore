@@ -8,7 +8,8 @@ import { codeMatches, sameCommand, wrongCode } from '../lib/consent.mjs';
 import { economyFile } from '../lib/economy.mjs';
 import { pageRoots } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
-import { plural } from '../lib/util.mjs';
+import { DATABASE_LIMITS, STUDIO_BODY_BYTES } from '../lib/server/contract.mjs';
+import { plural, sizeText } from '../lib/util.mjs';
 
 const usage = `Usage: xcore db info [dir] [--live] [--json]
        xcore db query "<sql>" [dir] [--params '<json list>'] [--write] [--live [--yes <code>]] [--json]
@@ -24,7 +25,7 @@ the game's database on xgames.fun, which keeps every call in the game's audit lo
                      --write. --params '["moon", 3]' fills its ? marks
   export             the whole database as SQL, into --out <file> or .gamesfun/exports/ (hidden: never published;
                      it holds your players' data, so keep it out of git and off shared drives)
-  import <file.sql>  run a file of SQL statements, all of it or none; at most 5 MB (live, 4.5 MB as sent). A dump
+  import <file.sql>  run a file of SQL statements, all of it or none; at most ${sizeText(DATABASE_LIMITS.importBytes)} (live, ${sizeText(STUDIO_BODY_BYTES)} as sent). A dump
                      from export (here, live or D1's) goes in over what is there, or into an empty database:
                      tables kept, each row updated by its key where it is (none deleted)
   restore <time>     live only: the database as it was at <time> (a date such as 2026-11-08T12:00:00Z, or unix
@@ -36,7 +37,8 @@ back to) with a code, and changes nothing. It goes on when run again with --yes 
 type its word (write, import, restore). A code printed for another change is refused. With --json, the printout is
 {planned: true, code, plan, next}.`;
 
-const kb = n => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${(n / 1024).toFixed(1)} KB`);
+/** A size as the person reads it (../lib/util.mjs sizeText, the one every command prints sizes with). */
+const kb = sizeText;
 
 /** Rows as columns a person reads; long values cut short. */
 function table(rows) {

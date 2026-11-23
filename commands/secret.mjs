@@ -10,6 +10,8 @@ import { changeCode, codeMatches, sameCommand, wrongCode } from '../lib/consent.
 import { allowOrigin, newVoucherKey, seedAddress } from '../lib/add.mjs';
 import { economyCluster, solanaRpc } from '../lib/solana-rpc.mjs';
 import { pointGrantsAt } from '../lib/voucher-key.mjs';
+import { readEconomy } from '../lib/economy.mjs';
+import { plural } from '../lib/util.mjs';
 import { secretNameProblem, secretValueProblem } from '../lib/server/secrets.mjs';
 
 const usage = `Usage: xcore secret set <NAME> [dir] [--from-file <path> | --from-dev-vars | --new-key] [--yes <code>] [--json]
@@ -179,6 +181,9 @@ export default {
       }
       if ([values['from-file'], values['from-dev-vars'], values['new-key']].filter(Boolean).length > 1)
         throw new UsageError(`one of --from-file, --from-dev-vars and --new-key\n\n${usage}`);
+      // the economy file is read for these (a voucher key's address is written into it, an RPC is held to its cluster):
+      // one that does not read refuses here, before the value the live server has is replaced
+      if (['VOUCHER_SEED', 'XSOLANA_RPC_URL', 'LOOT_RPC_URL'].includes(name)) readEconomy(dir);
       // what this machine can refuse is refused before xgames.fun is asked: the name, and a value read from a file
       const early = values['from-dev-vars']
         ? await fromDevVars(dir, name)
@@ -238,7 +243,7 @@ export default {
       if (out) out(live ? { ...r, address: live.address, ...(pointed ? { economy: pointed } : {}) } : r);
       else {
         console.log(
-          `Set ${name} on ${shown(dir)}'s server: env.${name} from its next request. (${r.names.length} secrets.)`,
+          `Set ${name} on ${shown(dir)}'s server: env.${name} from its next request. (${plural(r.names.length, 'secret')}.)`,
         );
         if (made)
           console.log(`It is a new key, made here and kept only on xgames.fun's server. Its address: ${made.address}`);

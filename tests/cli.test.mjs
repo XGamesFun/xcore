@@ -31,7 +31,7 @@ test('help lists its own commands; a kit command with no kit says how to get the
   assert.match(create.stderr, /"create" is the kit's command[\s\S]*@xgamesfun\/kit/);
   // a typo is told the nearest command of ours, and is not blamed on the kit
   const typo = run(['pubish', '.'], { cwd: away.dir });
-  assert.equal(typo.status, 1);
+  assert.equal(typo.status, 2);
   assert.match(typo.stderr, /"pubish" is not an xcore command\. Did you mean "publish"\?/);
   assert.doesNotMatch(typo.stderr, /not released/);
   const unknown = run(['frobnicate'], { cwd: away.dir });
@@ -49,6 +49,53 @@ test('help lists its own commands; a kit command with no kit says how to get the
     JSON.parse(await (await import('node:fs/promises')).readFile(new URL('../package.json', import.meta.url), 'utf8'))
       .version,
   );
+});
+
+test('a usage mistake is answered one way by every command: its words on stderr, nothing on stdout, exit code 2', async t => {
+  const away = await tempDir();
+  t.after(away.cleanup);
+  for (const [args, said] of [
+    [[], /^Usage: xcore <command> \[options\]/], // no command
+    [['--frob'], /^No command before --frob: xcore <command> \[options\]\.\n\nUsage: xcore <command>/],
+    [['frobnicate'], /^"frobnicate" is not an xcore command\./], // no such command
+    [['add'], /^Usage: xcore add /], // no subcommand
+    [['loot'], /^Usage: xcore loot /],
+    [['db'], /^Usage: xcore db /],
+    [['add', 'bogus'], /^Usage: xcore add /], // no such subcommand
+    [['adopt', '.', '--frob'], /^Unknown option '--frob'/], // no such flag
+    [['dev', '.', '--port', 'eighty'], /^--port takes a port number/], // a value that is none
+  ]) {
+    const r = run(args, { cwd: away.dir });
+    assert.equal(r.status, 2, `${args.join(' ')}: exit code`);
+    assert.equal(r.stdout, '', `${args.join(' ')}: nothing on stdout`);
+    assert.match(r.stderr, said, args.join(' '));
+    // asked for JSON, the same mistake is also said on stdout, in the one shape
+    const j = run([...args, '--json'], { cwd: away.dir });
+    assert.equal(j.status, 2, `${args.join(' ')} --json: exit code`);
+    const out = JSON.parse(j.stdout);
+    assert.deepEqual(
+      [out.ok, typeof out.error, out.code],
+      [false, 'string', args[0] === 'frobnicate' ? 'unknown-command' : 'usage'],
+      `${args.join(' ')} --json`,
+    );
+  }
+  // help that was asked for is no mistake: on stdout, exit code 0
+  for (const args of [['--help'], ['loot', '--help'], ['add', '--help']]) {
+    const r = run(args, { cwd: away.dir });
+    assert.deepEqual([r.status, r.stderr, /^Usage: xcore /.test(r.stdout)], [0, '', true], args.join(' '));
+  }
+  // a refusal is not a usage mistake: exit code 1, and under --json always { ok: false, error, code }
+  for (const [args, code] of [
+    [['check', 'nowhere'], 'no-folder'],
+    [['dev', '.'], 'not-a-game'],
+    [['create', 'x'], 'no-kit'],
+    [['backend', 'use', 'custom', '.', '--url', 'https://api.game.example'], 'not-a-game'],
+  ]) {
+    const j = run([...args, '--json'], { cwd: away.dir });
+    assert.equal(j.status, 1, args.join(' '));
+    const out = JSON.parse(j.stdout);
+    assert.deepEqual([out.ok, typeof out.error, out.code], [false, 'string', code], args.join(' '));
+  }
 });
 
 test('with a kit: its commands, publish and check of a game it made, and its backends go to it as they are', async t => {

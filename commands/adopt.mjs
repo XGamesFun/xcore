@@ -1,6 +1,6 @@
 // `xcore adopt [folder]`: bring a web game made anywhere, to check it, add an economy and publish it on xgames.fun
 // (../lib/publish/adopt.mjs; README.md).
-import { guard, parse, printJson } from '../lib/cli.mjs';
+import { failureJson, guard, parse, printJson } from '../lib/cli.mjs';
 import path from 'node:path';
 import { shown } from '../lib/games.mjs';
 import { adopt, adoptNext, reportLines } from '../lib/publish/adopt.mjs';
@@ -51,7 +51,11 @@ export default {
       });
       if (values.json) {
         const { state, next } = adoptNext(r, { shown });
-        printJson({ ...r, dir: shown(r.dir), state, next });
+        // the report, and one that is refused or has something to fix said as every command's --json says a failure
+        const why = r.refused.length
+          ? `cannot be hosted as it is: ${r.refused.map(i => i.what).join('; ')}`
+          : `fix before publishing: ${r.fix.map(i => i.what).join('; ')}`;
+        printJson({ ...r, ...(r.ok ? {} : failureJson(why, state)), dir: shown(r.dir), state, next });
       } else console.log(reportLines(r, { shown }).join('\n'));
       // 1 while anything is refused or left to fix (for scripts and agents); 0 when only "worth a look" remains
       return r.refused.length || r.fix.length ? 1 : 0;

@@ -5,16 +5,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { request } from 'node:http';
 import path from 'node:path';
-import { FILES, filePathProblem, servedType, usesFiles } from '../lib/server/contract.mjs';
+import { FILES, STUDIO_BODY_BYTES, filePathProblem, servedType, usesFiles } from '../lib/server/contract.mjs';
 import { createFileStore, FILE_HEADERS, serveFiles } from '../lib/dev/files.mjs';
 import { createPlatformStore } from '../lib/dev/platform.mjs';
-import { pageHeaders } from '../lib/publish/hosting.mjs';
+import { DEFAULT_LIMITS, pageHeaders } from '../lib/publish/hosting.mjs';
 import { adopt } from '../lib/publish/adopt.mjs';
 import { publishGame } from '../lib/publish/index.mjs';
-import { fixture, passing, runAsync, signIn, standIn, tempDir } from './helpers.mjs';
+import { sizeText as filesSizeText } from '../lib/files.mjs';
+import { plural, sizeText } from '../lib/util.mjs';
+import db from '../commands/db.mjs';
+import { fixture, passing, ROOT, runAsync, signIn, standIn, tempDir } from './helpers.mjs';
 
 const noMiniflare = process.env.GAMESFUN_SERVER_DEPS
   ? false
@@ -30,6 +33,45 @@ async function game(tmp, files = {}) {
   }
   return dir;
 }
+
+test('sizes and counts are printed by one helper each: a size on the scale the limits are set in, a count with its word', async () => {
+  // 1 MB is 1,048,576 bytes, as the limits are (a game's 100 MB, a file's 25 MB): a limit reads as the documents state it
+  for (const [bytes, said] of [
+    [0, '0 bytes'],
+    [1, '1 byte'],
+    [1023, '1023 bytes'],
+    [1024, '1 KB'],
+    [2355, '2.3 KB'],
+    [1_048_575, '1 MB'],
+    [4_600_000, '4.4 MB'],
+    [FILES.fileBytes, '25 MB'],
+    [DEFAULT_LIMITS.totalBytes, '100 MB'],
+    [1.5 * 1024 ** 3, '1.5 GB'],
+  ])
+    assert.equal(sizeText(bytes), said);
+  assert.equal(filesSizeText, sizeText, 'xcore files prints sizes with the same one');
+  assert.deepEqual(
+    [
+      plural(0, 'file'),
+      plural(1, 'file'),
+      plural(2, 'file'),
+      plural(1, 'entry', 'entries'),
+      plural(3, 'entry', 'entries'),
+    ],
+    ['0 files', '1 file', '2 files', '1 entry', '3 entries'],
+  );
+  // Studio's limit on a request is one number wherever it is said: db import's help says what its refusal says
+  const flat = text => text.replace(/\s+/g, ' ');
+  assert.equal(sizeText(STUDIO_BODY_BYTES), '4.3 MB');
+  assert.ok(flat(db.usage).includes('at most 5 MB (live, 4.3 MB as sent)'), db.usage);
+  // no command formats a size of its own: each would drift from this one (the dev host's words are xgames.fun's own)
+  const own = /\.toFixed\(\d\)\} ?(KB|MB|GB)\b/;
+  for (const folder of ['commands', 'lib', 'lib/publish', 'lib/publish/adopt'])
+    for (const name of (await readdir(path.join(ROOT, folder))).filter(f => f.endsWith('.mjs') && f !== 'util.mjs')) {
+      const text = await readFile(path.join(ROOT, folder, name), 'utf8');
+      assert.doesNotMatch(text, own, `${folder}/${name} formats a size itself: use sizeText (lib/util.mjs)`);
+    }
+});
 
 test('a file’s path and how the files domain serves its type', () => {
   for (const ok of ['a.json', 'replays/2026-11-08/run_1.bin', 'x'.repeat(512)])
@@ -400,7 +442,7 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
   assert.match(r.stdout, /Deleted art\/hero\.png on xgames\.fun/);
   assert.equal(seen.at(-1).method, 'DELETE');
   r = await xc(['usage']);
-  assert.match(r.stdout, /1 file, 4 bytes of 100\.0 MB/);
+  assert.match(r.stdout, /1 file, 4 bytes of 100 MB/);
 });
 
 test('publish: a server that uses env.GF.files is refused until xgames.fun lists "files"', async t => {

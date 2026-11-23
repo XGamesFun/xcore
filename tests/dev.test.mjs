@@ -4,13 +4,15 @@
 /* global GamesFun -- the page's, inside page.evaluate */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { request as httpRequest } from 'node:http';
 import { markPage, relayRefuses, startDev, DEV_MARK } from '../lib/dev/index.mjs';
 import { createPlatformStore } from '../lib/dev/platform.mjs';
 import { findChrome, playwrightChromium, ensureBrowser } from '../lib/browser.mjs';
-import { ROOT, tempDir } from './helpers.mjs';
+import { ROOT, run, tempDir } from './helpers.mjs';
+import { listenRefusal } from '../commands/dev.mjs';
 import { addRpc } from '../lib/add.mjs';
 import { lootProgram } from '../lib/economy.mjs';
 
@@ -197,6 +199,45 @@ async function http(url, init) {
   } catch {}
   return { status: r.status, text, json };
 }
+
+test('xcore dev refuses a backend.json or an economy file that is not valid JSON, by name, before anything starts', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await game(path.join(tmp.dir, 'moth'));
+  const start = () => startDev(dir, { port: 0, log: () => {} });
+  await writeFile(path.join(dir, 'backend.json'), '{ "origins": [');
+  await assert.rejects(start(), /^Error: backend\.json is not valid JSON \(.+\); fix it first$/);
+  await writeFile(path.join(dir, 'backend.json'), '{ "version": 1, "origins": [] }');
+  await writeFile(path.join(dir, 'xsolana.json'), '{ "name": ');
+  await assert.rejects(start(), /^Error: xsolana\.json is not valid JSON \(.+\); fix it first$/);
+  assert.ok(!existsSync(path.join(dir, '.gamesfun')), 'no store, no server: nothing was started');
+});
+
+test('a port xcore dev cannot take is said by the number the person gave, with why: never a port they did not type', () => {
+  const refused = (code, port) =>
+    Object.assign(new Error(`listen ${code}: permission denied 127.0.0.1:${port}`), { code, syscall: 'listen', port });
+  // --port 80: the files' port, 81, is the one the system refuses first
+  const files = listenRefusal(refused('EACCES', 81), 80).message;
+  assert.match(files, / dev cannot listen on port 81, the one after 80, which it takes for the game's files: /);
+  assert.match(files, /only an administrator use a port under 1024\. Pick another with --port <n>/);
+  assert.doesNotMatch(files, /EACCES|127\.0\.0\.1/);
+  assert.match(listenRefusal(refused('EACCES', 1023), 1023).message, / dev cannot listen on port 1023: this system/);
+  assert.equal(
+    listenRefusal(refused('EADDRINUSE', 8787), 8787).message,
+    'port 8787 is in use: pick another with --port <n>',
+  );
+  assert.match(
+    listenRefusal(refused('EADDRNOTAVAIL', 9000), 9000).message,
+    /port 9000: the system answered EADDRNOTAVAIL/,
+  );
+  assert.equal(listenRefusal(new Error('the build failed'), 8787), null, 'any other error goes on as it is');
+  const unreadable = Object.assign(new Error('EACCES: permission denied, open'), { code: 'EACCES', syscall: 'open' });
+  assert.equal(listenRefusal(unreadable, 8787), null, 'a file it may not read is no port');
+  // the last port has no next one for the files: refused as a usage mistake, in words
+  const last = run(['dev', '.', '--port', '65535']);
+  assert.equal(last.status, 2);
+  assert.match(last.stderr, /^--port takes a port number \(0–65534: the next one is taken for the game's files\)/);
+});
 
 test('xcore dev serves the game marked, the platform, the RPC forward, and no server where there is none', async t => {
   const tmp = await tempDir();
