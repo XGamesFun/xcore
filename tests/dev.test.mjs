@@ -367,8 +367,10 @@ test('xcore dev with no --port starts at 8787, or the first free pair after it: 
   assert.equal(Number(new URL(where.files).port), page + 1, 'its files on the next port');
   // another game in dev may hold 8787 on this machine: then it is the next pair, and the next, never an odd step
   assert.ok(page >= 8787 && page < 8787 + 20 && (page - 8787) % 2 === 0, `the page is on ${page}`);
-  const readme = await readFile(path.join(ROOT, 'README.md'), 'utf8');
-  assert.ok(readme.includes('`http://127.0.0.1:8787/game/`'), 'the README names the same port');
+  for (const doc of ['README.md', path.join('docs', 'COMMANDS.md')]) {
+    const text = await readFile(path.join(ROOT, doc), 'utf8');
+    assert.ok(text.includes('`http://127.0.0.1:8787/game/`'), `${doc} names the same port`);
+  }
 });
 
 test(

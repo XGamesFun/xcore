@@ -9,6 +9,17 @@ The contract is `gf-server-v1`. Every name and number in it lives in one module,
 [`lib/server/contract.mjs`](../lib/server/contract.mjs); the bundler and its checks are
 [`lib/server/bundle.mjs`](../lib/server/bundle.mjs).
 
+- [What goes in the game folder](#what-goes-in-the-game-folder)
+- [What the server is](#what-the-server-is): requests, `env`, limits, what is not allowed;
+  [the token](#check-the-token-first), [rooms over a WebSocket](#a-room-over-a-websocket),
+  [`env.GF`](#envgf-the-platform), [project files](#project-files-envgffiles), [secrets](#secrets),
+  [the economy's own RPC](#the-economys-own-rpc), [what a payout rests on](#what-a-payout-rests-on),
+  [what your server does, declared](#what-your-server-does-declared),
+  [paying a result](#paying-a-result-xgamesfuns-keeper-or-a-voucher-key-of-your-own)
+- [A database of its own](#a-database-of-its-own): from a server, with no server, and `xcore db`
+- [Running it locally](#running-it-locally)
+- [Publishing it](#publishing-it): what a stopped, capped or paused server answers
+
 ## What goes in the game folder
 
 ```
@@ -70,7 +81,7 @@ export default {
   `https://play.xgames.fun/loot/v1/rpc` (the methods loot's client uses, one request a call): the public devnet RPC
   (`api.devnet.solana.com`) answers the Workers runtime with 403 ("Your IP or provider is blocked"), under `xcore dev`
   as well.
-- **Limits**: set by the game's plan (README §5, `xcore plan`). Free: 50 ms of CPU per request to `fetch`, **600
+- **Limits**: set by the game's plan ([HOSTING.md](HOSTING.md#plans-xcore-plan), `xcore plan`). Free: 50 ms of CPU per request to `fetch`, **600
   requests a minute per game and 120 from one player**; Creator: 200 ms, 6,000 and 600; a 5 MB bundle on every plan.
   Requests with no good game token share half of the game's minute (Free: 300), so signed-in players always have the
   other half. Past a rate, `/api/*` answers 429 with `retry-after: 60`, `scope` (`"player"` or `"game"`) and `plan`.
@@ -144,6 +155,12 @@ export default {
   and that it has not expired. A backend of your own that checks tokens with a JWT library checks all three:
   `jwtVerify(token, keys, { issuer: 'xgames.fun', audience: 'game:<slug>' })`, never the signature alone (every
   game's tokens are signed with one key, so a token without its audience checked is any game's).
+- A backend of your own checks it with any JWT library against `https://<slug>-play.xgames.fun/player/v1/key` (issuer
+  `xgames.fun`, audience `game:<slug>`). Its `sub` is the player's account (`x:<X id>`, or `g:<id>` for Google,
+  different in every game); `wallet` is a claim of its own, and may be absent: a game that keeps a player's data by
+  wallet reads `wallet`. xgames.fun replaces its signing key from time to time: a backend that keeps the key set must
+  fetch it again when a token names a key id (`kid`) it does not hold, once, not in a loop (most JWT libraries' remote
+  key sets do).
 - The page sends it for you: `GamesFun.api(path)` adds `Authorization: Bearer …` for a signed-in player. A WebSocket
   cannot carry that header: send `GamesFun.token` in the address (below).
 - `server/gf-db.js`'s `withPlayer(request, env)` is the same check (null without a token, with no call made).
@@ -732,7 +749,7 @@ my-vault: 278 files, 10 MB, nothing refused. Left out: .gamesfun/, .gitignore, g
 Hosted, the game's server answers at `https://<slug>-play.xgames.fun/api/…`. A blocked or over-limit server answers
 `{error, message}` with 451, 429, 404, 503 or 502 instead of the server's own answer.
 
-**A game that is unpublished, taken down or capped** (past its plan's money for the month: README "Its plan") has its
+**A game that is unpublished, taken down or capped** (past its plan's money for the month: [HOSTING.md](HOSTING.md#plans-xcore-plan)) has its
 server switched off: every `api/*` request answers `451 {"error": "stopped", "reason": "unpublished" | "taken-down" |
 "capped", "message"}`, its Durable Objects' alarms lapse and their sockets close. A room that is running stops within
 about five minutes. Its rooms' data and its secrets are kept, and the server comes back by itself when the game is
@@ -740,7 +757,7 @@ published again (within 30 days, to be sure of its data) or its cap lifts (the m
 credit); a version published while it is capped goes live with its pages, and its server waits. The page keeps
 loading meanwhile, so a game whose server can be off says so when `api/` answers 451.
 
-While the game's owner has it **paused for maintenance** (xgames.fun/console, the Live tab; README "Live"), xgames.fun
+While the game's owner has it **paused for maintenance** (xgames.fun/console, the Live tab; [CLIENT.md](CLIENT.md#live-settings-gflive)), xgames.fun
 answers its `api/*` itself with `503 {ok: false, code: 'maintenance', why, since}` and `retry-after: 60`, WebSocket
 upgrades included: the server's code does not run for a new request. What already runs keeps running (an open
 WebSocket, a Durable Object's alarm, the `env.GF` calls they make); a server that should stop those reads the game's

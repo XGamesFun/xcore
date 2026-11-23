@@ -1,5 +1,5 @@
 // `xcore adopt [folder]`: bring a web game made anywhere, to check it, add an economy and publish it on xgames.fun
-// (../lib/publish/adopt.mjs; README.md).
+// (../lib/publish/adopt.mjs; docs/COMMANDS.md).
 import { failureJson, guard, parse, printJson } from '../lib/cli.mjs';
 import path from 'node:path';
 import { shown } from '../lib/games.mjs';

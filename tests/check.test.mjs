@@ -69,12 +69,15 @@ async function pageWith(tmp, script, html = '') {
 }
 const FRAMED = "inside the play page's frame (as players meet it)";
 
-test('the play frame the check builds is the one README.md names', () => {
-  const row = readFileSync(path.join(ROOT, 'README.md'), 'utf8')
-    .split('\n')
-    .find(l => l.includes('**Inside the play page**'));
-  assert.ok(row.includes(`sandbox="${PLAY_FRAME_SANDBOX}"`), row);
-  assert.ok(row.includes(`allow="${PLAY_FRAME_ALLOW}"`), row);
+test('the play frame the check builds is the one docs/HOSTING.md names', () => {
+  // its section "Inside the play page", up to the next heading
+  const section = readFileSync(path.join(ROOT, 'docs', 'HOSTING.md'), 'utf8')
+    .split(/\n(?=#)/)
+    .find(part => part.startsWith('### Inside the play page\n'));
+  assert.ok(section, 'docs/HOSTING.md has its section "Inside the play page"');
+  const text = section.replace(/\s+/g, ' ');
+  assert.ok(text.includes(`sandbox="${PLAY_FRAME_SANDBOX}"`), section);
+  assert.ok(text.includes(`allow="${PLAY_FRAME_ALLOW}"`), section);
 });
 
 test(
@@ -88,7 +91,7 @@ test(
     const three = r.checks.find(c => c.n === 3);
     assert.equal(three.ok, false, JSON.stringify(r.checks));
     assert.equal(three.detail, `${FRAMED}: ${FRAME_BLOCKS.popup}`);
-    assert.match(three.detail, /README\.md.*"Inside the play page"/);
+    assert.match(three.detail, /docs\/HOSTING\.md, "Inside the play page"/);
     assert.equal(r.checks.find(c => c.n === 4).ok, true, JSON.stringify(r.checks));
   },
 );

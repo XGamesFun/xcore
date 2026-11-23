@@ -148,15 +148,15 @@ test('plan in words: the tier, the month, the limits, capped and the slots', () 
   assert.match(account, /Scale {3}Showground {2}\$9\.99 {2}\(granted\)/);
 });
 
-test('what a cap does to a game is one statement: `xcore plan`, its help, the README and docs/SERVER.md agree', async () => {
+test('what a cap does to a game is one statement: `xcore plan`, its help, docs/HOSTING.md and docs/SERVER.md agree', async () => {
   const flat = text => text.replace(/\s+/g, ' ');
   assert.ok(flat(plan.usage).includes(`the game is capped until the month ends: ${CAPPED}`), plan.usage);
-  const readme = flat(await readFile(path.join(ROOT, 'README.md'), 'utf8'));
+  const hosting = flat(await readFile(path.join(ROOT, 'docs', 'HOSTING.md'), 'utf8'));
   assert.match(
-    readme,
+    hosting,
     /a game is \*\*capped\*\* until the month ends: \*\*its server is switched off\*\* \(every `api\/\*` request answers 451 /,
   );
-  assert.match(readme, /and saves and scores slow down .* Its pages keep loading/);
+  assert.match(hosting, /and saves and scores slow down .* Its pages keep loading/);
   const server = flat(await readFile(path.join(ROOT, 'docs', 'SERVER.md'), 'utf8'));
   assert.match(
     server,
