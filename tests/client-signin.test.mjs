@@ -44,6 +44,8 @@ function standIn({ shared = 'real', sharedType = 'text/javascript', sharedWait =
   const s = {
     requests: [],
     status: [],
+    // when each status request came in (ms): a test asks when a look was made, not how fast the whole sign-in ran
+    statusAt: [],
     sessions: [],
     forgets: [],
     seen: [],
@@ -187,6 +189,7 @@ function standIn({ shared = 'real', sharedType = 'text/javascript', sharedWait =
     }
     if (url.pathname === '/player/v1/request/status') {
       s.status.push(body.id);
+      s.statusAt.push(Date.now());
       if (!/^r\d+$/.test(body.id ?? '') || body.secret !== `s${body.id.slice(1)}`)
         return send(200, { state: 'expired' });
       if (!s.approved) return send(200, { state: 'waiting' });
@@ -743,16 +746,22 @@ test(
     const opened = ctx.waitForEvent('page');
     await page.click('[data-gamesfun="signin"] a');
     const win = await opened;
-    await win.waitForURL(/\/go\/CODE-0001\?with=x$/);
+    await win.waitForURL(/\/go\/CODE-0001\?with=x$/, { waitUntil: 'commit' });
     assert.equal(await win.evaluate(() => !!window.opener), true, 'the page knows which page opened it');
 
     // answered there while the game was out of view: back in view it is asked at once (a look has just gone by, so
     // the next one is two seconds away), and the panel goes by itself
-    const looks = s.status.length;
-    while (s.status.length === looks) await page.waitForTimeout(20);
+    // the next look's answer is back in the page, so none is in flight when the game comes back into view (one in
+    // flight is answered as it was asked, and the next look is two seconds on)
+    await page.waitForResponse(r => r.url().endsWith('/player/v1/request/status'));
     s.approved = true;
+    const asked = s.status.length;
+    const shown = Date.now();
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
-    assert.equal((await page.evaluate(within(1200, 'window.signedIn')))?.id, 'x:42', 'no wait for the next look');
+    assert.equal((await page.evaluate(within(5000, 'window.signedIn')))?.id, 'x:42');
+    // asked as it came into view, not at the next look two seconds on (timed by the request, so a slow machine's
+    // sign-in doesn't fail it)
+    assert.ok(s.statusAt[asked] - shown < 1000, `asked ${s.statusAt[asked] - shown} ms after it came back into view`);
     assert.equal(await panelOf(page), null, 'no Done, no Continue');
     assert.equal(await page.evaluate(() => GamesFun.code), null);
   },
@@ -803,12 +812,12 @@ test(
     let popup = page.waitForEvent('popup');
     await page.click('#in');
     let win = await popup;
-    await win.waitForURL(/\/go\/CODE-0001\?with=x$/);
+    await win.waitForURL(/\/go\/CODE-0001\?with=x$/, { waitUntil: 'commit' });
     await win.close();
     popup = page.waitForEvent('popup');
     await page.click('#in');
     win = await popup;
-    await win.waitForURL(/\/go\/CODE-0001\?with=x$/);
+    await win.waitForURL(/\/go\/CODE-0001\?with=x$/, { waitUntil: 'commit' });
     assert.equal(s.requests.length, 1, 'no second request');
     s.approved = true;
     assert.equal((await page.evaluate(() => window.signedIn)).id, 'x:42');

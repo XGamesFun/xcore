@@ -210,7 +210,7 @@ test(
     const popup = page.waitForEvent('popup');
     await page.click('#in');
     const win = await popup;
-    await win.waitForURL(/\/go\/ABCD-EFGH\?with=x$/);
+    await win.waitForURL(/\/go\/ABCD-EFGH\?with=x$/, { waitUntil: 'commit' });
     assert.deepEqual(g.s.requests, [{ slug: 'moth', with: 'x' }]);
     const code = await page.evaluate(() => codes[0]);
     assert.equal(code.code, 'ABCD-EFGH');
@@ -358,7 +358,8 @@ test(
     await page.click('#in');
     const win = await popup;
     // xgames.fun's own sign-in page, not mygame.test's (a host starting with play. is not xgames.fun's play host here)
-    await win.waitForURL(new RegExp(`^http://xgames\\.test:${g.port}/go/ABCD-EFGH\\?with=x$`));
+    // the address is what is asked: the stand-in page's load event is not, and on a slow machine it can lag
+    await win.waitForURL(new RegExp(`^http://xgames\\.test:${g.port}/go/ABCD-EFGH\\?with=x$`), { waitUntil: 'commit' });
     assert.deepEqual(g.s.requests, [{ slug: 'moth', with: 'x' }]);
     g.s.approved = true;
     assert.equal((await page.evaluate(() => window.signedIn)).id, 'x:42');
