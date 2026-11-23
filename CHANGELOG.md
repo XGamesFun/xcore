@@ -2,6 +2,103 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.11.0 — 2026-11-23
+
+Fixes from a read of the whole package: places where a command passed, or went ahead, on something it could not read,
+and output and documents nobody had read as a reader. Four changes can stop what 0.10.7 let through; they are marked.
+
+**`xcore review`**
+
+- **Changed: the review says how it reads a game and what a PASS means, under every verdict** (on screen, in
+  `review.md` and in `--json`'s `method`). It reads the server's code as text, by patterns, and runs none of it. A
+  PASS is no proof that a game is safe to pay from.
+- **Changed: what it could not read is listed beside the verdict and does not pass quietly.** A `PAY.check` whose
+  answer comes from code the review could not follow is a high finding (`pay-unreadable`). An `xsolana.json` or
+  `gamesfun.json` that is there but is not valid JSON is a high finding (`file-unreadable`); it was a clean PASS.
+- `PAY.check` is read by the names its own parameters give (renamed, destructured, or handed to a helper in another
+  server file). A word in a message, a comment or a regular expression, a fetch whose answer is unused, and a setting
+  read from env no longer change the verdict. On a set of 16 unsafe and 8 safe spellings of one payout, the verdict was
+  wrong for 12 and is now wrong for none.
+- A route that pays with `voucherFor` is in the payout ledger, and the review no longer says such a game "pays nothing
+  yet". `token-any-game` fires in games that use xcore's voucher template. With several grants in one check, each
+  grant's amount and wallet are read from the answer that names it.
+- The counts say "1 route", "1 paid route", "1 key".
+
+**A file that does not parse is never read as a missing one**
+
+- **Changed: a `gamesfun.json` that is not valid JSON is refused by every command**, with its name and the parser's
+  reason. `xcore check` said "run adopt first", and `dev`, `add signin` and `card` went ahead. The same for
+  `xsolana.json` (or `loot.json`) and `backend.json` wherever a command reads them: `add vouchers` and `add rpc` refuse
+  before writing anything, and `secret set VOUCHER_SEED` before the live key is replaced.
+- A damaged `.gamesfun/publish.json` was read as "never published", so the next publish would have made a second
+  game. Publish and every command that needs the game now stop and say how to put the record back. The file is written
+  whole and moved into place, so an interrupted publish cannot cut it short.
+
+**Live project files**
+
+- **Changed: `xcore files rm --live`, and `xcore files put --live` over a file that is there, ask first.** xgames.fun
+  keeps one copy of a project file and no earlier one, so a file deleted or written over is gone for good. Both print
+  what would be lost with a code and change nothing; the same command with `--yes <code>` goes on, as for live database
+  and secret changes. A new path is put at once. `xcore files get <path> --live` keeps a copy first.
+
+**Checks and messages**
+
+- `xcore check` answers on a page whose script never yields (`while (true) {}`): check 3 fails as "the page stopped
+  answering" within about a minute, and no browser is left running. `xcore card` and the first-session walk say the
+  same in words.
+- `xcore plan` told the owner of a capped game its server "answers slowly"; it is switched off (every `api/` request
+  answers 451), as the help and the docs say.
+- Every size is on one scale, the one the limits are set in (1 MB = 1,048,576 bytes): the live request limit is
+  4.3 MB everywhere (`db` said 4.5). A small game is "2.3 KB", not "0.0 MB", and one file is "1 file".
+- `xcore check` and `xcore adopt` name `xcore dev` where they said "the kit's dev server". The first-session walk
+  speaks of a first reward, a wallet and SOL only for a game with an economy. `xcore dev --port 80` says which port it
+  could not take and why.
+- **Changed: a usage mistake prints on stderr and exits with 2**, for every command: bare `xcore` (was stdout, exit 1),
+  an unknown command, `xcore loot` with no subcommand, and `xcore coin`'s bad flags (were 1). Every `--json` failure
+  carries `code`; `check --json` and `adopt --json` carry `ok`, `error` and `code` when they fail.
+
+**In the files a game carries**
+
+A game picks these up when `xcore add signin` (and `add multiplayer`) writes its copies again; `xcore check` says when
+a game's copy is older.
+
+- A player who was never there stayed in a room: one connection that said hello twice, or closed while its sign-in was
+  checked, was announced and never left. A connection now has one seat (`server/rooms.js`). A room address that is not
+  valid text answers 400, not 500.
+- Large room messages sent in the same frame were all dropped: `room.send()` counted every JSON message as 64 bytes.
+  Each is counted by its real size, sent as it was when `send` was called, and one that cannot be JSON is reported in
+  the console instead of losing the frame.
+- A save key or board name that worked on localhost failed once published: the client took 64 characters and no dot,
+  xgames.fun takes 1 to 32 letters, digits, `.`, `_` or `-`. The client holds xgames.fun's rule, and a test holds the
+  two equal.
+- An error thrown in a game's own listener (`gf.onChange`, `room.on` and the others) is reported with `console.error`;
+  it vanished. The game still plays on.
+- Godot and Unity, outside a web export: `GamesFun.sign_in()` kept an error as the player, so `is_signed_in()` was
+  true in the Godot editor; Unity's `SignIn()` returned an error. Both now answer nobody.
+- `xcore add signin` names what the Godot and Unity plugins have (`GamesFun.player` and `player_changed`;
+  `GamesFun.Player` and `PlayerChanged`); it named a `ready` neither has. `add database` and `add multiplayer` print
+  their own steps, and the sign-in's only when they added it.
+- The payout example in `server/vouchers.js` uses the database a new game gets (`db(env)` from `server/gf-db.js`).
+
+**Documents**
+
+- The README's example for a backend of your own was refused ("must be a public name"); it uses an address the command
+  takes.
+- Paying with the server's own key is told in one order: `docs/SERVER.md` ("Your own key") has the steps, and the
+  README and the skill give the same order and point there.
+- Corrected: where a new game's database rules are (`gamesfun.json` → `database.collections`), what `signIn()` and
+  `signOut()` answer, `env.GF.scores.list()`, how to wire a mainnet economy into a page (`gf/loot/wallets.js`'s
+  `cluster`, `pageRpc`, `chainOf`), Miniflare's size (about 180 MB), and `xcore coin launch --symbol` and
+  `--description`.
+
+**For contributors**
+
+- Tests hold eleven safety behaviours a one-line change could break unseen: the saved sign-in's file mode, the sign-in
+  callback's `state`, the dev host's socket guard, `nosniff`, each name the secret scan reads, the publish limits, the
+  direct upload and others.
+- A test run leaves no folder in the temp directory, and on a machine with no browser it ends by saying how many
+  browser tests did not run and how to get one.
+
 ## 0.10.7 — 2026-11-22
 
 Two small sign-in races in the page client (`gamesfun.js`), fixed. A game picks them up when `xcore add signin` writes

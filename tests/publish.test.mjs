@@ -153,10 +153,14 @@ test('the account’s limits: a game at every one of them is published; one file
   const at = { files: files.length, totalBytes: total, fileBytes: 2 * 1048576 };
   for (const [limits, words] of [
     [{ ...at, files: at.files - 1 }, `This game has ${at.files} files; a published game may have ${at.files - 1}.`],
-    [{ ...at, totalBytes: total - 1 }, 'This game is 2.0 MB; a published game may be 2.0 MB.'],
-    [{ ...at, totalBytes: 1048576 }, 'This game is 2.0 MB; a published game may be 1.0 MB.'],
-    [{ ...at, fileBytes: at.fileBytes - 1 }, 'world.bin is 2.0 MB; one file may be 2.0 MB.'],
-    [{ ...at, fileBytes: 1048576 }, 'world.bin is 2.0 MB; one file may be 1.0 MB.'],
+    [
+      { ...at, totalBytes: total - 1 },
+      // over by one byte: said in bytes, where megabytes would read the same
+      `This game is ${total.toLocaleString('en-US')} bytes; a published game may be ${(total - 1).toLocaleString('en-US')} bytes.`,
+    ],
+    [{ ...at, totalBytes: 1048576 }, 'This game is 2 MB; a published game may be 1 MB.'],
+    [{ ...at, fileBytes: at.fileBytes - 1 }, 'world.bin is 2,097,152 bytes; one file may be 2,097,151 bytes.'],
+    [{ ...at, fileBytes: 1048576 }, 'world.bin is 2 MB; one file may be 1 MB.'],
   ]) {
     g.state.me = { limits };
     await assert.rejects(publish(), e => {

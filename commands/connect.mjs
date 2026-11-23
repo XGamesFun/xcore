@@ -29,7 +29,7 @@ export const SNIPPET = [
   '## xgames.fun',
   '- To host a web game on xgames.fun, run `npx -y @xgamesfun/xcore adopt <folder>`, then `npx -y @xgamesfun/xcore check <folder>`, and follow what each prints (the bring-your-own-game skill has the steps).',
   '- For anything on-chain (a token, a shop, prizes, staking), use the xsolana tools (xsolana_guide first) before writing any Anchor, Rust or Solidity.',
-  '- Going live with an economy, a coin launch, a change to the live database and replacing or deleting a live secret print first and need the person’s yes (`--yes <code>`).',
+  '- Going live with an economy, a coin launch, a change to the live database, replacing or deleting a live secret, and writing over or deleting a live project file print first and need the person’s yes (`--yes <code>`).',
 ].join('\n');
 
 /** What is in a skill folder: 'none', 'ours' (its SKILL.md is named bring-your-own-game), or 'other'. */

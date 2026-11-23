@@ -15,7 +15,7 @@ Play the game on this machine as xgames.fun will host it, with everything a publ
                                   with xgames.fun's limits on the plan it imitates (Free unless --plan)
   /loot/v1/rpc                    the economy's Solana devnet RPC (XSOLANA_RPC_URL in .env, else xgames.fun's relay)
 gamesfun.js (${CMD} add signin|database|multiplayer) uses all of it here, from any engine: open the page in two
-windows to play a room together. Running server/ needs Miniflare (workerd), installed once on first use (~140 MB).
+windows to play a room together. Running server/ needs Miniflare (workerd), installed once on first use (~180 MB).
 Saves, scores and Durable Object storage are kept in <dir>/.gamesfun/ (never published).
   --port <n>      the port (default the first free one from 8787)
   --plan <name>   the plan to imitate: free (the default), creator or scale: its boards, saves, reads and writes a
