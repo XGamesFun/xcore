@@ -53,7 +53,17 @@ jobs:
         run: npm pack --dry-run
       - name: Publish (a pre-release version goes out under the "next" dist-tag)
         run: |
-          case "$(node -p "require('./package.json').version")" in
-            *-*) npm publish --tag next ;;
-            *) npm publish ;;
+          version="$(node -p "require('./package.json').version")"
+          # A version npm has already is left as it is, so a run can be started again, or an older tag pushed, safely.
+          if npm view "@xgamesfun/xcore@$version" version >/dev/null 2>&1; then
+            echo "npm has @xgamesfun/xcore@$version already: nothing to publish."
+            exit 0
+          fi
+          case "$version" in
+            *-*) tag=next ;;
+            *) tag=latest ;;
           esac
+          if ! npm publish --tag "$tag"; then
+            echo "::error::npm refused the publish. An E404 here means npm does not trust this workflow: on npmjs.com, @xgamesfun/xcore → Settings → Trusted publisher must name GitHub Actions, XGamesFun/xcore, release.yml and the environment npm."
+            exit 1
+          fi

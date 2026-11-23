@@ -50,7 +50,16 @@ CI runs the linter, the formatting check and the tests on Linux, macOS and Windo
 
 ## Releases
 
-Maintainers release by pushing a `v<version>` tag; `.github/workflows/release.yml` publishes to npm with provenance.
+A release is a pushed `v<version>` tag. `.github/workflows/release.yml` checks that the tag is `package.json`'s version,
+runs the linter and the tests, and publishes to npm with provenance; a version npm has already is skipped.
+
+1. Bump the version: `npm version <x.y.z> --no-git-tag-version` (`package.json` and `package-lock.json`), and add its
+   `CHANGELOG.md` entry.
+2. Commit, merge to `main`, then `git tag v<x.y.z> && git push origin v<x.y.z>`.
+
+The workflow publishes with npm's trusted publishing, with no stored token: once, on npmjs.com, `@xgamesfun/xcore` →
+Settings → Trusted publisher names GitHub Actions, the repository `XGamesFun/xcore`, the workflow `release.yml` and
+the environment `npm`. Until that is set, npm answers the publish with E404.
 
 ## License
 
