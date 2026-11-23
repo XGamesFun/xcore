@@ -187,7 +187,7 @@ test(
     const r = await pageVerify(dir, { out: path.join(tmp.dir, 'out') });
     assert.equal(r.pass, true, JSON.stringify(r.checks));
     assert.ok(
-      r.notes.some(n => /It calls its own server \(api\/visits, api\/room\)/.test(n)),
+      r.notes.some(n => /It calls its own server \(api\/room, api\/visits\)/.test(n)),
       r.notes.join('\n'),
     );
   },
