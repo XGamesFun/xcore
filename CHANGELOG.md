@@ -2,6 +2,19 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.10.7 — 2026-11-22
+
+Two small sign-in races in the page client (`gamesfun.js`), fixed. A game picks them up when `xcore add signin` writes
+its copy again; `xcore check` says when a game's copy is older.
+
+- **Fixed: a player back in the game waited for the next look.** A game that stays open while the player signs in
+  elsewhere asks again the moment it is back in view. If a look was already on its way, that ask was dropped and the
+  next went two seconds after it: now it goes as soon as the one on its way is answered.
+- **Fixed: the sign-in window could stay on xgames.fun's /go page.** The window opens at the player's tap and goes on
+  to the request's page once xgames.fun answers. It now goes on once the window has opened (at most 5 seconds), as a
+  browser can keep a first page that is still loading over an address set meanwhile. A window closed meanwhile still
+  leaves the sign-in panel in its place.
+
 ## 0.10.6 — 2026-11-22
 
 **Ships with `@xgamesfun/solana` 0.29.10**, whose page client and instruction builders are split into modules (no
