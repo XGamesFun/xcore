@@ -7,6 +7,9 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 Fixes from a read of the whole package: places where a command passed, or went ahead, on something it could not read,
 and output and documents nobody had read as a reader. Four changes can stop what 0.10.7 let through; they are marked.
 
+**Ships with `@xgamesfun/solana` 0.29.11** (`xcore loot …`): `check` refuses a spec the other tools cannot build, the guide
+and the examples agree with `check`, and `units()` refuses an amount it cannot read exactly. Its changelog has the rest.
+
 **`xcore review`**
 
 - **Changed: the review says how it reads a game and what a PASS means, under every verdict** (on screen, in
