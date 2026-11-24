@@ -1001,6 +1001,9 @@ test('add vouchers: refused without an economy; the server, the signer copy, the
   const bare = await fixture(other, 'static');
   await assert.rejects(addVouchers(bare), /has no economy yet/);
   const { dir, r } = await voucherGame(tmp);
+  // the seed is a secret: .dev.vars goes in .gitignore at once, even in a folder that is not in git yet
+  assert.equal(await readFile(path.join(dir, '.gitignore'), 'utf8'), '.dev.vars\n');
+  assert.ok(r.written.includes('wrote .gitignore (.dev.vars holds secrets: keep it out of git)'), r.written.join('\n'));
   await writeFile(path.join(dir, '.gitignore'), 'node_modules\n');
   assert.match(
     await readFile(path.join(dir, 'server', 'vouchers.js'), 'utf8'),

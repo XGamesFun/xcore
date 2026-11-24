@@ -1,6 +1,6 @@
 // `xcore db info|query|export|import|restore`: the game's own database (gamesfun.json → database), on this machine
 // (the one `xcore dev` runs) or, with --live, on xgames.fun (../lib/db.mjs).
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, notOneOf } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { dbExport, dbImport, dbInfo, dbQuery, dbRestore, importOf, liveChange, queryProblem } from '../lib/db.mjs';
 import { consented } from '../lib/consent.mjs';
@@ -92,7 +92,8 @@ export default {
       );
       const [verb, ...rest] = positionals;
       const takes = { query: 'a statement', import: 'a file', restore: 'a time' };
-      if (!['info', 'query', 'export', 'import', 'restore'].includes(verb)) throw new UsageError(usage);
+      const verbs = ['info', 'query', 'export', 'import', 'restore'];
+      if (!verbs.includes(verb)) throw new UsageError(`${notOneOf(verb, verbs)}\n\n${usage}`);
       if (takes[verb] && !rest[0]) throw new UsageError(`${verb} needs ${takes[verb]}\n\n${usage}`);
       const arg = takes[verb] ? rest[0] : null;
       const dir = await resolveGame(takes[verb] ? rest[1] : rest[0]);

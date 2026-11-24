@@ -1,6 +1,6 @@
 // `xcore coin`: a coin that trades for a published game (../lib/coin.mjs): where it stands, launching one with a key
 // file, and giving up a launch that was never sent.
-import { guard, parse, UsageError } from '../lib/cli.mjs';
+import { guard, parse, UsageError, tooMany } from '../lib/cli.mjs';
 import { resolveGame, named } from '../lib/games.mjs';
 import {
   ABOUT_SOL,
@@ -157,7 +157,7 @@ export default {
       const verbs = ['launch', 'drop', 'status'];
       const verb = verbs.includes(positionals[0]) ? positionals[0] : 'status';
       const rest = verbs.includes(positionals[0]) ? positionals.slice(1) : positionals;
-      if (rest.length > 1) throw new UsageError(usage);
+      if (rest.length > 1) throw new UsageError(`${tooMany(rest.slice(1))}\n\n${usage}`);
       const symbol = values.ticker ?? values.symbol;
       if (verb === 'launch')
         for (const [flag, value] of [

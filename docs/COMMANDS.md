@@ -497,7 +497,8 @@ For other agents (Cursor, Copilot, Gemini CLI and more), `npx skills add XGamesF
 
 ## For scripts and agents: `--json` and exit codes
 
-Every command takes `--json`.
+Every command takes `--json`. `xcore add` and `xcore loot add` print what they wrote and the next steps in short;
+`--verbose` prints every note, and `--json` has both (`next` and `steps`).
 
 - A failure is then also printed on stdout as `{ "ok": false, "error", "code", "state", "next" }`:
   - `code` is the reason (`usage`, `login`, `files`, `secrets`, `build`, `card`, `size`…; `failed` when there is no
@@ -516,12 +517,12 @@ Every command takes `--json`.
 
 Exit codes:
 
-| Code | Meaning                                                                                       |
-| ---- | --------------------------------------------------------------------------------------------- |
-| 0    | success                                                                                       |
-| 1    | any failure other than a usage mistake                                                        |
-| 2    | a usage mistake (no such command or flag, a missing argument); the usage is printed on stderr |
-| 3    | `xcore review` only: INCONCLUSIVE, no high finding but a payout the review could not read     |
+| Code | Meaning                                                                                                                                        |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0    | success                                                                                                                                        |
+| 1    | any failure other than a usage mistake                                                                                                         |
+| 2    | a usage mistake (no such command, subcommand or flag; a missing or extra argument): stderr says what was wrong, then the command's usage lines |
+| 3    | `xcore review` only: INCONCLUSIVE, no high finding but a payout the review could not read                                                      |
 
 ## Environment variables
 

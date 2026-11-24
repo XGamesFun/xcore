@@ -28,9 +28,8 @@ folder that is already linked to a game updates that game without asking.
 What happens:
   - A game you adopted (${CMD} adopt) is built first if it has a build. Its published folder (gamesfun.json
     page.out) is uploaded, with its server/ bundle if it has one.
-  - The game's checks must pass on the files being published. They run again unless nothing changed since they
-    last passed. For a game you brought, this is the page check; for a game made with the game-making kit, the
-    kit's six gates.
+  - The page check (${CMD} check) must pass on the files being published. It runs again unless nothing changed
+    since it last passed.
   - If the checks fail, the game is uploaded only as a private draft, and you are told which checks failed.
   - Files that look like keys, .env files and symbolic links stop the publish. evidence/, hidden files and notes at
     the top level (README.md, NOTES.md, LAUNCH.md and similar) are left out.

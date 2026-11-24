@@ -1,5 +1,5 @@
 // `xcore plan`: a game's backend plan on xgames.fun (../lib/publish/plans.mjs).
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, tooMany } from '../lib/cli.mjs';
 import { resolveGame } from '../lib/games.mjs';
 import { accountPlan, describeAccount, describeGame, gamePlan, setActive } from '../lib/publish/plans.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -48,7 +48,8 @@ export default {
       const { values, positionals } = parse(args, { all: { type: 'boolean' } }, usage);
       const [first, second] = positionals;
       const verb = first === 'activate' || first === 'deactivate' ? first : null;
-      if (positionals.length > (verb ? 2 : 1)) throw new UsageError(usage);
+      if (positionals.length > (verb ? 2 : 1))
+        throw new UsageError(`${tooMany(positionals.slice(verb ? 2 : 1))}\n\n${usage}`);
       const out = values.json ? printJson : null;
       const plain = e => {
         if (e?.status === 404)

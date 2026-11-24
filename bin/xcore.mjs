@@ -42,12 +42,17 @@ const VALUE_FLAGS = Object.fromEntries(
   ['out', 'port', 'plan', 'title', 'url', 'origin', 'yes'].map(f => [f, { type: 'string', multiple: true }]),
 );
 
+/** The kit's `backend` subcommands (its builder/commands/backend.mjs). */
+const KIT_BACKEND = new Set(['agents', 'check', 'connect', 'disconnect', 'password', 'status', 'use']);
+
 /** Does this command, with these arguments, belong to the kit even though this package has a command by its name?
  *  (`connect`: the kit's own connect where there is a kit, this package's where there is none.) */
 export function kitsTurn(name, args) {
   if (name === 'connect') return true;
   const { positionals } = parseArgs({ args, options: VALUE_FLAGS, strict: false, allowPositionals: true });
-  if (name === 'backend') return !(positionals[0] === 'use' && positionals[1] === 'custom');
+  // the kit's backend commands (connect, use supabase, check …); any other word is a usage mistake of ours
+  if (name === 'backend')
+    return KIT_BACKEND.has(positionals[0]) && !(positionals[0] === 'use' && positionals[1] === 'custom');
   if (name === 'publish' || name === 'check' || name === 'dev') {
     const dir = path.resolve(positionals[0] ?? '.');
     return madeByKit(dir);
@@ -147,10 +152,12 @@ function help(commands, kit) {
   for (const c of commands.values()) lines.push(`  ${c.name.padEnd(10)} ${c.summary}`);
   lines.push(
     '',
-    kit
-      ? `The game-making kit is installed (${kit}): create, verify, slots, build and its other commands run there. \`${CMD} help\` lists them.`
-      : 'Making a game from an idea, the studio page and verify belong to the game-making kit, which is not released yet.',
-    '',
+    ...(kit
+      ? [
+          `The game-making kit is installed (${kit}): create, verify, slots, build and its other commands run there. \`${CMD} help\` lists them.`,
+          '',
+        ]
+      : []),
     `Run \`${CMD} <command> --help\` for a command's options. To start with a game you have: ${CMD} adopt <folder>`,
   );
   return lines.join('\n');

@@ -1,5 +1,5 @@
 // `xcore embed`: the sites of your own that may show the published game in a frame (../lib/publish/site.mjs).
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, tooMany } from '../lib/cli.mjs';
 import { resolveGame } from '../lib/games.mjs';
 import { changeEmbed, describeSite, embedSnippet, gameSite, playUrl } from '../lib/publish/site.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
@@ -37,7 +37,7 @@ export default {
       const rest = verbs.includes(positionals[0]) ? positionals.slice(1) : positionals;
       const needs = verb !== 'list';
       if (needs && !rest[0]) throw new UsageError(`${verb} needs a site, like https://mygame.com\n\n${usage}`);
-      if (rest.length > (needs ? 2 : 1)) throw new UsageError(usage);
+      if (rest.length > (needs ? 2 : 1)) throw new UsageError(`${tooMany(rest.slice(needs ? 2 : 1))}\n\n${usage}`);
       const dir = await resolveGame(needs ? rest[1] : rest[0]);
       const out = values.json ? printJson : null;
       const origin = studioOrigin();

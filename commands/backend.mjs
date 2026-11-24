@@ -22,10 +22,7 @@ site.
   - Keep the backend's keys on the backend. A game may only contain keys that are meant to be public.
   - The backend must answer CORS requests from the game's origin (https://<slug>-play.xgames.fun once published).
   - For an adopted game with a build, backend.json goes in the folder the build copies unchanged (gamesfun.json
-    page.static).
-
-A backend set up for you (Supabase, Railway: backend connect) is part of the game-making kit, which is not released
-yet.`;
+    page.static).`;
 
 export default {
   name: 'backend',
@@ -38,7 +35,10 @@ export default {
         { url: { type: 'string' }, origin: { type: 'string', multiple: true } },
         usage,
       );
-      if (positionals[0] !== 'use' || positionals[1] !== 'custom') throw new UsageError(usage);
+      if (positionals[0] !== 'use' || positionals[1] !== 'custom')
+        throw new UsageError(
+          `${positionals.length ? `"backend ${positionals.slice(0, 2).join(' ')}" is not a command here` : 'Name a command'}: xcore has "backend use custom".\n\n${usage}`,
+        );
       if (!values.url) throw new UsageError(`backend use custom needs --url <https://…>\n\n${usage}`);
       const dir = await resolveGame(positionals[2]);
       const roots = pageRoots(dir);
@@ -50,7 +50,7 @@ export default {
       try {
         main = new URL(values.url).origin;
       } catch {
-        throw new Error(`--url ${values.url} is not an address`);
+        throw new UsageError(`--url ${values.url} is not an address (https://…)\n\n${usage}`);
       }
       // an https backend's WebSocket twin comes with it (wss:// on the same host): a game that talks to its server often uses both
       const twin = main.startsWith('https:') ? main.replace(/^https:/, 'wss:') : null;

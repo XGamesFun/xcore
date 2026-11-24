@@ -3,7 +3,7 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, notOneOf } from '../lib/cli.mjs';
 import { named, resolveGame } from '../lib/games.mjs';
 import {
   filesGet,
@@ -79,7 +79,8 @@ export default {
         usage,
       );
       const [verb, a, b] = positionals;
-      if (!['ls', 'put', 'get', 'rm', 'usage'].includes(verb)) throw new UsageError(usage);
+      const verbs = ['ls', 'put', 'get', 'rm', 'usage'];
+      if (!verbs.includes(verb)) throw new UsageError(`${notOneOf(verb, verbs)}\n\n${usage}`);
       if (['put', 'get', 'rm'].includes(verb) && !a)
         throw new UsageError(`${verb} needs ${verb === 'put' ? 'a file' : 'a path'}\n\n${usage}`);
       const dir = await resolveGame(values.dir);

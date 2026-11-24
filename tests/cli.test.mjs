@@ -60,10 +60,13 @@ test('a usage mistake is answered one way by every command: its words on stderr,
     [[], /^Usage: xcore <command> \[options\]/], // no command
     [['--frob'], /^No command before --frob: xcore <command> \[options\]\.\n\nUsage: xcore <command>/],
     [['frobnicate'], /^"frobnicate" is not an xcore command\./], // no such command
-    [['add'], /^Usage: xcore add /], // no subcommand
-    [['loot'], /^Usage: xcore loot /],
-    [['db'], /^Usage: xcore db /],
-    [['add', 'bogus'], /^Usage: xcore add /], // no such subcommand
+    [['add'], /^Say what to add: signin, [\s\S]*\n\nUsage: xcore add /], // no subcommand: what was wrong, then usage
+    [['loot'], /^Name a command: add, [\s\S]*\n\nUsage: xcore loot /],
+    [['db'], /^Name a command: info, [\s\S]*\n\nUsage: xcore db /],
+    [
+      ['add', 'bogus'],
+      /^"bogus" is not something xcore can add\. [\s\S]*\n\nUsage: xcore add [\s\S]*Run `xcore add --help` for the options\.\n$/,
+    ], // no such subcommand
     [['adopt', '.', '--frob'], /^Unknown option '--frob'/], // no such flag
     [['dev', '.', '--port', 'eighty'], /^--port takes a port number/], // a value that is none
   ]) {

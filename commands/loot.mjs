@@ -64,13 +64,14 @@ RPC:
     shared relay only passes loot's own transactions, and a setup also creates mints and token accounts. If the
     public RPC refuses your requests, set XSOLANA_RPC_URL to a devnet RPC of your own.`;
 
-const ADD_USAGE = `Usage: xcore loot add [game] [--json]
+const ADD_USAGE = `Usage: xcore loot add [game] [--verbose] [--json]
 
 Show where the game's economy file (${ECONOMY_FILE}) goes. Once the file exists, copy the economy's page client next
 to it (gf/loot/). The client is a managed copy: do not edit it; publish keeps it up to date.
 
 For an adopted game with a build, both go in the folder the build copies unchanged (gamesfun.json page.static), so
-every build includes them. It prints the next steps.`;
+every build includes them. It prints the next steps in short; --verbose prints every note, and --json has both
+(next and steps).`;
 
 /** xsolana's commands that read an economy file ([file], default xsolana.json). */
 const ON_FILE = new Set(['check', 'simulate', 'cost', 'explain', 'review', 'publish', 'status', 'approve']);
@@ -133,21 +134,33 @@ export default {
     // no subcommand (--json alone names none): a usage mistake, said as every command says one
     if (args.every(a => a === '--json'))
       return guard(() => {
-        throw new UsageError(usage);
+        throw new UsageError(
+          `Name a command: add, connect, check, simulate, cost, explain, review, token, keygen, approve or help.\n\n${usage}`,
+        );
       }, args);
     if (args[0] === 'add')
       return guard(async () => {
-        const { values, positionals } = parse(args.slice(1), {}, ADD_USAGE);
+        const { values, positionals } = parse(args.slice(1), { verbose: { type: 'boolean' } }, ADD_USAGE);
         const dir = await resolveGame(positionals[0]);
         const r = await addLoot(dir);
         if (values.json)
-          return printJson({ game: shown(dir), home: shown(r.home), economy: r.economy, page: r.page, steps: r.steps });
+          return printJson({
+            game: shown(dir),
+            home: shown(r.home),
+            economy: r.economy,
+            page: r.page,
+            next: r.next,
+            steps: r.steps,
+          });
         console.log(
           r.economy
             ? `${shown(dir)}: its economy is ${shown(r.economy)}; ${r.page?.changed ? `copied ${r.page.package} ${r.page.version}'s page client (${r.page.files} files)` : "loot's page client is current"} in ${shown(path.join(r.home, 'gf', 'loot'))}.`
             : `${shown(dir)} has no economy yet: its ${ECONOMY_FILE} goes in ${shown(r.home) === '.' ? 'this folder' : `${shown(r.home)}/`}.`,
         );
-        for (const s of r.steps) console.log(`  - ${s}`);
+        const steps = values.verbose ? r.steps : r.next;
+        console.log(['', 'Next:', ...steps.map((s, i) => `  ${i + 1}. ${s}`)].join('\n'));
+        if (!values.verbose && r.steps.length > r.next.length)
+          console.log(`\nDetails (${r.steps.length} notes): ${CMD} loot add ${shown(dir)} --verbose`);
         return 0;
       }, args);
     // --json goes to the kit as it is, and its answer comes back untouched: the kit's JSON is the contract

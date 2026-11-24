@@ -2,7 +2,7 @@
 // picture of the game as it plays, or of a picture the person has, written as assets/card.jpg where publish takes it.
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, tooMany } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { sizeText } from '../lib/util.mjs';
 import {
@@ -69,7 +69,7 @@ export default {
         },
         usage,
       );
-      if (positionals.length > 1) throw new UsageError(usage);
+      if (positionals.length > 1) throw new UsageError(`${tooMany(positionals.slice(1))}\n\n${usage}`);
       const wait = values.wait === undefined ? 4 : Number(values.wait);
       if (!Number.isFinite(wait) || wait < 0 || wait > 120)
         throw new UsageError(`--wait takes a number of seconds (0–120)\n\n${usage}`);
