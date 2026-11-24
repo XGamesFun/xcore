@@ -8,8 +8,8 @@ top of the file it writes.
 
 `xcore add signin <folder>` works out the engine: a web game gets `gamesfun.js` loaded in its page, a Godot 4 project
 the `GamesFun` autoload, a Unity project `Assets/Plugins/GamesFun/`. Replace the game's own login, local save file or
-localhost leaderboard with these calls. Players sign in with X (or a wallet), so the game asks for no password and keeps
-no accounts of its own: xgames.fun holds them.
+localhost leaderboard with these calls. Players sign in with X or Google (a wallet they linked comes with the
+sign-in), so the game asks for no password and keeps no accounts of its own: xgames.fun holds them.
 
 - **Start sign-in from a click.** When `onCode` / `sign_in_code` / `SignInCode` fires with `window: false`, show the
   code and the site; with `window: true` the player already has a way to sign in on screen (a window, or the small

@@ -1,7 +1,7 @@
 # Security policy
 
-`xcore` signs people in to xgames.fun, stores publish tokens, scans games for secrets before they go public and handles
-Solana economies, so we take security reports seriously.
+`xcore` signs users in to xgames.fun, stores publish tokens, scans games for secrets before they are published, and
+handles Solana economies. We take security reports seriously.
 
 ## Reporting a vulnerability
 
@@ -15,9 +15,9 @@ Please include:
 - the steps or a minimal example to reproduce it
 - the version (`xcore --version`), your operating system and your Node version
 
-We aim to acknowledge a report within 3 business days and to keep you informed until it is fixed. Please give us
-reasonable time to release a fix before you disclose the problem publicly. We are glad to credit you in the release
-notes if you would like.
+We aim to acknowledge a report within 3 business days, and to keep you informed until it is fixed. Please give us
+reasonable time to release a fix before you disclose the problem publicly. If you would like, we will credit you in the
+release notes.
 
 ## Supported versions
 
@@ -34,6 +34,7 @@ A key or secret that the publish scan fails to catch is in scope.
 
 ## Out of scope
 
-- the xgames.fun website and hosting, `@xgamesfun/kit` and `@xgamesfun/solana`: report those to their own projects
+- the xgames.fun website and hosting, the game-making kit (not released yet) and `@xgamesfun/solana`: report those to
+  their own projects
 - vulnerabilities in a game someone published with this tool
 - findings that need an already-compromised machine or account
