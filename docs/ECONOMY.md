@@ -63,8 +63,10 @@ for a token").
 ## Adding it to a game: `xcore loot add`
 
 `xcore loot add <folder>` tells you where the economy file goes: `xsolana.json`, in the `static` folder. Once the file
-is there, run it again and it copies the page client next to it, as `gf/loot/`. This is a copy: never edit it. Each
-publish keeps it up to date.
+is there, run it again and it puts the page client next to it, as `gf/loot/`: one bundled, minified client
+(`play/index.js` and `chain/rpc.js`, about 0.5 MB with their shared chunk) and `wallets.js`. This is a managed copy:
+never edit it. Running `xcore loot add` again is the update path: it rebuilds the copy when the installed
+`@xgamesfun/solana` changed, and leaves it alone otherwise. Each publish does the same.
 
 The page uses the client in one of two ways:
 

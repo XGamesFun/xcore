@@ -67,7 +67,8 @@ RPC:
 const ADD_USAGE = `Usage: xcore loot add [game] [--verbose] [--json]
 
 Show where the game's economy file (${ECONOMY_FILE}) goes. Once the file exists, copy the economy's page client next
-to it (gf/loot/). The client is a managed copy: do not edit it; publish keeps it up to date.
+to it (gf/loot/: the client bundled and minified, play/index.js and chain/rpc.js, with wallets.js). It is a managed
+copy: do not edit it. Run loot add again to refresh it after @xgamesfun/solana changes; publish does too.
 
 For an adopted game with a build, both go in the folder the build copies unchanged (gamesfun.json page.static), so
 every build includes them. It prints the next steps in short; --verbose prints every note, and --json has both

@@ -25,6 +25,23 @@ Readability and accuracy, and fixes, from two outside reviews. No price or limit
   imported them (the game-making kit uses its own copy).
 - **Fixed: sign-in is X or Google**, as the client does it. A Solana wallet is linked to the player's account and
   comes with the sign-in; it never signs anyone in. The README and `xcore add --help` said "X first, or a wallet".
+- **Changed: `xcore connect` sets up the current project only by default.** It copied the skill into every project's
+  user-wide skills folders. The skills now go in the project's `.claude/skills/` and `.agents/skills/`, and Claude
+  Code registers the tools for that project; `--scope user` does it for every project, as before.
+- **Changed: publish makes a missing preview picture from the page check's screenshot.** A game with no
+  `assets/card.jpg` gets one made from the newest `evidence/verify-N/desktop.png` (960×960, a JPEG under 1,500,000
+  bytes), with one line that says so and how to replace it. It still stops when there is no screenshot, or for a
+  picture xgames.fun cannot draw.
+- **Changed: the economy's page client in `gf/loot/` is bundled and minified** (esbuild, ES modules with code
+  splitting): 7 files of about 0.5 MB in place of 66 files of 1.3 MB. `play/index.js`, `chain/rpc.js` and `wallets.js`
+  keep their paths, so pages import them as before. `xcore loot add` again is the update path; publish does it too.
+- **Changed: adopt and check findings are one line and a short fix.** A path from the root names the setting for the
+  framework adopt detected (all of them: docs/HOSTING.md, "Paths from the root"); routing, `<base>`, full screen,
+  service worker, Socket.IO, api/ and server findings are cut to their fix, with a docs section for the rest. A `.env`
+  is listed once (publish refuses it), not also as a hidden file. Check's summary says "3 passed, 1 skipped", and the
+  upload count names the two records xcore adds.
+- **Changed: npx examples name the version** (`npx -y @xgamesfun/xcore@0.11.0`), and so does the command xcore prints
+  when it runs through npx. `scripts/pin-version.mjs` updates them at a release, and a test fails while one is stale.
 - **Changed: `xcore add` and `xcore loot add` print a short result**: what was written and the next steps (two to
   five lines). `--verbose` prints every note, as before; `--json` has both (`next`, `steps`).
 - **Changed: every usage mistake says what was wrong** (`xcore add bogus`: `"bogus" is not something xcore can add`),

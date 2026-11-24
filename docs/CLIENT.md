@@ -525,8 +525,11 @@ for prizes by place, or a voucher signed with the game's own key (`xcore add vou
 
 ## The economy: `GamesFun.loot` and `gf/loot/`
 
-`xcore loot add` copies loot's page client next to the game's economy, into `gf/loot/`. It is a copy: never edit it.
-Publish keeps it up to date. What the economy is and how it goes live: [ECONOMY.md](ECONOMY.md).
+`xcore loot add` puts loot's page client next to the game's economy, in `gf/loot/`: `@xgamesfun/solana`'s client
+bundled and minified by esbuild (`play/index.js`, `chain/rpc.js` and their shared `chunks/`), xcore's `wallets.js`,
+and `release.json`, which names the version. It is a managed copy: never edit it. To refresh it after
+`@xgamesfun/solana` changes, run `xcore loot add` again (it rebuilds only when something changed); every publish does
+the same. What the economy is and how it goes live: [ECONOMY.md](ECONOMY.md).
 
 ### From any engine: `GamesFun.loot`
 
