@@ -15,8 +15,13 @@ const usage = `Usage: xcore review [game] [--live [origin]] [--out <dir>] [--jso
 A pattern-based check of a game's economy and server code for payout and key-handling mistakes, read the way a
 cheater would: what a script can get without playing, and what to fix first. It is not a security audit.
 
-How it works: it reads the game's code as text, by patterns, and runs none of it: a PASS means no high finding in
-what it read, never that the game is safe to pay from. Every result says this and lists what it could not read.
+How it works: it reads the game's code as text, by patterns, and runs none of it. Verdicts:
+  PASS          no high finding in what it read, and every payout read through. Never proof that the game is safe
+                to pay from: every result says this and lists what it could not read.
+  FAIL          a high finding.
+  INCONCLUSIVE  no high finding, but a payout it could not read through: code it did not follow, or what the check
+                was handed read by a computed key (ctx[k], Reflect.get(ctx, k)). Write the field by name (ctx.body,
+                ctx.env.X), or check that code yourself.
 
 What it reads:
   the economy  @xgamesfun/solana's own review of the economy file, when the installed version has one: each route
@@ -49,8 +54,11 @@ The record:
   review.md ends with the trade-offs: for each route that pays, how the server checks it (decides, replays or
   bounds), what a cheater gets, and what the stronger level would cost.
 
-Exit code: 1 if there is any high finding, otherwise 0.
+Exit code: 0 PASS, 1 FAIL, 3 INCONCLUSIVE (2 is a usage mistake, as for every command).
 Guide: docs/SERVER.md, "What a payout rests on".`;
+
+/** The exit code of each verdict: PASS 0, FAIL 1 (a high finding), INCONCLUSIVE 3 (a payout not read through). */
+export const EXIT = { PASS: 0, FAIL: 1, INCONCLUSIVE: 3 };
 
 /** --live takes an origin or nothing: `--live`, `--live <http…>`, `--live=<http…>`. → {args without it, live} */
 export function liveFlag(args) {
@@ -97,7 +105,7 @@ export default {
       const r = await reviewGame(dir, { live: base, liveWhy, out: values.out ?? null });
       if (values.json) printJson(r);
       else console.log(summary(r, shown(dir), unreadWords(r)));
-      return r.ok ? 0 : 1;
+      return EXIT[r.verdict];
     }, args),
 };
 
@@ -105,7 +113,7 @@ export default {
 function summary(r, where, unread) {
   const c = r.counts;
   const lines = [
-    `review: ${r.ok ? 'PASS' : 'FAIL'} ${c.high} high, ${c.medium} medium, ${c.low} low, ${c.info} info${unread} · evidence ${shown(r.outDir)}`,
+    `review: ${r.verdict} ${c.high} high, ${c.medium} medium, ${c.low} low, ${c.info} info${unread} · evidence ${shown(r.outDir)}`,
     ...r.method.map(l => `  ${l}`),
     ...r.unread.map(u => `  not read: ${u.what}: ${u.why}`),
   ];

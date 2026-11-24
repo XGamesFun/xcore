@@ -754,10 +754,12 @@ test('the ledger against the grants: payOnly and perPerson (payout-signer, payou
   r = await review(dir);
   assert.deepEqual(ids(r), []);
   assert.deepEqual([r.ledger[0].signer, r.ledger[0].where, r.ledger[0].identity], ['keeper', 'server/room.js', 'x']);
-  // (who wins is its callers' to say, and the review read none: said as not read)
+  // (who wins is its callers' to say, and the review read none: said as not read, and no PASS)
+  assert.equal(r.verdict, 'INCONCLUSIVE');
   assert.deepEqual(r.unread, [
     {
       what: 'server/room.js',
+      payout: true,
       why: 'what decides the result it reports to the keeper is in the code that calls its function, which was not read',
     },
   ]);
@@ -1549,6 +1551,64 @@ const SAFE = [
   ],
 ];
 
+// What PAY.check was handed, read in a way the reading can't follow: which field it took (the request's body, or state
+// the server keeps) can't be told, so the verdict is INCONCLUSIVE (exit code 3), never PASS. Each pays the page's word.
+const RUN_ID = "{ grant: 'found-whale', round: `${ctx.player.sub}:${req.runId}`, amount: 'grant' }";
+const WHALE_REQ = "if (req?.creature !== 'whale') return { why: 'Only a whale earns an NFT.' };";
+const opaqueCheck = take =>
+  `export const PAY = {\n  async check(ctx) {\n    ${take}\n    ${WHALE_REQ}\n    return ${RUN_ID};\n  },\n};`;
+const EVASIONS = [
+  ['a key made of two strings', opaqueCheck("const req = ctx['bo' + 'dy'];")],
+  ['a key held in a variable', opaqueCheck("const k = 'body';\n    const req = ctx[k];")],
+  ['a key written as a string', opaqueCheck("const req = ctx['body'];")],
+  ['optional chaining with a computed key', opaqueCheck("const k = 'body';\n    const req = ctx?.[k];")],
+  ['destructuring through a computed key', opaqueCheck("const k = 'body';\n    const { [k]: req } = ctx;")],
+  ['Reflect.get', opaqueCheck("const req = Reflect.get(ctx, 'body');")],
+  ['Object.values', opaqueCheck('const [req] = Object.values(ctx);')],
+  [
+    'a computed key in the parameters',
+    "const K = 'body';\nexport const PAY = {\n  async check({ [K]: req, player }) {\n    if (req?.creature !== 'whale') return { why: 'Only a whale earns an NFT.' };\n    return { grant: 'found-whale', round: `${player.sub}:${req.runId}`, amount: 'grant' };\n  },\n};",
+  ],
+  [
+    'a helper that reads what it was handed by a computed key',
+    'export const PAY = {\n  async check(ctx) {\n    return whale(ctx);\n  },\n};',
+    `function whale(ctx) {\n  const req = ctx['bo' + 'dy'];\n  ${WHALE_REQ}\n  return ${RUN_ID};\n}`,
+  ],
+];
+
+test('a check read through a computed key or Reflect is INCONCLUSIVE, never PASS', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  for (const [i, [how, pay, above = '']] of EVASIONS.entries()) {
+    const dir = await sample(tmp, 'bounded', `e${i}`);
+    await writeFile(path.join(dir, 'server', 'vouchers.js'), await vouchersWith(pay, above));
+    const r = await review(dir);
+    assert.deepEqual([r.verdict, r.ok], ['INCONCLUSIVE', false], how);
+    assert.deepEqual(
+      ids(r).filter(x => x.startsWith('high')),
+      [],
+      `${how}: no high finding, so no FAIL either`,
+    );
+    const not = r.unread.find(u => u.what === 'server/vouchers.js');
+    assert.ok(not?.payout, `${how}: said as a payout not read`);
+    assert.match(not.why, /can't be told by reading/, how);
+    assert.equal(r.ledger[0].source, 'unreadable', `${how}: never taken as state the server keeps`);
+  }
+  // the outside reviewer's own case, through the command: exit code 3 and ok: false, in words and in JSON
+  const dir = path.join(tmp.dir, 'e0');
+  const c = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
+  assert.equal(c.status, 3, c.stdout + c.stderr);
+  assert.match(c.stdout, /^review: INCONCLUSIVE 0 high, /);
+  const j = run(['review', dir, '--json'], { env: { GAMESFUN_SOLANA: '' } });
+  assert.equal(j.status, 3);
+  assert.deepEqual([JSON.parse(j.stdout).ok, JSON.parse(j.stdout).verdict], [false, 'INCONCLUSIVE']);
+  // the same check written plainly is read, and is the high finding it should be
+  await writeFile(path.join(dir, 'server', 'vouchers.js'), await vouchersWith(opaqueCheck('const req = ctx.body;')));
+  const plain = await review(dir);
+  assert.equal(plain.verdict, 'FAIL');
+  assert.ok(ids(plain).includes('high payout-input'), ids(plain).join());
+});
+
 test('one unsafe payout, however its check is written: paid on the request alone, a high finding', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
@@ -1693,7 +1753,7 @@ test('every result says how it was read and what a PASS means: the same lines on
   assert.match(METHOD[1], /^How: as text, by patterns\. None of the game's code is run and none is parsed/);
   assert.match(
     METHOD[2],
-    /^A PASS means no high finding in what was read\. It is not proof that the game is safe to pay/,
+    /^A PASS means no high finding in what was read, and every payout read through\. It is not proof that the game is safe to pay/,
   );
   assert.match(METHOD[3], /^Where the reading of a payout stops: /);
   const r = await review(dir);
@@ -1715,7 +1775,7 @@ test('every result says how it was read and what a PASS means: the same lines on
   assert.match(c.stdout, /^server: 1 paid route in the ledger, 1 key in custody; 5 api\/ routes named/m);
   assert.match(
     run(['review', '--help']).stdout,
-    /as text, by patterns, and runs none of it: a PASS means no high finding/,
+    /as text, by patterns, and runs none of it\. Verdicts:\n {2}PASS {10}no high finding in what it read/,
   );
 });
 
@@ -1737,14 +1797,15 @@ test('what the review could not read is said beside the verdict; a check that an
     /^PAY\.check in server\/vouchers\.js answers through `whale`, which this review did not read .*: what the server checks before paying was not reviewed\.$/,
   );
   assert.deepEqual(r.unread, [
-    { what: 'server/vouchers.js', why: 'PAY.check answers through `whale`, which was not read' },
+    { what: 'server/vouchers.js', why: 'PAY.check answers through `whale`, which was not read', payout: true },
   ]);
   assert.equal(r.ledger[0].source, 'unreadable');
   assert.match(
     r.tell.find(x => x.from === 'server').text,
     /^“Found a Whale”: it rests on code this review did not read/,
   );
-  // env handed to code it did not read (a class of a package): taken as state, as before, and the PASS says so
+  // env handed to code it did not read (a class of a package): the ledger takes it as state, but the verdict is no
+  // PASS: INCONCLUSIVE, exit code 3
   await writeFile(
     vouchers,
     await vouchersWith(
@@ -1753,7 +1814,7 @@ test('what the review could not read is said beside the verdict; a check that an
     ),
   );
   r = await review(dir);
-  assert.equal(r.ok, true);
+  assert.deepEqual([r.ok, r.verdict], [false, 'INCONCLUSIVE']);
   assert.deepEqual(ids(r), []);
   assert.deepEqual(
     [r.ledger[0].source, r.ledger[0].assumed, r.ledger[0].seen],
@@ -1762,19 +1823,20 @@ test('what the review could not read is said beside the verdict; a check that an
   assert.deepEqual(r.unread, [
     {
       what: 'server/vouchers.js',
+      payout: true,
       why: 'PAY.check hands env to `Tides`, which was not read: taken as reading state the server keeps',
     },
   ]);
   const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
-  assert.match(md, /^\*\*PASS\*\*: 0 high, .* info; 1 part not read\. No high finding\.$/m);
+  assert.match(md, /^\*\*INCONCLUSIVE\*\*: 0 high, .* info; 1 part not read\. No high finding, but a payout/m);
   assert.match(
     md,
     /## Not read\n\nThe verdict does not cover these: read them yourself\.\n\n- server\/vouchers\.js: PAY\.check hands env to `Tides`/,
   );
   assert.match(md, /\| state the server keeps \(taken so: env goes to code not read\) \|/);
   const c = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
-  assert.equal(c.status, 0);
-  assert.match(c.stdout, /^review: PASS 0 high, .* info; 1 part not read · evidence /);
+  assert.equal(c.status, 3);
+  assert.match(c.stdout, /^review: INCONCLUSIVE 0 high, .* info; 1 part not read · evidence /);
   assert.match(c.stdout, /^ {2}not read: server\/vouchers\.js: PAY\.check hands env to `Tides`, which was not read/m);
   // a check that refuses everything in words of its own pays nothing: said so, and nothing more
   await writeFile(
@@ -1801,7 +1863,7 @@ test('what the review could not read is said beside the verdict; a check that an
     /^server\/vouchers\.ts declares PAY, and this review reads PAY\.check only in server\/vouchers\.js/,
   );
   assert.deepEqual(r.unread, [
-    { what: 'server/vouchers.ts', why: 'it declares PAY, which is read only in server/vouchers.js' },
+    { what: 'server/vouchers.ts', why: 'it declares PAY, which is read only in server/vouchers.js', payout: true },
   ]);
 });
 

@@ -176,11 +176,23 @@ two side by side.
 
 `xcore review` is a pattern-based check of a game's economy and server code for payout and key-handling mistakes,
 read the way a cheater would read it. It is not a security audit. It reads the code as text, by patterns, and runs none
-of it, so a PASS means no high finding in what it read, not that the game is safe to pay real money from. Run it before
-players are paid.
+of it, so a PASS is not proof that the game is safe to pay real money from. Run it before players are paid.
 
-`xcore review <folder>` writes `evidence/review-N/review.md` and `review.json`, prints what it found, and exits 1 on any
-high finding. It covers three parts.
+`xcore review <folder>` writes `evidence/review-N/review.md` and `review.json`, and prints what it found and one of three
+verdicts (`verdict` in `--json`):
+
+| Verdict      | Meaning                                                                  | Exit code |
+| ------------ | ------------------------------------------------------------------------ | --------- |
+| PASS         | no high finding in what it read, and every payout read through           | 0         |
+| FAIL         | at least one high finding                                                | 1         |
+| INCONCLUSIVE | no high finding, but a payout it could not read through; `ok` is `false` | 3         |
+
+A payout is not read through when its code calls code the review did not follow (a package, or more than three calls
+deep), or when PAY.check reads what it was handed by a computed key (`ctx[k]`, `ctx['bo' + 'dy']`,
+`{ [k]: req } = ctx`, `Reflect.get(ctx, k)`). The review can't tell which field such code reads, so it never treats it
+as state the server keeps. Write the field by name (`ctx.body`, `ctx.env.RUNS`), or check that code yourself.
+
+The review covers three parts.
 
 **The economy.** `@xgamesfun/solana`'s own review (also `xcore loot review`): each route that pays, what it trusts, its
 ceiling, and the trade-offs in plain words. If the installed version has no review, the output says so in one line and

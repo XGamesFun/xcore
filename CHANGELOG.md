@@ -4,7 +4,15 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
 
 ## Unreleased
 
-Readability and accuracy, from an outside review. No price, limit or check changed.
+Readability and accuracy, and fixes, from two outside reviews. No price or limit changed. Changes that can stop what
+0.11.0 let through, or that break an import, are marked **Breaking**.
+
+- **Breaking: `xcore review` has a third verdict, INCONCLUSIVE (exit code 3, `ok: false`).** A payout the review could
+  not read through was a PASS with "1 part not read": env handed to code it did not follow, a keeper report whose
+  winners its callers decide, and a PAY.check that reads what it was handed by a computed key (`ctx['bo' + 'dy']`,
+  `ctx[k]`, `{ [k]: req } = ctx`, `Reflect.get(ctx, k)`). Each is now INCONCLUSIVE, and a computed key is never taken
+  as state the server keeps. `review.json` has `verdict` (`PASS`, `FAIL`, `INCONCLUSIVE`), and each payout entry in
+  `unread` has `payout: true`. A high finding is still FAIL (exit code 1).
 
 - **Changed: a project install prints `npx @xgamesfun/xcore`, never `npx xcore`.** The unscoped `xcore` on npm is
   another package.

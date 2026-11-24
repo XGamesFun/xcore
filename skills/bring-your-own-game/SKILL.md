@@ -119,8 +119,9 @@ with a key file on the person's machine. Follow that skill; this one adds where 
 ## 5. Review (a game whose server pays results)
 
 Before publishing a game that pays results, read it as a cheater would: `xcore review <folder>` writes
-`evidence/review-N/review.md` and `review.json` and exits 1 on a high finding (`xcore loot review` is the economy's
-part alone).
+`evidence/review-N/review.md` and `review.json`; its verdict is PASS (exit 0), FAIL (1, a high finding) or
+INCONCLUSIVE (3, a payout it could not read through: never treat that as a pass). `xcore loot review` is the economy's
+part alone.
 
 - Fix every high finding and run it again. Mediums are the person's to decide with you: say each one plainly.
 - Declare each voucher grant's `trust` as what `PAY.check` really does

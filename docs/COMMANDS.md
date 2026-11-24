@@ -496,6 +496,7 @@ Exit codes:
 | 0    | success                                                                                       |
 | 1    | any failure other than a usage mistake                                                        |
 | 2    | a usage mistake (no such command or flag, a missing argument); the usage is printed on stderr |
+| 3    | `xcore review` only: INCONCLUSIVE, no high finding but a payout the review could not read     |
 
 ## Environment variables
 
