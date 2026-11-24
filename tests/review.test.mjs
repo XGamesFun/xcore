@@ -1609,6 +1609,67 @@ test('a check read through a computed key or Reflect is INCONCLUSIVE, never PASS
   assert.ok(ids(plain).includes('high payout-input'), ids(plain).join());
 });
 
+// What the page writes for its own player (a save, the page's GamesFun.db documents) is the player's word: read in a
+// payout it is player input, as the request's body is, and a read of it never makes a body read safe.
+const SCORE = "if (!(body.score > 100)) return { why: 'Score more than 100.' };";
+const BEST = "const best = (await env.GF.saves.get(player.sub, 'best')).value ?? 0;";
+const PAID = "return { grant: 'found-whale', round: `${player.sub}:${body.runId}`, amount: 'grant' };";
+const DECOYS = [
+  ['a save read after the body', check(`${SCORE}\n    ${BEST}\n    ${PAID}`)],
+  ['a save read before the body', check(`${BEST}\n    ${SCORE}\n    ${PAID}`)],
+  [
+    'the save and the body together',
+    check(`${BEST}\n    if (!(Math.max(best, body.score) > 100)) return { why: 'no' };\n    ${PAID}`),
+  ],
+  [
+    'a save taken apart first',
+    check(`const { saves } = env.GF;\n    const b = await saves.get(player.sub, 'best');\n    ${SCORE}\n    ${PAID}`),
+  ],
+  [
+    'a save alone',
+    check(
+      `${BEST}\n    if (!(best > 100)) return { why: 'no' };\n    return { grant: 'found-whale', round: \`\${player.sub}:best\`, amount: 'grant' };`,
+    ),
+  ],
+  [
+    "the page's documents",
+    check(
+      `const doc = await env.DB.prepare("SELECT data FROM gf_docs WHERE owner = ?").bind(player.sub).first();\n    ${SCORE}\n    ${PAID}`,
+    ),
+  ],
+];
+
+test("a save or the page's documents read beside the body: player input, a high payout-input, never a PASS", async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  for (const [i, [how, pay]] of DECOYS.entries()) {
+    const dir = await sample(tmp, 'bounded', `d${i}`);
+    await writeFile(path.join(dir, 'server', 'vouchers.js'), await vouchersWith(pay));
+    const r = await review(dir);
+    assert.equal(r.verdict, 'FAIL', how);
+    assert.ok(ids(r).includes('high payout-input'), `${how}: ${ids(r).join()}`);
+    assert.deepEqual([r.ledger[0].source, r.ledger[0].decides], ['request', 'body'], how);
+    assert.match(r.ledger[0].seen ?? '', /which the player writes/, how);
+  }
+  // the outside reviewer's case, through the command: exit code 1
+  const c = run(['review', path.join(tmp.dir, 'd0')], { env: { GAMESFUN_SOLANA: '' } });
+  assert.equal(c.status, 1, c.stdout);
+  assert.match(c.stdout, /^review: FAIL [1-9]\d* high/);
+  // state the server keeps (a Durable Object of its own) still decides: no payout-input
+  const dir = await sample(tmp, 'bounded', 'kept');
+  await writeFile(
+    path.join(dir, 'server', 'vouchers.js'),
+    await vouchersWith(
+      check(
+        `const run = await env.RUNS.get(env.RUNS.idFromName(player.sub)).finished(body.runId);\n    if (!run) return { why: 'no' };\n    ${PAID}`,
+      ),
+    ),
+  );
+  const kept = await review(dir);
+  assert.ok(!ids(kept).includes('high payout-input'), ids(kept).join());
+  assert.equal(kept.ledger[0].source, 'env');
+});
+
 test('one unsafe payout, however its check is written: paid on the request alone, a high finding', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);

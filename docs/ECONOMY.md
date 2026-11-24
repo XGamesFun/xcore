@@ -194,6 +194,11 @@ deep), or when PAY.check reads what it was handed by a computed key (`ctx[k]`, `
 `{ [k]: req } = ctx`, `Reflect.get(ctx, k)`). The review can't tell which field such code reads, so it never treats it
 as state the server keeps. Write the field by name (`ctx.body`, `ctx.env.RUNS`), or check that code yourself.
 
+What the page writes for its own player is never state the server keeps: a check that reads the player's saves
+(`env.GF.saves`) or the page's `GamesFun.db` documents (the table `gf_docs`) reads player input, as it does when it
+reads the request's body. Reading them never makes a payout safe: with no state the server keeps behind it, the payout
+is the high finding `payout-input`.
+
 The review covers three parts.
 
 **The economy.** `@xgamesfun/solana`'s own review (also `xcore loot review`): each route that pays, what it trusts, its
