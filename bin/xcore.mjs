@@ -11,7 +11,7 @@ import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { guard, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, nearest, printJson, UsageError } from '../lib/cli.mjs';
 import { CMD } from '../lib/command.mjs';
 import { readJson } from '../lib/util.mjs';
 import { madeByKit } from '../lib/games.mjs';
@@ -109,29 +109,8 @@ export const KIT_COMMANDS = new Set([
   'voice-room',
 ]);
 
-/** Edit distance (insertions, deletions, substitutions and swaps of two letters side by side). */
-function distance(a, b) {
-  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
-  for (let j = 1; j <= b.length; j++) d[0][j] = j;
-  for (let i = 1; i <= a.length; i++)
-    for (let j = 1; j <= b.length; j++) {
-      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
-        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
-    }
-  return d[a.length][b.length];
-}
-
-/** The command a mistyped name most likely meant: the nearest of `names` within a couple of letters, or null. */
-export function nearest(name, names) {
-  const word = name.toLowerCase();
-  let best = null;
-  for (const n of names) {
-    const dist = distance(word, n);
-    if (dist <= Math.max(1, Math.floor(n.length / 3)) && (!best || dist < best.dist)) best = { n, dist };
-  }
-  return best?.n ?? null;
-}
+/** (the nearest name: ../lib/cli.mjs, which every command's subcommands use too) */
+export { nearest };
 
 /** What an unknown command is told: the kit's (only for one of its commands), else the nearest of ours. */
 export function unknownCommand(name, commands) {

@@ -25,6 +25,14 @@ Contents:
 
 ## Every command
 
+Commands with subcommands (`files`, `secret`, `db`, `embed`, `domain`, `plan`, `coin`) take them the same way:
+
+- `list` and `remove` are the names this reference uses; `ls`, and `rm` or `delete`, are the same subcommands.
+- The game's folder is the last word, or `--dir <folder>`; either works, and both must agree. `files` takes
+  `--dir <folder>` only, because its words are file paths. The default is the current directory.
+- A word that is no subcommand is a usage mistake (exit code 2) that names the subcommands there are, never "no such
+  folder".
+
 | Command                    | What it does                                                                                                    | Details                                                                                   |
 | -------------------------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `xcore adopt [folder]`     | brings in a web game you made: writes its record and lists what to fix for the hosting                          | [adopt](#adopt), [HOSTING.md](HOSTING.md)                                                 |
@@ -280,10 +288,10 @@ your machine:
 
 ```bash
 xcore files put ./levels/forest-3.json levels/forest-3.json --public --live   # served at https://<slug>.xgamesusercontent.com/levels/forest-3.json
-xcore files ls levels/ --live
+xcore files list levels/ --live
 xcore files get replays/run-1.json --live --out run-1.json
-xcore files rm levels/old.json --live                 # prints what it would delete, with a code, and deletes nothing
-xcore files rm levels/old.json --live --yes <code>    # deletes it
+xcore files remove levels/old.json --live                 # prints what it would delete, with a code, and deletes nothing
+xcore files remove levels/old.json --live --yes <code>    # deletes it
 xcore files usage --live
 ```
 
@@ -299,7 +307,7 @@ Without `--live`, `xcore files` works on the files `xcore dev` gives the server.
 that is overwritten or deleted there is gone for good.
 
 - Uploading to a new path happens at once.
-- `put --live` to a path xgames.fun already has, and `rm --live`, first print what would be lost (the file there, its
+- `put --live` to a path xgames.fun already has, and `remove --live`, first print what would be lost (the file there, its
   size and type) with a code, and change nothing. Run the same command with `--yes <code>` to go ahead. A code printed
   for a different change is refused.
 - `xcore files get <path> --live` keeps a local copy first.
@@ -501,7 +509,8 @@ By default it does this for the folder it runs in only: the skills go in that fo
 `.agents/skills/`, and Claude Code registers the tools for that project. `xcore connect --scope user` does it for every
 project of this user (`~/.claude/skills/`, `~/.agents/skills/` and the user's MCP settings). Codex registers MCP
 servers only for the whole user, so with the default scope its tools are left out (run `--scope user` for them).
-`--dry-run` shows what it would do and changes nothing.
+`--dry-run` shows what it would do, starts no agent's program (it looks for `claude` and `codex` on PATH instead), and
+changes nothing.
 
 For other agents (Cursor, Copilot, Gemini CLI and more), `npx skills add XGamesFun/xcore` installs the same skill.
 

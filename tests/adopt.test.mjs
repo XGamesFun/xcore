@@ -775,3 +775,26 @@ test('a gamesfun.json that is not valid JSON is refused by name, by every comman
     /not a page this checks \(no gamesfun\.json → page: run .* adopt first\)/,
   );
 });
+
+test('a literal address the code calls is found, even at a host that is mostly noise (example.com); one in a comment is not', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  await writeFile(
+    path.join(dir, 'calls.js'),
+    [
+      "fetch('https://api.example.com/score', { method: 'POST' });",
+      'const ws = new WebSocket("wss://rt.example.org/room");',
+      "const x = new XMLHttpRequest(); x.open('GET', 'https://data.example.net/levels');",
+      "const es = new EventSource('https://feed.example.com/live');",
+      '// the docs: https://example.com/guide',
+    ].join('\n'),
+  );
+  const r = await adopt(dir);
+  assert.deepEqual(r.origins.found.map(o => o.origin).sort(), [
+    'https://api.example.com',
+    'https://data.example.net',
+    'https://feed.example.com',
+    'wss://rt.example.org',
+  ]);
+});

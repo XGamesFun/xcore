@@ -62,7 +62,9 @@ test('a usage mistake is answered one way by every command: its words on stderr,
     [['frobnicate'], /^"frobnicate" is not an xcore command\./], // no such command
     [['add'], /^Say what to add: signin, [\s\S]*\n\nUsage: xcore add /], // no subcommand: what was wrong, then usage
     [['loot'], /^Name a command: add, [\s\S]*\n\nUsage: xcore loot /],
-    [['db'], /^Name a command: info, [\s\S]*\n\nUsage: xcore db /],
+    [['db'], /^Name a subcommand: info, [\s\S]*\n\nUsage: xcore db /],
+    [['embed', 'ls-sites'], /^Unknown subcommand "ls-sites": use list, add or remove\./], // never "no such folder"
+    [['secret', 'lst'], /^Unknown subcommand "lst": use set, list or remove\. Did you mean "list"\?/],
     [
       ['add', 'bogus'],
       /^"bogus" is not something xcore can add\. [\s\S]*\n\nUsage: xcore add [\s\S]*Run `xcore add --help` for the options\.\n$/,

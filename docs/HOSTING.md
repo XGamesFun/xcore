@@ -403,7 +403,7 @@ A published game's data is kept in three places. Only the first two can be expor
 | Data                                                                                                                      | Where it is kept                                  | How to get it out                                                                 |
 | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------- |
 | The game's database: your server's tables, and the page's `GamesFun.db` documents                                         | the game's own D1 database on xgames.fun          | `xcore db export --live` writes all of it as SQL; `xcore db import` loads it back |
-| Project files (`env.GF.files`)                                                                                            | xgames.fun's file store for the game              | `xcore files ls --live`, then `xcore files get <path> --live` for each file       |
+| Project files (`env.GF.files`)                                                                                            | xgames.fun's file store for the game              | `xcore files list --live`, then `xcore files get <path> --live` for each file     |
 | Player saves and leaderboards (`GamesFun.saves`, `GamesFun.scores`, and `env.GF.saves` and `env.GF.scores` on the server) | xgames.fun's player services, not the D1 database | no bulk export yet; see below                                                     |
 
 `xcore db export` does not include saves or leaderboards. A game's own server can read them through `env.GF`

@@ -31,8 +31,9 @@ from a qualified professional before you offer anything of real value.
 - Blockchain transactions are public and irreversible.
 - You alone control your wallet and keys. Never put a private key, seed phrase or secret in a game, and approve only
   transactions you understand.
-- The key file an economy goes live with owns that economy. Keep it outside the game's folder, and never paste it
-  anywhere.
+- The key file an economy goes live with owns that economy until it hands it to another key (`xcore loot handover`,
+  which both keys sign). Keep it outside the game's folder, and never paste it anywhere. For real money, a browser
+  wallet that keeps its key on a hardware device is the safer owner (docs/ECONOMY.md, "Going live").
 
 ## Third-party services
 

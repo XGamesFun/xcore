@@ -1,6 +1,6 @@
 // `xcore db info|query|export|import|restore`: the game's own database (gamesfun.json → database), on this machine
 // (the one `xcore dev` runs) or, with --live, on xgames.fun (../lib/db.mjs).
-import { guard, parse, printJson, UsageError, notOneOf } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, notOneOf, folderArg, verbNamed } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { dbExport, dbImport, dbInfo, dbQuery, dbRestore, importOf, liveChange, queryProblem } from '../lib/db.mjs';
 import { consented } from '../lib/consent.mjs';
@@ -15,6 +15,8 @@ const usage = `Usage: xcore db info [dir] [--live] [--json]
        xcore db export [dir] [--out <file>] [--live] [--json]
        xcore db import <file.sql> [dir] [--live [--yes <code>]] [--json]
        xcore db restore <time> [dir] --live [--yes <code>] [--json]
+
+The game's folder is the last word or --dir <folder> (default: the current directory).
 
 Work with the game's own database: one D1 database per game, added with ${CMD} add database (gamesfun.json →
 database).
@@ -87,16 +89,18 @@ export default {
           params: { type: 'string' },
           out: { type: 'string' },
           yes: { type: 'string' },
+          dir: { type: 'string' },
         },
         usage,
       );
-      const [verb, ...rest] = positionals;
+      const [word, ...rest] = positionals;
       const takes = { query: 'a statement', import: 'a file', restore: 'a time' };
       const verbs = ['info', 'query', 'export', 'import', 'restore'];
-      if (!verbs.includes(verb)) throw new UsageError(`${notOneOf(verb, verbs)}\n\n${usage}`);
+      const verb = verbNamed(word, verbs);
+      if (!verb) throw new UsageError(`${notOneOf(word, verbs)}\n\n${usage}`);
       if (takes[verb] && !rest[0]) throw new UsageError(`${verb} needs ${takes[verb]}\n\n${usage}`);
       const arg = takes[verb] ? rest[0] : null;
-      const dir = await resolveGame(takes[verb] ? rest[1] : rest[0]);
+      const dir = await resolveGame(folderArg(values.dir, takes[verb] ? rest[1] : rest[0], usage));
       const live = !!values.live;
       const where = live ? `${shown(dir)}'s database on xgames.fun` : `${shown(dir)}'s database on this machine`;
       const log = m => console.error(m);

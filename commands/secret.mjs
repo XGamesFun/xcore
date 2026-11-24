@@ -1,7 +1,7 @@
 // `xcore secret set|list|delete`: a game server's own secrets on xgames.fun (../lib/publish/secrets.mjs).
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { guard, parse, printJson, UsageError, notOneOf } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, notOneOf, folderArg, verbNamed } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { deleteSecret, listSecrets, setSecret } from '../lib/publish/secrets.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
@@ -16,7 +16,9 @@ import { secretNameProblem, secretValueProblem } from '../lib/server/secrets.mjs
 
 const usage = `Usage: xcore secret set <NAME> [dir] [--from-file <path> | --from-dev-vars | --new-key] [--yes <code>] [--json]
        xcore secret list [dir] [--json]
-       xcore secret delete <NAME> [dir] [--yes <code>] [--json]
+       xcore secret remove <NAME> [dir] [--yes <code>] [--json]
+
+The game's folder is the last word or --dir <folder> (default: the current directory). ls also means list, and rm or delete also mean remove.
 
 Store a secret for the game's server: a value the server needs and no player may see (a voucher-signing key, a
 third-party API key, an RPC URL that contains a key). The server reads it as env.<NAME>.
@@ -39,7 +41,7 @@ Commands:
                        stdin                when input is piped
                        a prompt             typed at the terminal (not shown)
   list               list the names (values are never shown)
-  delete <NAME>      remove a secret
+  remove <NAME>      remove a secret
 
 Confirming changes:
   A new name is set immediately. Replacing a name the server already has, or deleting one, cannot be undone:
@@ -133,16 +135,18 @@ export default {
           'from-dev-vars': { type: 'boolean' },
           'new-key': { type: 'boolean' },
           yes: { type: 'string' },
+          dir: { type: 'string' },
         },
         usage,
       );
-      const [verb, ...rest] = positionals;
-      const needsName = verb === 'set' || verb === 'delete';
-      if (!['set', 'list', 'delete'].includes(verb))
-        throw new UsageError(`${notOneOf(verb, ['set', 'list', 'delete'])}\n\n${usage}`);
-      if (needsName && !rest[0]) throw new UsageError(`${verb} needs a NAME\n\n${usage}`);
+      const [word, ...rest] = positionals;
+      const verbs = ['set', 'list', 'remove'];
+      const verb = verbNamed(word, verbs);
+      if (!verb) throw new UsageError(`${notOneOf(word, verbs)}\n\n${usage}`);
+      const needsName = verb === 'set' || verb === 'remove';
+      if (needsName && !rest[0]) throw new UsageError(`${word} needs a NAME\n\n${usage}`);
       const name = needsName ? rest[0] : null;
-      const dir = await resolveGame(needsName ? rest[1] : rest[0]);
+      const dir = await resolveGame(folderArg(values.dir, needsName ? rest[1] : rest[0], usage));
       const out = values.json ? printJson : null;
       if (verb === 'list') {
         const r = await listSecrets(dir);
@@ -155,7 +159,7 @@ export default {
           );
         return 0;
       }
-      if (verb === 'delete') {
+      if (verb === 'remove') {
         const bad = secretNameProblem(name);
         if (bad) throw new Error(bad);
         const { game, names } = await listSecrets(dir);

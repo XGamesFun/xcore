@@ -34,10 +34,10 @@ token, a flow a player taps through, or can't be undone:
 They hold at every step, so no step needs a rule of its own.
 
 - **Consent where it can't be undone.** Some commands print exactly what they would do with a code, send nothing, and
-  act only when run again with `--yes <code>`: `loot approve` (an economy going live), `coin launch`, a change to the
+  act only when run again with `--yes <code>`: `loot approve` (an economy going live), `loot handover` (a new owner key), `coin launch`, a change to the
   live database (`db query --write --live`, `db import --live`, `db restore --live`), replacing or deleting a secret
-  the live server has (`secret set` over an existing name, `secret delete`), and writing over or deleting a project
-  file xgames.fun has (`files put --live` over an existing path, `files rm --live`), and the first `publish` of a folder
+  the live server has (`secret set` over an existing name, `secret remove`), and writing over or deleting a project
+  file xgames.fun has (`files put --live` over an existing path, `files remove --live`), and the first `publish` of a folder
   (a new game on the account this computer is signed in to, in one of its slots). They move money, hand over keys,
   lose a key or a file for good, change players' data or take a slot, and none can be taken back by a command. Show the
   person the printout (for a first publish: the account, the game's name and the slot), and run it with the code only

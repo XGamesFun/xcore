@@ -224,9 +224,9 @@ test('every command that goes on only with --yes <code> is in the skill’s list
     'db import',
     'db restore',
     'secret set',
-    'secret delete',
+    'secret remove',
     'files put',
-    'files rm',
+    'files remove',
   ])
     assert.ok(gated.includes(named), `${named} asks for a code`);
 });

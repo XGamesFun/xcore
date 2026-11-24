@@ -165,7 +165,7 @@ loot's fees, randomness, and Metaplex's fee on new NFTs.
 
 - **The game's database** (D1, including the page's `GamesFun.db` documents): `xcore db export --live` writes all of
   it as SQL, and `xcore db import` loads it back.
-- **Project files:** `xcore files ls --live` and `xcore files get <path> --live`.
+- **Project files:** `xcore files list --live` and `xcore files get <path> --live`.
 - **Player saves and leaderboards** are kept by xgames.fun's player services, not in the game's database, so
   `xcore db export` does not include them. There is no bulk export for them yet. A game's own server can read them
   through `env.GF`: one player's saves at a time, and leaderboards in pages of up to 100 entries.

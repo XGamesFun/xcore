@@ -63,6 +63,7 @@
     "skills/",
     "types/",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {

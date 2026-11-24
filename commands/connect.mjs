@@ -11,6 +11,7 @@ import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { NO_SOLANA, solanaRoot } from '../lib/economy.mjs';
 import { CMD } from '../lib/command.mjs';
 import { ownWords } from './loot.mjs';
+import { onPath } from '../lib/browser.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const VERSION = JSON.parse(await readFile(path.join(ROOT, 'package.json'), 'utf8')).version;
@@ -75,15 +76,27 @@ async function solanaConnect(env = process.env) {
  * connect` runs it. `run(bin, args)` → {code, out} runs an agent's command (the kit's runAgent by default).
  * → {ok, dryRun, agents: [{agent, name, found, skill?: {dir, action}}], solana: {code, lines}, snippet}
  */
+/**
+ * What a dry run runs in place of an agent's program: nothing. `--version` answers whether the program is on PATH; any
+ * other command (`mcp get`, `mcp add`) answers as not done, so it is said as what would run.
+ */
+function dryRunner(present) {
+  return async (bin, args) => ({ code: args[0] === '--version' && present(bin) ? 0 : 1, out: '' });
+}
+
 export async function connectAgents({
   dryRun = false,
   scope = 'project',
   run,
   cwd = process.cwd(),
   env = process.env,
+  present = bin => Boolean(onPath(bin, { env })),
 } = {}) {
   const kit = await solanaConnect(env);
   if (!kit) throw Object.assign(new Error(NO_SOLANA), { code: 'no-solana' });
+  // A dry run starts no agent's program (an agent's first run can write its own settings, ~/.claude.json): an agent
+  // is found by its program on PATH, and every command is said, not run. A real run asks each program.
+  if (dryRun) run = dryRunner(present);
   run ??= kit.runAgent;
   const agents = [];
   for (const [id, a] of Object.entries(kit.AGENTS)) {
@@ -93,7 +106,16 @@ export async function connectAgents({
     }
     const dir = path.join(a.skills(scope, cwd), SKILL);
     const there = await skillFolder(dir);
-    const action = there === 'other' ? 'left' : there === 'ours' ? 'replaced' : 'copied';
+    const action =
+      there === 'other'
+        ? 'left'
+        : dryRun
+          ? there === 'ours'
+            ? 'would-replace'
+            : 'would-copy'
+          : there === 'ours'
+            ? 'replaced'
+            : 'copied';
     if (!dryRun && action !== 'left') {
       await mkdir(path.dirname(dir), { recursive: true });
       if (there === 'ours') await rm(dir, { recursive: true, force: true });
@@ -127,16 +149,16 @@ export default {
         const { dir, action } = a.skill;
         console.log(
           action === 'left'
-            ? `${a.name}: ${dir} is there already and is not xcore's ${SKILL} skill, so it was left as it is. Move it away, then run ${CMD} connect again.`
+            ? `${a.name}: ${dir} is there already and is not xcore's ${SKILL} skill, so it ${r.dryRun ? 'would be' : 'was'} left as it is. Move it away, then run ${CMD} connect again.`
             : r.dryRun
-              ? `${action === 'replaced' ? `replace the ${SKILL} skill at` : `copy skills/${SKILL} to`} ${dir}`
+              ? `${a.name}: would ${action === 'would-replace' ? `replace the ${SKILL} skill at` : `copy skills/${SKILL} to`} ${dir}`
               : `${a.name}: the ${SKILL} skill ${action === 'replaced' ? 'replaced' : 'copied'} at ${dir}.`,
         );
       }
       for (const line of r.solana.lines) console.log(line);
       if (r.agents.some(a => a.found))
         console.log(
-          `\n${scope === 'project' ? `Connected for ${process.cwd()} only (${CMD} connect --scope user for every project).` : 'Connected for every project of this user.'} These lines may go in a project's AGENTS.md or CLAUDE.md (${CMD} connect never writes them):\n\n${r.snippet}`,
+          `\n${r.dryRun ? `Nothing was changed: this was a dry run. Without --dry-run, it would connect ${scope === 'project' ? `${process.cwd()} only` : 'every project of this user'}.` : scope === 'project' ? `Connected for ${process.cwd()} only (${CMD} connect --scope user for every project).` : 'Connected for every project of this user.'} These lines may go in a project's AGENTS.md or CLAUDE.md (${CMD} connect never writes them):\n\n${r.snippet}`,
         );
       return r.ok ? 0 : 1;
     }, args),

@@ -36,11 +36,22 @@ changelog has the rest.
   and at most three next steps; `--verbose` prints the rest, as before. A script that read their text should read
   `--json`, which is unchanged and complete. Measured on sample games: `review` 35 lines to 13, `check` 25 to 8, `dev`
   8 to 4.
+- **`xcore review` takes a player's saves and the page's `GamesFun.db` documents as player input, never as state the
+  server keeps.** A PAY.check that paid on `body.score` and also read `env.GF.saves.get(…)` passed; it is now the
+  high finding `payout-input` (FAIL, exit code 1), as is a check that pays on a save alone. A check whose payout state
+  the server keeps decides is judged as before.
+- **Subcommands are named one way in every group.** `list` and `remove` are the names (`files ls` and `rm`, and
+  `secret delete`, still work as aliases), and the game's folder is the last word or `--dir <folder>` in `secret`,
+  `db`, `embed`, `domain`, `plan` and `coin` (`files` takes `--dir` only). A word that is no subcommand is a usage
+  mistake that names the subcommands, never "no such folder" (`xcore embed lst` said "lst: no such folder").
 - **Usage mistakes say what was wrong and exit with code 2**, followed by the command's usage lines (not its whole
   help). `xcore backend <word>` that is not a command, and a `--url` that is no address, exited with 1 and now exit
   with 2.
 
 **Added**
+
+- `xcore loot --help` lists every command of the installed `@xgamesfun/solana` (read from it, so `handover` is
+  there), and `xcore loot <command> --help` is that command's own help.
 
 - [docs/FEES.md](docs/FEES.md): every cost in one table (hosting, the $15 paid slot and what it includes, usage
   credit, coin launches, loot's fees, randomness, Metaplex), and docs/HOSTING.md's "Your game's data, and getting it
@@ -77,6 +88,16 @@ changelog has the rest.
   plain English with every fact kept. `xcore review` is described as a pattern-based check, not a security audit.
 
 **Fixed**
+
+- `xcore connect --dry-run` starts no agent's program (it ran `claude --version` and `claude mcp get`, which can write
+  `~/.claude.json`) and says each step as what it would do (`"action": "would-copy"`).
+- The key file owns an economy until it hands it over with `xcore loot handover` (0.29.12); docs/ECONOMY.md,
+  docs/DISCLAIMER.md and `xcore loot` said it owned it permanently. For real money, the docs name a browser wallet
+  that keeps its key on a hardware device as the safer owner, as `@xgamesfun/solana`'s README does.
+- `xcore adopt` finds a literal address the code calls (`fetch`, `XMLHttpRequest.open`, `WebSocket`, `EventSource`,
+  `sendBeacon`) even at a host it otherwise ignores as noise (`fetch('https://api.example.com/score')`).
+- The full-screen hint gives the direct fix (`element.requestFullscreen()` from a click) before the client's.
+- CHANGELOG.md is in the package.
 
 - Sign-in is X or Google, as the client does it; a Solana wallet linked to the account comes with the sign-in. The
   README and `xcore add --help` said "X first, or a wallet".

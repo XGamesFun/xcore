@@ -347,7 +347,7 @@ if (world.ok) state = new Uint8Array(await new Response(world.body).arrayBuffer(
 - **From your machine**: `xcore files put <file> [path] [--public]`, `ls`, `get`, `rm`, `usage`. Add `--live` to work
   on the game's files on xgames.fun.
 - xgames.fun keeps one copy of each file and no earlier versions. So overwriting a file it has (`put --live` to an
-  existing path) or deleting one (`rm --live`) first prints what would be lost, with a code, and changes nothing. Run
+  existing path) or deleting one (`remove --live`) first prints what would be lost, with a code, and changes nothing. Run
   it again with `--yes <code>` to go ahead. A new path is written immediately, and so is every change to the local
   files.
 - **Locally**, `xcore dev` keeps project files in `.gamesfun/dev/files/` (never published). It serves the public ones
@@ -366,7 +366,7 @@ contains a key. The server reads it as `env.<NAME>`.
 ```sh
 xcore secret set VOUCHER_SEED --from-file ../voucher-seed.txt   # or piped in, or typed (not shown)
 xcore secret list                                               # the names; values are never shown again
-xcore secret delete VOUCHER_SEED
+xcore secret remove VOUCHER_SEED
 ```
 
 - xgames.fun keeps the value only on the server's host (Cloudflare). It never stores or shows the value itself, and

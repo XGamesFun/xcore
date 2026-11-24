@@ -1,5 +1,5 @@
 // `xcore embed`: the sites of your own that may show the published game in a frame (../lib/publish/site.mjs).
-import { guard, parse, printJson, UsageError, tooMany } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, tooMany, folderArg, verbOrFolder } from '../lib/cli.mjs';
 import { resolveGame } from '../lib/games.mjs';
 import { changeEmbed, describeSite, embedSnippet, gameSite, playUrl } from '../lib/publish/site.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
@@ -8,6 +8,8 @@ import { CMD } from '../lib/command.mjs';
 const usage = `Usage: xcore embed [list] [dir] [--json]
        xcore embed add <site> [dir] [--json]
        xcore embed remove <site> [dir] [--json]
+
+The game's folder is the last word or --dir <folder> (default: the current directory). ls also means list, and rm or delete also mean remove.
 
 Allow your own sites to show the published game in a frame (an <iframe> in your page), in addition to xgames.fun
 and posts on X.
@@ -31,14 +33,12 @@ export default {
   usage,
   run: args =>
     guard(async () => {
-      const { values, positionals } = parse(args, {}, usage);
-      const verbs = ['list', 'add', 'remove'];
-      const verb = verbs.includes(positionals[0]) ? positionals[0] : 'list';
-      const rest = verbs.includes(positionals[0]) ? positionals.slice(1) : positionals;
+      const { values, positionals } = parse(args, { dir: { type: 'string' } }, usage);
+      const { verb, rest } = verbOrFolder(positionals, ['list', 'add', 'remove'], 'list', usage);
       const needs = verb !== 'list';
       if (needs && !rest[0]) throw new UsageError(`${verb} needs a site, like https://mygame.com\n\n${usage}`);
       if (rest.length > (needs ? 2 : 1)) throw new UsageError(`${tooMany(rest.slice(needs ? 2 : 1))}\n\n${usage}`);
-      const dir = await resolveGame(needs ? rest[1] : rest[0]);
+      const dir = await resolveGame(folderArg(values.dir, needs ? rest[1] : rest[0], usage));
       const out = values.json ? printJson : null;
       const origin = studioOrigin();
       if (verb === 'list') {

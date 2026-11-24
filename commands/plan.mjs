@@ -1,5 +1,5 @@
 // `xcore plan`: a game's backend plan on xgames.fun (../lib/publish/plans.mjs).
-import { guard, parse, printJson, UsageError, tooMany } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, tooMany, folderArg, verbOrFolder } from '../lib/cli.mjs';
 import { resolveGame } from '../lib/games.mjs';
 import { accountPlan, describeAccount, describeGame, gamePlan, setActive } from '../lib/publish/plans.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -8,6 +8,8 @@ const usage = `Usage: xcore plan [dir] [--json]
        xcore plan --all [--json]
        xcore plan activate [dir] [--json]
        xcore plan deactivate [dir] [--json]
+
+The game's folder is the last word or --dir <folder> (default: the current directory).
 
 Show what a game's backend may use on xgames.fun (its server, saves and scores), and what it used this month.
 
@@ -45,11 +47,12 @@ export default {
   usage,
   run: args =>
     guard(async () => {
-      const { values, positionals } = parse(args, { all: { type: 'boolean' } }, usage);
-      const [first, second] = positionals;
-      const verb = first === 'activate' || first === 'deactivate' ? first : null;
-      if (positionals.length > (verb ? 2 : 1))
-        throw new UsageError(`${tooMany(positionals.slice(verb ? 2 : 1))}\n\n${usage}`);
+      const { values, positionals } = parse(args, { all: { type: 'boolean' }, dir: { type: 'string' } }, usage);
+      const { verb, rest } = verbOrFolder(positionals, ['activate', 'deactivate'], null, usage);
+      if (rest.length > 1) throw new UsageError(`${tooMany(rest.slice(1))}\n\n${usage}`);
+      const [first, second] = verb
+        ? [verb, folderArg(values.dir, rest[0], usage)]
+        : [folderArg(values.dir, rest[0], usage)];
       const out = values.json ? printJson : null;
       const plain = e => {
         if (e?.status === 404)

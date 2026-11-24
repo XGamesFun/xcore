@@ -1,5 +1,5 @@
 // `xcore domain`: the game served on a domain of your own, like play.mygame.com (../lib/publish/site.mjs).
-import { guard, parse, printJson, UsageError, tooMany } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, tooMany, folderArg, verbOrFolder } from '../lib/cli.mjs';
 import { resolveGame } from '../lib/games.mjs';
 import { changeDomain, describeDomain, describeSite, gameSite } from '../lib/publish/site.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
@@ -10,6 +10,8 @@ const usage = `Usage: xcore domain [list] [dir] [--json]
        xcore domain add <domain> [dir] [--json]
        xcore domain check <domain> [dir] [--json]
        xcore domain remove <domain> [dir] [--json]
+
+The game's folder is the last word or --dir <folder> (default: the current directory). ls also means list, and rm or delete also mean remove.
 
 Serve the published game on your own domain (play.mygame.com) in addition to its xgames.fun link.
 
@@ -47,14 +49,12 @@ export default {
   usage,
   run: args =>
     guard(async () => {
-      const { values, positionals } = parse(args, {}, usage);
-      const verbs = ['list', 'add', 'check', 'remove'];
-      const verb = verbs.includes(positionals[0]) ? positionals[0] : 'list';
-      const rest = verbs.includes(positionals[0]) ? positionals.slice(1) : positionals;
+      const { values, positionals } = parse(args, { dir: { type: 'string' } }, usage);
+      const { verb, rest } = verbOrFolder(positionals, ['list', 'add', 'check', 'remove'], 'list', usage);
       const needs = verb !== 'list';
       if (needs && !rest[0]) throw new UsageError(`${verb} needs a domain, like play.mygame.com\n\n${usage}`);
       if (rest.length > (needs ? 2 : 1)) throw new UsageError(`${tooMany(rest.slice(needs ? 2 : 1))}\n\n${usage}`);
-      const dir = await resolveGame(needs ? rest[1] : rest[0]);
+      const dir = await resolveGame(folderArg(values.dir, needs ? rest[1] : rest[0], usage));
       const out = values.json ? printJson : null;
       const origin = studioOrigin();
       if (verb === 'list') {

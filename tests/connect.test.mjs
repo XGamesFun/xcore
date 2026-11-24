@@ -44,13 +44,20 @@ test('connect --scope user: the skill copied for each agent found, the solana ki
   const { connectAgents, SNIPPET } = await import('../commands/connect.mjs');
   const { runAgent, calls } = agents(['claude']);
 
-  // a dry run: says what it would copy and the commands it would run, and changes nothing
-  let r = await connectAgents({ dryRun: true, scope: 'user', run: runAgent, cwd: project });
+  // a dry run: says what it would copy and the commands it would run, runs no agent's program, and changes nothing
+  let r = await connectAgents({
+    dryRun: true,
+    scope: 'user',
+    run: runAgent,
+    present: bin => bin === 'claude',
+    cwd: project,
+  });
   assert.equal(r.ok, true);
+  assert.deepEqual(calls, [], "a dry run starts no agent's program");
   const claude = r.agents.find(a => a.agent === 'claude');
   assert.deepEqual(claude.skill, {
     dir: path.join(home, '.claude', 'skills', 'bring-your-own-game'),
-    action: 'copied',
+    action: 'would-copy',
   });
   assert.equal(r.agents.find(a => a.agent === 'codex').found, false);
   // the MCP server's command, as it is registered (not said as `xcore loot mcp`)

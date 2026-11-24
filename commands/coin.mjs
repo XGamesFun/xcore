@@ -1,6 +1,6 @@
 // `xcore coin`: a coin that trades for a published game (../lib/coin.mjs): where it stands, launching one with a key
 // file, and giving up a launch that was never sent.
-import { guard, parse, UsageError, tooMany } from '../lib/cli.mjs';
+import { guard, parse, UsageError, tooMany, folderArg, verbOrFolder } from '../lib/cli.mjs';
 import { resolveGame, named } from '../lib/games.mjs';
 import {
   ABOUT_SOL,
@@ -23,6 +23,8 @@ const usage = `Usage: xcore coin [game] [--cluster devnet|mainnet] [--json]
                          [--venue meteora|pumpfun] [--pair <SYMBOL>] [--description <text>] [--cluster devnet|mainnet]
                          [--yes <code>] [--json]
        xcore coin drop [game] [--cluster devnet|mainnet] [--json]
+
+The game's folder is the last word or --dir <folder> (default: the current directory).
 
 Launch a tradable coin for a game published on xgames.fun.
 
@@ -151,12 +153,11 @@ export default {
           keypair: { type: 'string' },
           yes: { type: 'string' },
           cluster: { type: 'string' },
+          dir: { type: 'string' },
         },
         usage,
       );
-      const verbs = ['launch', 'drop', 'status'];
-      const verb = verbs.includes(positionals[0]) ? positionals[0] : 'status';
-      const rest = verbs.includes(positionals[0]) ? positionals.slice(1) : positionals;
+      const { verb, rest } = verbOrFolder(positionals, ['launch', 'drop', 'status'], 'status', usage);
       if (rest.length > 1) throw new UsageError(`${tooMany(rest.slice(1))}\n\n${usage}`);
       const symbol = values.ticker ?? values.symbol;
       if (verb === 'launch')
@@ -167,7 +168,7 @@ export default {
           ['--keypair', values.keypair],
         ])
           if (!value?.trim()) throw new UsageError(`launch needs ${flag}\n\n${usage}`);
-      const dir = await resolveGame(rest[0]);
+      const dir = await resolveGame(folderArg(values.dir, rest[0], usage));
       const game = named(dir);
       const out = values.json ? v => process.stdout.write(safeJson(v) + '\n') : null;
 

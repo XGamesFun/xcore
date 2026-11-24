@@ -94,7 +94,8 @@ back is an extra confirmation on top of the setting in the file.
 Before you approve, send the address that `keygen` printed the devnet SOL that `xcore loot cost` names. If the setup
 takes a coin or NFT from you, that must be at the address first too.
 
-**The key file owns the project permanently.**
+**The key file owns the project** until it hands the project to another key with `xcore loot handover`, which both
+keys sign.
 
 - Whoever can read it controls the project, and every later change is signed with it.
 - Nothing can restore a lost key file.
@@ -104,9 +105,16 @@ takes a coin or NFT from you, that must be at the address first too.
 - Unless `xsolana.json` names a `treasury`, what the economy earns for you goes to the key's address.
 
 Why a key file: it is a new key that has never held anything else, so the wallet that holds your assets is never
-connected. It also signs each transaction exactly as shown, with no web page involved. To sign with a browser wallet
-instead, run `xcore loot approve --browser` yourself and approve on the page it serves. Once an economy is live, only
-the key that owns it can change it.
+connected. It also signs each transaction exactly as shown, with no web page involved. The cost: it is a plain file,
+so anything on your machine that can read it can sign as the project.
+
+To sign with a browser wallet instead, run `xcore loot approve --browser` yourself and approve on the page it serves.
+**For real money (mainnet), that is the safer choice:** the wallet that goes live owns the project, and a browser
+wallet can keep its key on a hardware device (a Ledger, for example) instead of in a plain file. The tools have not
+been tested with a hardware wallet.
+
+Once an economy is live, only the key that owns it can change it, and `xcore loot handover` moves ownership to another
+key (both keys sign, as the program requires).
 
 The economy's reads go through xgames.fun's shared relay. Going live does not: the relay passes only loot's own
 transactions, and a setup also creates mints and token accounts. So `approve` sends through `XSOLANA_RPC_URL` when it is
