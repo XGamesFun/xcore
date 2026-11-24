@@ -56,7 +56,7 @@ They hold at every step, so no step needs a rule of its own.
 
 **Say in your own words**, keeping every number, everything a command prints for the person. Three kinds of fact go
 **as written**, because a paraphrase can overclaim: what a cheater gets and the key-leak ceiling (review), and the legal
-flags. Pass on each "Ask the person" question before building on its answer. Say only what you know: an economy is not
+flags. Ask the person each of review's "Questions to decide" before building on its answer. Say only what you know: an economy is not
 legal, safe, an investment or ready for real money because you say so.
 
 ## 1. Adopt and fix
@@ -80,7 +80,7 @@ offer a button: [references/sign-in-saves-rooms.md](references/sign-in-saves-roo
 
 `xcore check <folder>` serves the game as xgames.fun does and runs it in Chrome, including inside the play page's
 sandboxed frame. Open the screenshots in `evidence/verify-N/` and look at them. Read its "First session" walk (a
-first-time player on a phone: taps, sign-in, wallet, waits) and pass its lines to the person; when the walk can't
+first-time player on a phone: taps, sign-in, wallet, waits) and pass its "In short" lines to the person; when the walk can't
 reach the first reward, declare the path in `gamesfun.json` (`"journey": [{"tap": "<css selector>"} | {"wait": ms}]`)
 and check again.
 
@@ -125,8 +125,11 @@ part alone).
 - Fix every high finding and run it again. Mediums are the person's to decide with you: say each one plainly.
 - Declare each voucher grant's `trust` as what `PAY.check` really does
   ([references/server-and-payouts.md](references/server-and-payouts.md), "Review: trust levels").
-- review.md opens with "Tell the person, as written" (what a cheater gets, the key-leak ceiling: say these as written)
-  and "Ask the person" (ask before building on the answers). A bounded result is capped, not safe.
+- review.md opens with "Questions to decide" (`? ` lines, `ask` in review.json: ask the person each one before
+  building on the answer) and "What this build allows" (`> ` lines, `tell` in review.json: what a cheater gets, the
+  key-leak ceiling). Tell the person every "What this build allows" line as written, in your answer and not only in
+  notes, and show them the trade-offs section at its end so they choose the level. A bounded result is capped, not
+  safe.
 - Confirm each draft in its "Design and code" (`offchain`, `serverLimit`) with the person, add the confirmed ones to
   `xsolana.json`, and run `xcore loot check` again: a loop through the server shows only once it is declared.
 

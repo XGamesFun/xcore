@@ -407,7 +407,7 @@ test(
     assert.deepEqual(JSON.parse(await readFile(path.join(out, 'record.json'), 'utf8')).firstSession.tell, w.tell);
     const at = lines.indexOf('First session (as a first-time player on a phone, in the play frame):');
     assert.ok(at > 0, lines.join('\n'));
-    assert.ok(lines.slice(at).includes('  Tell the person:'), lines.slice(at).join('\n'));
+    assert.ok(lines.slice(at).includes('  In short:'), lines.slice(at).join('\n'));
   },
 );
 

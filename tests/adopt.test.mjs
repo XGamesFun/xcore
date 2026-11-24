@@ -297,7 +297,7 @@ test('a page that calls its own api/ with no server/ is a fix, naming the progra
   );
   assert.match(
     r.fix.find(f => /calls api\//.test(f.what)).fix,
-    /server\/[\s\S]*backend use custom[\s\S]*WebAssembly[\s\S]*Ask the person/,
+    /server\/[\s\S]*backend use custom[\s\S]*WebAssembly[\s\S]*large change/,
   );
   assert.match(fix, /web\/api\.js:4 loads \/assets\/hero\.png from the root, in a script/);
   assert.match(fix, /web\/index\.html:\d+ has an import map entry \/vendor\/three\.module\.js from the root/);

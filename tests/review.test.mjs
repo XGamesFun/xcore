@@ -143,14 +143,14 @@ test('the two sample servers: no server finding in either; the economy review of
   assert.match(d.tradeoffs[0].cheater, /a bot that plays well/);
   const md = await readFile(path.join(b.outDir, 'review.md'), 'utf8');
   for (const h of [
-    '# Security review: bounded',
+    '# Payout and key review: bounded',
     '## Findings',
     '## Economy',
     '## Server',
     '### Payouts: the ledger',
     '### Keys: where each one is',
     '## Live',
-    '## For the person',
+    '## What a cheater gets, and the trade-offs',
   ])
     assert.ok(md.includes(h), h);
   assert.ok(md.trimEnd().endsWith('trust-and-cheating.md.'), 'it ends with the guide');
@@ -1196,7 +1196,7 @@ test('publish says to run the review when a game that pays through vouchers chan
   assert.doesNotMatch(run(['publish', plain, '--check']).stderr, /review has not run/);
 });
 
-// ---- For the person: "Ask the person" and "Tell the person, as written" -------------------------------------------
+// ---- For the owner: "Questions to decide" and "What this build allows" -------------------------------------------------
 
 const FROM = ['economy', 'server', 'design', 'custody', 'plan'];
 /** Each line is {text, from}: a sentence, and one of the four sources. */
@@ -1246,24 +1246,27 @@ test('the sample bounded server: a Tell line names its ceiling and what a leaked
   assert.deepEqual(json.tell, r.tell);
   const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
   const at = h => md.indexOf(h);
-  assert.ok(at('## Ask the person') > at('**PASS**'), 'after the summary');
-  assert.ok(at('## Tell the person, as written') > at('## Ask the person'));
-  assert.ok(at('## Findings') > at('## Tell the person, as written'), 'before the findings');
+  assert.ok(at('## Questions to decide') > at('**PASS**'), 'after the summary');
+  assert.ok(at('## What this build allows') > at('## Questions to decide'));
+  assert.ok(at('## Findings') > at('## What this build allows'), 'before the findings');
   const block = (from, to) => md.slice(at(from), at(to));
   for (const x of r.ask)
-    assert.ok(block('## Ask the person', '## Tell the person').includes(`\n? ${x.text}\n`), x.text);
-  for (const x of r.tell) assert.ok(block('## Tell the person', '## Findings').includes(`\n> ${x.text}\n`), x.text);
+    assert.ok(block('## Questions to decide', '## What this build allows').includes(`\n? ${x.text}\n`), x.text);
+  for (const x of r.tell)
+    assert.ok(block('## What this build allows', '## Findings').includes(`\n> ${x.text}\n`), x.text);
 
-  // the command: the counts, and to pass them on as written
+  // the command: the counts, and where both lists are
   const c = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
   assert.match(
     c.stdout,
     new RegExp(
-      `^ask the person: ${r.ask.length} questions? \\(\\d+ from the economy\\); tell the person: ${r.tell.length} sentences? `,
+      `^questions to decide: ${r.ask.length} \\(\\d+ from the economy\\); facts about this build: ${r.tell.length} `,
       'm',
     ),
   );
-  assert.match(c.stdout, /^Pass them on as written: review\.md's "Tell the person, as written" lines/m);
+  assert.match(c.stdout, /^review\.md lists both: "Questions to decide" \("\? "\) and "What this build allows"/m);
+  // written to the person reading it, not to an agent
+  assert.doesNotMatch(c.stdout, /(Tell|Ask|For) the person|Tell them|Pass them on/);
   // the questions themselves, on screen: an agent that reads only the summary still sees them
   assert.ok(r.ask.length > 0);
   for (const x of r.ask) assert.ok(c.stdout.includes(`\n  ? ${x.text}\n`), x.text);
@@ -1704,7 +1707,7 @@ test('every result says how it was read and what a PASS means: the same lines on
     assert.ok(md.includes(`\n- ${line}\n`), line);
     assert.ok(c.stdout.includes(`\n  ${line}\n`), line);
   }
-  assert.ok(md.indexOf(METHOD[0]) < md.indexOf('## Ask the person'), 'under the verdict, before anything else');
+  assert.ok(md.indexOf(METHOD[0]) < md.indexOf('## Questions to decide'), 'under the verdict, before anything else');
   assert.match(md, /^\*\*PASS\*\*: 0 high, .* info\. No high finding\.$/m);
   assert.deepEqual(JSON.parse(run(['review', dir, '--json'], { env: { GAMESFUN_SOLANA: '' } }).stdout).method, METHOD);
   // a count says what it counts: one route, one key

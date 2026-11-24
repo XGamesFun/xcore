@@ -102,7 +102,7 @@ test('a claim multiplied by a boost a code lookup gives, with no offchain: code-
   );
   const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
   assert.match(md, /## Design and code/);
-  assert.match(md, /\*\*Drafted from code: confirm each with the person before adding\.\*\*/);
+  assert.match(md, /\*\*Drafted from code: confirm each before adding\.\*\*/);
   const json = JSON.parse(/```json\n([\s\S]*?)\n```/.exec(md.slice(md.indexOf('## Design and code')))[1]);
   assert.deepEqual(json.offchain, [f.draft]);
   const saved = JSON.parse(await readFile(path.join(r.outDir, 'review.json'), 'utf8'));
