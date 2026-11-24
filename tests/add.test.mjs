@@ -755,6 +755,15 @@ test('a client copy from an older xcore is named, and add signin brings it up to
   await addSignin(web);
   await writeFile(path.join(web, 'gamesfun.js'), '// an older copy');
   assert.deepEqual(await staleClient(web), ['gamesfun.js']);
+  // the same gamesfun.js, not minified (as xcore before 0.12.0 copied it): current, not stale
+  await writeFile(path.join(web, 'gamesfun.js'), await readFile(path.join(ROOT, 'lib/client/gamesfun.js'), 'utf8'));
+  assert.deepEqual(await staleClient(web), []);
+  const unminified = (await readFile(path.join(ROOT, 'lib/client/godot/gamesfun.gd'), 'utf8')).replace(
+    '__GAMESFUN_SOURCE_B64__',
+    Buffer.from(await readFile(path.join(ROOT, 'lib/client/gamesfun.js'), 'utf8')).toString('base64'),
+  );
+  await writeFile(gd, unminified);
+  assert.deepEqual(await staleClient(godot), []);
 });
 
 test('a Godot project with no Web export gets a single-threaded Web preset, once', async t => {
