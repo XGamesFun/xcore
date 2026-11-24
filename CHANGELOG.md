@@ -42,6 +42,16 @@ Readability and accuracy, and fixes, from two outside reviews. No price or limit
   upload count names the two records xcore adds.
 - **Changed: npx examples name the version** (`npx -y @xgamesfun/xcore@0.11.0`), and so does the command xcore prints
   when it runs through npx. `scripts/pin-version.mjs` updates them at a release, and a test fails while one is stale.
+- **Changed: `check`, `review` and `dev` print a short result by default**: a verdict, one line per finding, and at
+  most three next steps; `--verbose` prints the rest. `review` on a sample game went from 35 lines (7,691 characters)
+  to 13 (849); its paragraph on how it reads is in `--verbose`, review.md and `--json`. `check` went from 25 lines to
+  8, with the first-session walk in one line; `dev`'s start from 8 lines to 4. adopt's "Next:" is three short steps.
+- **Changed: the database's page API is named `GamesFun.db` everywhere** (output, docs, the server files xcore
+  writes); `gf` in examples is the same object (`const gf = GamesFun`), as CLIENT.md says once.
+- **Changed: the `gamesfun.js` copied into a game is minified** by esbuild (132 KB to 47 KB; 17 KB gzipped), with a
+  banner naming its version and the readable source, which the package keeps. It sets the same global and calls,
+  in a web page and inside Godot's and Unity's glue. An older, unminified copy is out of date: `xcore add signin`
+  again replaces it.
 - **Changed: `xcore add` and `xcore loot add` print a short result**: what was written and the next steps (two to
   five lines). `--verbose` prints every note, as before; `--json` has both (`next`, `steps`).
 - **Changed: every usage mistake says what was wrong** (`xcore add bogus`: `"bogus" is not something xcore can add`),
@@ -50,10 +60,10 @@ Readability and accuracy, and fixes, from two outside reviews. No price or limit
 - **Changed: `.dev.vars` is git-ignored as soon as xcore uses it.** `xcore add vouchers` (the test seed) and
   `xcore add rpc` (an RPC URL with its key) add `.dev.vars` to the folder's `.gitignore`, writing one if needed, and
   say so in one line. Before, they did so only in a folder that was already in git.
-- **Changed: the README and `--help` no longer promote the unreleased game-making kit**; the Names table says what it
-  is in one line, and defines Studio. docs/FEES.md lists what a paid slot includes beyond hosting.
-- **Changed: a project install prints `npx @xgamesfun/xcore`, never `npx xcore`.** The unscoped `xcore` on npm is
-  another package.
+- **Changed: the README and `--help` no longer mention the unreleased game-making kit**; the Names table defines
+  Studio. docs/FEES.md lists what a paid slot includes beyond hosting.
+- **Changed: a project install prints `npx -y @xgamesfun/xcore@<its version>`, never `npx xcore`.** The unscoped
+  `xcore` on npm is another package; the version is the installed package's, as the README's examples pin it.
 - **Changed: no message tells you to install `@xgamesfun/kit`.** A kit command, or a game made with the kit, now says
   the game-making kit is not released yet.
 - **Changed: output is written to the person reading it.** `xcore check`'s first-session walk ends with "In short";

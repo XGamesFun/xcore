@@ -20,7 +20,7 @@ It prints what it wrote and the next steps in short; --verbose prints every note
                xgames.fun by the first publish (gamesfun.json → database).
                - With its own server, the game's code reads and writes it (server/gf-db.js; tables come from
                  server/migrations/).
-               - Without one, xcore's stock server stores the page's documents in it (gf.db), each player's own,
+               - Without one, xcore's stock server stores the page's documents in it (GamesFun.db), each player's own,
                  under gamesfun.json → database.collections.
                xcore db queries, exports and restores it.
   multiplayer  Everything signin adds, plus rooms for the game: server code (server/rooms.js) that relays messages

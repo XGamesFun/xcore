@@ -679,12 +679,12 @@ and, for a game with no server, the documents its page saves.
 }
 ```
 
-| Field         | Rule                                                                                                                                                                                                                                                                                                             |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `engine`      | `"d1"`, the only option.                                                                                                                                                                                                                                                                                         |
-| `binding`     | Default `"DB"`: its name on `env`. The same rules as a Durable Object's binding (A–Z, 0–9 and `_`, not `GF` or `GF_…`), and it must not clash with one of them.                                                                                                                                                  |
-| `migrations`  | Default `"server/migrations"`, a folder inside `server/` (never a public file). Files are named like `0001_init.sql`, `0002_add_guilds.sql`: four digits, `_`, lowercase words. At most 200 files, 1 MB each, and no statement over D1's 100,000 bytes.                                                          |
-| `collections` | Who may read and write each collection of the page's documents (`gf.db`, at `api/db/`). Enforced by the stock server, or by `server/gf-docs.js` in a server of your own (below). `read`: `"owner"` or `"anyone"`; `write`: `"owner"` or `"server"`. Without it, each player's documents are their own, as `"*"`. |
+| Field         | Rule                                                                                                                                                                                                                                                                                                                   |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `engine`      | `"d1"`, the only option.                                                                                                                                                                                                                                                                                               |
+| `binding`     | Default `"DB"`: its name on `env`. The same rules as a Durable Object's binding (A–Z, 0–9 and `_`, not `GF` or `GF_…`), and it must not clash with one of them.                                                                                                                                                        |
+| `migrations`  | Default `"server/migrations"`, a folder inside `server/` (never a public file). Files are named like `0001_init.sql`, `0002_add_guilds.sql`: four digits, `_`, lowercase words. At most 200 files, 1 MB each, and no statement over D1's 100,000 bytes.                                                                |
+| `collections` | Who may read and write each collection of the page's documents (`GamesFun.db`, at `api/db/`). Enforced by the stock server, or by `server/gf-docs.js` in a server of your own (below). `read`: `"owner"` or `"anyone"`; `write`: `"owner"` or `"server"`. Without it, each player's documents are their own, as `"*"`. |
 
 **Migrations are append only.**
 
@@ -743,7 +743,7 @@ if (db) return db;
   (`docsOf(env).put('news', 'today', {…})`).
 - A game that used the stock server keeps its documents and rules when it gets a server of its own:
   `xcore add multiplayer` writes the rules it had into `collections`, and `server/gf-docs.js` serves them.
-- Publish refuses a game whose block has `collections` while its server does not route `api/db/` (every `gf.db` call
+- Publish refuses a game whose block has `collections` while its server does not route `api/db/` (every `GamesFun.db` call
   would return 404), and explains how to fix it.
 
 That check reads only the text of the files in `server/` (not `server/gf-docs.js` or `server/database.js`), looking for
@@ -896,7 +896,7 @@ sockets close.
   returns 451.
 
 While the game's owner has it **paused for maintenance** (xgames.fun/console, the Live tab;
-[CLIENT.md](CLIENT.md#live-settings-gflive)), xgames.fun answers its `api/*` itself with
+[CLIENT.md](CLIENT.md#live-settings-gamesfunlive)), xgames.fun answers its `api/*` itself with
 `503 {ok: false, code: 'maintenance', why, since}` and `retry-after: 60`, WebSocket upgrades included. The server's
 code does not run for new requests. Whatever is already running keeps running (an open WebSocket, a Durable Object's
 alarm, the `env.GF` calls they make). A server that should stop those can read the game's `GET /platform/v1/live`

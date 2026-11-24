@@ -13,7 +13,7 @@ GDScript and C#. For the game's own server code, see [SERVER.md](SERVER.md).
 - [Leaderboards](#leaderboards)
 - [Full screen](#full-screen)
 - [A wallet app, for a claim](#a-wallet-app-for-a-claim)
-- [Live settings: `gf.live`](#live-settings-gflive)
+- [Live settings: `GamesFun.live`](#live-settings-gamesfunlive)
 - [The database: `GamesFun.db`](#the-database-gamesfundb)
 - [Rooms: `xcore add multiplayer`](#rooms-xcore-add-multiplayer)
 - [The economy: `GamesFun.loot` and `gf/loot/`](#the-economy-gamesfunloot-and-gfloot)
@@ -27,6 +27,9 @@ GDScript and C#. For the game's own server code, see [SERVER.md](SERVER.md).
 | A web game        | `gamesfun.js` next to the page (in the folder the build copies unchanged), loaded first in `index.html` | `await GamesFun.signIn()`, `GamesFun.saves.put('main', {...})`     |
 | A Godot 4 project | `addons/gamesfun/gamesfun.gd`, autoloaded as `GamesFun`                                                 | `await GamesFun.sign_in()`, `await GamesFun.saves_put("main", {})` |
 | A Unity project   | `Assets/Plugins/GamesFun/` (`GamesFun.jslib`, `GamesFun.cs`)                                            | `await GamesFun.SignIn()`, `await GamesFun.SavesPut("main", json)` |
+
+`gamesfun.js` sets one global, `GamesFun`. Examples that start with `const gf = GamesFun;` use `gf` as a short name
+for the same object, so `gf.db` and `GamesFun.db` are the same call.
 
 All three have the same calls:
 
@@ -325,7 +328,7 @@ claimButton.onclick = () => {
 there is no play page and no xgames.fun, so `canOpenWallet()` is `null` and `openWallet` returns `no-page`. Test the
 fallback locally, and the wallet app on xgames.fun.
 
-## Live settings: `gf.live`
+## Live settings: `GamesFun.live`
 
 Announcements, remote config and maintenance mode, without republishing. On xgames.fun/console, a game's **Live** tab
 sets three things. Players get changes within about 35 seconds. xgames.fun's play edge serves them from one cached

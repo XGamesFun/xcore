@@ -210,7 +210,7 @@ has behind it, so you can run the whole game before you publish:
   - a Sign out that persists (`session/forget`);
   - Sign in's round trip to X or Google (`x/begin`, `google/begin`);
   - the sign-in client at `/platform/v1/signin/v1.js`.
-- **`/platform/v1/live`**: the game's live settings ([`gf.live`](CLIENT.md#live-settings-gflive)): its announcement,
+- **`/platform/v1/live`**: the game's live settings ([`GamesFun.live`](CLIENT.md#live-settings-gamesfunlive)): its announcement,
   config and maintenance mode, from `.gamesfun/live.json` (read again on each request, never published). With
   maintenance on, the game's pages show the holding page, and its `api/` and `/platform/v1/*` answer `503` with code
   `maintenance`, as they do when hosted.

@@ -90,7 +90,7 @@ project and a Unity project.
   Objects, its own secrets, and `env.GF` (sign-in, saves, scores, loot reports). Use it for a leaderboard nobody can
   write to from the browser console, or a result that pays out. [docs/SERVER.md](docs/SERVER.md)
 - **Live settings:** an announcement, remote config and maintenance mode, set from xgames.fun/console without
-  republishing. [docs/CLIENT.md](docs/CLIENT.md#live-settings-gflive)
+  republishing. [docs/CLIENT.md](docs/CLIENT.md#live-settings-gamesfunlive)
 - **Project files:** `xcore files`. Replays, generated levels and content packs that the game's server writes and its
   page loads. [docs/COMMANDS.md](docs/COMMANDS.md#files)
 - **Your own backend:** `xcore backend use custom`. Any public `https://` or `wss://` origin the page needs to reach.
@@ -198,7 +198,6 @@ Reasons and alternatives: [docs/HOSTING.md](docs/HOSTING.md#what-is-not-supporte
 | **solana-kit**        | The GitHub repository of `@xgamesfun/solana` ([XGamesFun/solana-kit](https://github.com/XGamesFun/solana-kit)).              | No: source and docs only.   |
 | **loot**              | The shared Solana program every economy runs on, so you deploy no contract of your own. Not independently audited.           | Only for an economy.        |
 | **Studio**            | xgames.fun's creator side: your games, drafts, plans, secrets and signed-in computers. Its console is at xgames.fun/console. | With an account.            |
-| **game-making kit**   | A separate tool for making a game from an idea. Not released; xcore does not need it.                                        | No.                         |
 
 ## With a coding agent
 

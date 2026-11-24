@@ -32,14 +32,14 @@ If your game has that file, make the changes below. If it does not, you need non
    - A `list` without an owner still returns everyone's documents.
 4. **A page reads another player's document by its owner.**
    - An ID alone now means the player's own document (or, in a `write: 'server'` collection, the server's).
-   - For someone else's document, pass the owner: `gf.db.get('levels', id, { owner: doc.owner })`,
+   - For someone else's document, pass the owner: `GamesFun.db.get('levels', id, { owner: doc.owner })`,
      `GET api/db/<collection>/<id>?owner=<id>`, Godot `db_get(collection, id, {"owner": owner})`, Unity
      `DbGet(collection, id, owner)`.
    - Reading by ID alone returns `data: null` with `code: 'owner'` (reported once in the console).
 5. **Lists are paged with `after`, not `offset`.**
-   - Pass the last answer's `after` to get the next page: `gf.db.list('levels', { after: page.after })`. It is `null`
+   - Pass the last answer's `after` to get the next page: `GamesFun.db.list('levels', { after: page.after })`. It is `null`
      on the last page, and `more` says whether there is another page.
-   - A real `offset` is refused (0 or none is fine): `code: 'offset'` from `gf.db.list` and Godot's `db_list`, and
+   - A real `offset` is refused (0 or none is fine): `code: 'offset'` from `GamesFun.db.list` and Godot's `db_list`, and
      `400` from `GET api/db/<collection>?offset=` and from `dataOf(env).list`.
    - Unity's `DbList(collection, owner, limit, after, order)` takes the `after` text where 0.1.0 took an `int offset`.
      A call that passed an offset will not compile until it passes `after`.
