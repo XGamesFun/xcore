@@ -65,8 +65,10 @@ account.
 4. **Play it locally.** `xcore dev .` serves the game as xgames.fun will host it, at `http://127.0.0.1:8787/game/`,
    with sign-in, saves, leaderboards, its server and its rooms. Press Ctrl+C to stop it.
 5. **Publish it** (needs an xgames.fun account). `xcore card .` makes its preview picture, `xcore login` signs this
-   computer in, and `xcore publish .` checks the game and publishes it at an unlisted link anyone can play. A game
-   that fails its check is uploaded only as a private draft.
+   computer in, and `xcore publish .` checks the game and publishes it at an unlisted link anyone can play. The first
+   publish of a folder creates a new game on the signed-in account and takes one of its slots, so it first shows the
+   account, the game's name and the slot, and asks you to confirm. A game that fails its check is uploaded only as a
+   private draft.
 
 [docs/COMMANDS.md](docs/COMMANDS.md) describes what each step reads, writes and prints.
 

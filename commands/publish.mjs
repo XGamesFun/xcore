@@ -8,16 +8,22 @@ import { studioOrigin } from '../lib/publish/client.mjs';
 import { gate } from '../lib/publish/gate.mjs';
 import { buildFailure, pageRoots, runBuild } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
+import { confirmFirstPublish, firstPublish } from '../lib/publish/first.mjs';
 import { reviewNudge } from '../lib/review.mjs';
 import { cardPrinted, drawable } from '../lib/card.mjs';
 import { plural, sizeText } from '../lib/util.mjs';
 
-const usage = `Usage: xcore publish [dir] [--draft] [--new] [--title <name>] [--no-card] [--status] [--check [--verify [--port <n>]]] [--json]
+const usage = `Usage: xcore publish [dir] [--draft] [--new] [--title <name>] [--no-card] [--yes <code>] [--status] [--check [--verify [--port <n>]]] [--json]
 
 Publish a game to xgames.fun at a link anyone can play. xgames.fun hosts it; you do not need a server.
 
 Sign in first with ${CMD} login. In a GitHub Actions job with "permissions: id-token: write", the job's OIDC token
 is used instead of a login.
+
+The first publish of a folder creates a new game on the account this computer is signed in to, and takes one of
+its game slots. It first prints the account, the game's name and the slot, and changes nothing. At a terminal, type
+"publish" to go on; otherwise run the same command again with --yes <code>, using the code it prints. Publishing a
+folder that is already linked to a game updates that game without asking.
 
 What happens:
   - A game you adopted (${CMD} adopt) is built first if it has a build. Its published folder (gamesfun.json
@@ -49,6 +55,7 @@ Options:
   --draft        publish a private version in your xgames.fun Studio, with no public link
   --new          publish as a new game (a new link), not as an update of this folder's game
   --title <name> the game's name on xgames.fun (default: its page title)
+  --yes <code>   confirm the first publish of a folder (a new game, and a slot), with the code that was printed
   --no-card      publish without a preview picture: the link shows a plain card (a gradient with the title)
   --status       show this folder's link and the account it is published from; publishes nothing
   --check        run only the offline checks (files, secrets, backend origins, the server bundle); publishes nothing
@@ -94,6 +101,7 @@ export function publishCommand({
             verify: { type: 'boolean' },
             port: { type: 'string' },
             'no-card': { type: 'boolean' },
+            yes: { type: 'string' },
           },
           usage,
         );
@@ -166,6 +174,12 @@ export function publishCommand({
           }
           if (!values.json && out.verify) console.log(verifyLine(out.verify, shown(dir)));
           return out.ok ? 0 : 1;
+        }
+        // the first publish of a folder makes a game on the signed-in account and takes a slot: confirmed first
+        const first = await firstPublish(dir, { origin, newGame: values.new, title: values.title ?? null });
+        if (first) {
+          const go = await confirmFirstPublish(first, { args, values });
+          if (go !== true) return go;
         }
         const r = await publishGame(dir, {
           ...own,

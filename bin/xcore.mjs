@@ -39,7 +39,7 @@ export function findKit({ cwd = process.cwd(), env = process.env, here = HERE } 
 // the flags of check, publish, dev and backend that take a value: their value is never the game's folder
 // (tests/states-cli.test.mjs holds this list to the flags those commands' usage names)
 const VALUE_FLAGS = Object.fromEntries(
-  ['out', 'port', 'plan', 'title', 'url', 'origin'].map(f => [f, { type: 'string', multiple: true }]),
+  ['out', 'port', 'plan', 'title', 'url', 'origin', 'yes'].map(f => [f, { type: 'string', multiple: true }]),
 );
 
 /** Does this command, with these arguments, belong to the kit even though this package has a command by its name?

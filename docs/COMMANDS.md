@@ -333,7 +333,32 @@ games stay published.
 ## publish
 
 `xcore publish <folder>` builds the game, runs the page check on exactly the files built, and uploads the published
-folder with its `server/` bundle. The steps:
+folder with its `server/` bundle.
+
+### The first publish of a folder
+
+A folder's first publish creates a new game on the account this computer is signed in to, and the game takes one of
+that account's slots ([HOSTING.md](HOSTING.md#plans-xcore-plan)). So it is confirmed first. `xcore publish` prints:
+
+```text
+This creates a new game on https://xgames.fun:
+  account: you@example.com
+  game:    “Click the Moth” (from the folder my-game)
+  slot:    one of your 2 free slots (0 in use now, 1 after this)
+```
+
+and changes nothing.
+
+- At a terminal, type `publish` to go on.
+- Without a terminal (a script, an agent), run the same command again with `--yes <code>`, using the code it printed.
+  With `--json`, the printout is `{ok: true, planned: true, code, plan, next}`, and `next` is the command to run.
+- The code covers the site, the account, the game's name and the folder. A code printed for anything else is refused.
+- Publishing a folder that is already linked to its game (`.gamesfun/publish.json`) updates that game with no question.
+  `--new` makes another game, and asks again.
+- A GitHub Actions job signed in with its OIDC token is not asked: it publishes only the game its repository was linked
+  to in Studio.
+
+The steps of every publish:
 
 1. **The files**: the published folder, without hidden files, `evidence/`, `node_modules/`, `server/`, `supabase/` and
    the makers' notes at its top level (`README.md`, `NOTES.md`, `LAUNCH.md` and similar). A `.env` file or a symbolic

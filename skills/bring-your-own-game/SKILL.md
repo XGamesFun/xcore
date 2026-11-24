@@ -36,11 +36,13 @@ They hold at every step, so no step needs a rule of its own.
   act only when run again with `--yes <code>`: `loot approve` (an economy going live), `coin launch`, a change to the
   live database (`db query --write --live`, `db import --live`, `db restore --live`), replacing or deleting a secret
   the live server has (`secret set` over an existing name, `secret delete`), and writing over or deleting a project
-  file xgames.fun has (`files put --live` over an existing path, `files rm --live`). They move money, hand over keys,
-  lose a key or a file for good or change players' data, and none can be taken back. Show the person the printout, and
-  run it with the code only after they have read it and said yes; a code fits only the printout it came with.
-  Everything else is reversible and runs when the person asked for that change: publish (a new version, or a private
-  draft when checks fail), a domain, an embed (it applies in about a minute), `plan activate` and `deactivate` (a slot
+  file xgames.fun has (`files put --live` over an existing path, `files rm --live`), and the first `publish` of a folder
+  (a new game on the account this computer is signed in to, in one of its slots). They move money, hand over keys,
+  lose a key or a file for good, change players' data or take a slot, and none can be taken back by a command. Show the
+  person the printout (for a first publish: the account, the game's name and the slot), and run it with the code only
+  after they have read it and said yes; a code fits only the printout it came with. Everything else is reversible and
+  runs when the person asked for that change: publishing a folder already linked to its game (a new version, or a
+  private draft when checks fail), a domain, an embed (it applies in about a minute), `plan activate` and `deactivate` (a slot
   moves, no money does). A step that costs the creator a click is fine. A player's path is different: a tap added for a
   narrow threat costs real players, so that guard goes on the server.
 - **Custody.** Every key has one intended holder: the owner's key file on their machine, the live voucher key on
@@ -150,7 +152,9 @@ menu makes a poor card. Keep the subject clear of the top third (the title) and 
 
 `xcore publish <folder> --check` shows what goes up and what would refuse it, offline. `xcore publish <folder>` builds,
 runs the page check on exactly those files and uploads them with the `server/` bundle; a failed check makes a private
-draft only. `xcore login` asks the person to tick the games this computer may work on; a command refused with
+draft only. The first publish of a folder prints the account it would publish under, the game's name and the slot it
+takes, with a code, and publishes nothing: show the person those three lines, and add `--yes <code>` only after they
+say yes (they may want another account: `xcore login`, or a paid slot first). `xcore login` asks the person to tick the games this computer may work on; a command refused with
 `not-granted` means they run `xcore login` again and tick that game. Tell them the link, what you changed in their
 files, what the checks proved, and what nothing checked (their gameplay, their backend's own behaviour).
 

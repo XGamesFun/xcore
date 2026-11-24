@@ -149,7 +149,9 @@ process.exitCode = await publishCommand({ check: passing, card: false, label: 'a
       child.stderr.on('data', c => (stderr += c));
       child.on('close', status => resolve({ status, stdout, stderr }));
     });
-  const r = await kit([dir]);
+  // the folder's first publish is confirmed with its code, as with xcore publish (tests/publish-first.test.mjs)
+  const code = JSON.parse((await kit([dir, '--json'])).stdout).code;
+  const r = await kit([dir, '--yes', code]);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Published .*http:\/\/x\/play\/dot-catch/);
   assert.doesNotMatch(r.stdout + r.stderr, /preview picture|plain card/);
@@ -172,7 +174,9 @@ test('xcore publish as a person or an agent runs it: the refusal with its verdic
     );
   };
   await remember();
-  const refused = await runAsync(['publish', dir, '--json'], cli);
+  // the folder's first publish makes a game: confirmed with the code it prints (tests/publish-first.test.mjs)
+  const yes = ['--yes', JSON.parse((await runAsync(['publish', dir, '--json'], cli)).stdout).code];
+  const refused = await runAsync(['publish', dir, '--json', ...yes], cli);
   assert.equal(refused.status, 1, refused.stderr);
   const j = JSON.parse(refused.stdout);
   assert.equal(j.ok, false);
@@ -190,7 +194,7 @@ test('xcore publish as a person or an agent runs it: the refusal with its verdic
 
   await putCard(dir, 'card.jpg', png(960, 960));
   await remember();
-  const mismatch = JSON.parse((await runAsync(['publish', dir, '--json'], cli)).stdout);
+  const mismatch = JSON.parse((await runAsync(['publish', dir, '--json', ...yes], cli)).stdout);
   assert.equal(mismatch.code, 'card');
   assert.deepEqual(mismatch.card, {
     status: 'unusable',
@@ -205,7 +209,7 @@ test('xcore publish as a person or an agent runs it: the refusal with its verdic
     process.platform === 'win32' ? /^move \S+card\.jpg \S+card\.png$/ : /^mv \S+card\.jpg \S+card\.png$/,
   );
 
-  const plain = await runAsync(['publish', dir, '--no-card'], cli);
+  const plain = await runAsync(['publish', dir, '--no-card', ...yes], cli);
   assert.equal(plain.status, 0, plain.stderr);
   assert.match(plain.stdout, /its link shows a plain card \(a gradient with the title\)/);
   assert.equal((await runAsync(['publish', dir, '--draft'], cli)).status, 0);

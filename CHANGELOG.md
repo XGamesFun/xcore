@@ -14,6 +14,10 @@ Readability and accuracy, and fixes, from two outside reviews. No price or limit
   as state the server keeps. `review.json` has `verdict` (`PASS`, `FAIL`, `INCONCLUSIVE`), and each payout entry in
   `unread` has `payout: true`. A high finding is still FAIL (exit code 1).
 
+- **Breaking: the first publish of a folder asks first.** It creates a new game on the account this computer is signed
+  in to and takes one of its slots, so it now prints the account, the game's name and the slot, and changes nothing.
+  At a terminal, type `publish` to go on; otherwise run it again with `--yes <code>` (`--json`: `planned: true`, with
+  `code` and `next`). A folder already linked to its game, and a GitHub Actions job's OIDC publish, are not asked.
 - **Changed: a project install prints `npx @xgamesfun/xcore`, never `npx xcore`.** The unscoped `xcore` on npm is
   another package.
 - **Changed: no message tells you to install `@xgamesfun/kit`.** A kit command, or a game made with the kit, now says
