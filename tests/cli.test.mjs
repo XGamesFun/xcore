@@ -149,7 +149,7 @@ test("the command it tells people to run is one that finds this package (`xcore`
     'xcore',
     'installed globally on Windows',
   );
-  assert.equal(at('/home/a/my-game/node_modules/@xgamesfun/xcore'), 'npx xcore', 'installed in the project');
+  assert.equal(at('/home/a/my-game/node_modules/@xgamesfun/xcore'), 'npx @xgamesfun/xcore', 'installed in the project');
   assert.equal(
     commandOf({ root: '/home/a/xcore', env: {}, cwd: '/home/a/xcore' }),
     'node bin/xcore.mjs',
@@ -166,4 +166,9 @@ test("the command it tells people to run is one that finds this package (`xcore`
     'its checkout, from far away',
   );
   assert.equal(commandOf({ root: '/x', env: { XCORE_COMMAND: 'xc' } }), 'xc');
+  for (const root of [
+    '/home/a/my-game/node_modules/@xgamesfun/xcore',
+    '/home/a/.npm/_npx/1a2b/node_modules/@xgamesfun/xcore',
+  ])
+    assert.doesNotMatch(at(root), /^npx (-y )?xcore\b/, 'never the unscoped package');
 });
