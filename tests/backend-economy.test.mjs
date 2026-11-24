@@ -164,7 +164,7 @@ test('gamesfun loot approve opens nothing unless told how it is signed; a key fi
   );
   // No way to sign named: the two ways, in this package's words, and nothing started.
   const bare = run(['loot', 'approve', 'public/xsolana.json'], { cwd: game });
-  assert.equal(bare.status, 1);
+  assert.equal(bare.status, 2, 'a usage mistake (@xgamesfun/solana 0.29.12 and later)');
   assert.match(bare.stderr, /say how going live is signed/);
   assert.match(bare.stderr, /--keypair <keyfile>/);
   assert.match(bare.stderr, /xcore loot keygen <file>/);
