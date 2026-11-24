@@ -2,6 +2,28 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+Readability and accuracy, from an outside review. No price, limit or check changed.
+
+- **Changed: a project install prints `npx @xgamesfun/xcore`, never `npx xcore`.** The unscoped `xcore` on npm is
+  another package.
+- **Changed: no message tells you to install `@xgamesfun/kit`.** A kit command, or a game made with the kit, now says
+  the game-making kit is not released yet.
+- **Changed: output is written to the person reading it.** `xcore check`'s first-session walk ends with "In short";
+  `review.md`'s lists are "Questions to decide" and "What this build allows", and its last section is "What a cheater
+  gets, and the trade-offs". `review.md` is titled "Payout and key review". The JSON (`tell`, `ask`) is unchanged.
+  Directions for coding agents moved to the skill.
+- **Changed: every command's `--help`** has a usage line, a one-line description, its options and its limits, in
+  shorter sentences. The README and docs/ are rewritten the same way.
+- **Added: [docs/FEES.md](docs/FEES.md)**, every cost in one table, and a section on getting a game's data out
+  (docs/HOSTING.md). Player saves and leaderboards are not in `xcore db export`.
+- **Changed: package.json `exports` lists each public module by name.** The wildcards made every internal module
+  public. The listed modules are the ones the game-making kit imports; any other subpath now fails with
+  `ERR_PACKAGE_PATH_NOT_EXPORTED`.
+- **Fixed: sign-in is X or Google**, as the client does it. A Solana wallet is linked to the player's account and
+  comes with the sign-in; it never signs anyone in. The README and `xcore add --help` said "X first, or a wallet".
+
 ## 0.11.0 — 2026-11-23
 
 Fixes from a read of the whole package: places where a command passed, or went ahead, on something it could not read,
