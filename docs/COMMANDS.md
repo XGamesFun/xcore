@@ -4,7 +4,7 @@
 reference for flags, so they are not repeated here. This document covers what the help has no room for: what each
 command reads and writes, the steps it takes, and what it prints for scripts.
 
-Run a command without installing it, as `npx -y @xgamesfun/xcore <command>`. Or install it once with
+Run a command without installing it, as `npx -y @xgamesfun/xcore@0.11.0 <command>`. Or install it once with
 `npm i -g @xgamesfun/xcore` and run `xcore <command>`.
 
 The unscoped `xcore` package on npm is a different package. Always use `@xgamesfun/xcore`.
@@ -495,7 +495,13 @@ For use with a coding agent, the skill in `skills/bring-your-own-game/` walks th
 
 - copies the skill into Claude Code's and Codex's skills;
 - adds the economy's tools, as `xcore loot connect` does (the `xsolana_*` MCP tools and the `xsolana-economy` skill);
-- prints a few lines for a project's AGENTS.md.
+- prints a few lines for a project's AGENTS.md (it never writes AGENTS.md or CLAUDE.md).
+
+By default it does this for the folder it runs in only: the skills go in that folder's `.claude/skills/` and
+`.agents/skills/`, and Claude Code registers the tools for that project. `xcore connect --scope user` does it for every
+project of this user (`~/.claude/skills/`, `~/.agents/skills/` and the user's MCP settings). Codex registers MCP
+servers only for the whole user, so with the default scope its tools are left out (run `--scope user` for them).
+`--dry-run` shows what it would do and changes nothing.
 
 For other agents (Cursor, Copilot, Gemini CLI and more), `npx skills add XGamesFun/xcore` installs the same skill.
 

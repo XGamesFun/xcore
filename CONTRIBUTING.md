@@ -60,8 +60,9 @@ A release is triggered by pushing a `v<version>` tag. `.github/workflows/release
 
 To release:
 
-1. Bump the version: `npm version <x.y.z> --no-git-tag-version` (`package.json` and `package-lock.json`), and add its
-   `CHANGELOG.md` entry.
+1. Bump the version: `npm version <x.y.z> --no-git-tag-version` (`package.json` and `package-lock.json`), run
+   `node scripts/pin-version.mjs` (it pins the `npx -y @xgamesfun/xcore@<version>` examples in the README, docs/ and the
+   skill; `tests/docs.test.mjs` fails until you do), and add its `CHANGELOG.md` entry.
 2. Commit, merge to `main`, then `git tag v<x.y.z> && git push origin v<x.y.z>`.
 
 The workflow uses npm's trusted publishing, so no token is stored. This needs a one-time setup on npmjs.com: under

@@ -24,11 +24,12 @@ Playwright's Chromium once.
 
 ```bash
 npm i -g @xgamesfun/xcore      # install, then run: xcore <command>
-npx -y @xgamesfun/xcore adopt  # or run it without installing
+npx -y @xgamesfun/xcore@0.11.0 adopt  # or run it without installing
 ```
 
-The unscoped `xcore` package on npm is a different package. Always run this one as `npx -y @xgamesfun/xcore …`, or
-install it. The examples below use `xcore`.
+The unscoped `xcore` package on npm is a different package. Always run this one as `npx -y @xgamesfun/xcore@0.11.0 …`, or
+install it. The npx examples name the version this README describes, so a copied command runs the release documented
+here; `npm i -g` installs the latest. The examples below use `xcore`.
 
 ## Quick start
 
@@ -202,8 +203,9 @@ Reasons and alternatives: [docs/HOSTING.md](docs/HOSTING.md#what-is-not-supporte
 ## With a coding agent
 
 The skill in [`skills/bring-your-own-game/`](skills/bring-your-own-game/SKILL.md) follows the same steps.
-`xcore connect` copies it into Claude Code's and Codex's skills, adds the economy tools (as `xcore loot connect`
-does), and prints a few lines for a project's AGENTS.md. For other agents (Cursor, Copilot, Gemini CLI and more),
+`xcore connect`, run in your project's folder, copies it into Claude Code's and Codex's skills for that project, adds
+the economy tools (as `xcore loot connect` does), and prints a few lines for the project's AGENTS.md. Add
+`--scope user` to do this for every project. For other agents (Cursor, Copilot, Gemini CLI and more),
 `npx skills add XGamesFun/xcore` installs the same skill.
 
 Before you build an economy, a draw, or anything a player pays for, read
@@ -239,8 +241,8 @@ in with X or Google, and a Solana wallet they linked to their account comes with
 and leaderboard entries. A web game calls `await GamesFun.signIn()`; Godot 4 and Unity have the same calls. See
 [the page client](docs/CLIENT.md).
 
-**Can Claude Code, Codex or Cursor publish my game for me?** Yes. `xcore connect` copies the `bring-your-own-game`
-skill into Claude Code's and Codex's skills and adds the economy's MCP tools (`xsolana_*`). For other agents (Cursor,
+**Can Claude Code, Codex or Cursor publish my game for me?** Yes. `xcore connect` (in the project's folder) copies the
+`bring-your-own-game` skill into Claude Code's and Codex's skills and adds the economy's MCP tools (`xsolana_*`). For other agents (Cursor,
 Copilot, Gemini CLI and more), `npx skills add XGamesFun/xcore` installs the same skill. The agent then follows the
 steps above: adopt, check, add what the game needs, review, publish.
 
@@ -251,7 +253,7 @@ xgames.fun's launchpad, on devnet to rehearse or on mainnet. See
 **Can I get my game's data out?** The database and project files, yes: `xcore db export --live` and
 `xcore files get <path> --live`. Player saves and leaderboards have no bulk export yet. See [Your data](#your-data).
 
-**Is `xcore` on npm this package?** No. This one is `@xgamesfun/xcore`: run it as `npx -y @xgamesfun/xcore`, or install
+**Is `xcore` on npm this package?** No. This one is `@xgamesfun/xcore`: run it as `npx -y @xgamesfun/xcore@0.11.0`, or install
 it with `npm i -g @xgamesfun/xcore`.
 
 ## Documentation

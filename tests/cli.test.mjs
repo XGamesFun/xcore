@@ -143,10 +143,10 @@ test('with a kit: its commands, publish and check of a game it made, and its bac
 test("the command it tells people to run is one that finds this package (`xcore` on npm is someone else's)", async () => {
   const { commandOf } = await import('../lib/command.mjs');
   const at = root => commandOf({ root, env: {} });
-  assert.equal(
+  assert.match(
     at('/home/a/.npm/_npx/1a2b/node_modules/@xgamesfun/xcore'),
-    'npx -y @xgamesfun/xcore',
-    'run through npx',
+    /^npx -y @xgamesfun\/xcore@(\d+\.\d+\.\d+|latest)$/,
+    'run through npx: pinned to the version that runs (latest when its package.json is not there to read)',
   );
   assert.equal(at('/usr/local/lib/node_modules/@xgamesfun/xcore'), 'xcore', 'installed globally');
   assert.equal(

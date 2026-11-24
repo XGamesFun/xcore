@@ -266,3 +266,13 @@ test('every env.GF call a game’s server gets in xcore dev is in docs/SERVER.md
   });
   assert.deepEqual(missing, [], 'a call the table does not name');
 });
+
+test('every npx example names this version (scripts/pin-version.mjs pins them at a release)', async () => {
+  const { PINNED_DOCS, NPX } = await import('../scripts/pin-version.mjs');
+  const { version } = JSON.parse(read(path.join(ROOT, 'package.json')));
+  const stale = [];
+  for (const rel of PINNED_DOCS)
+    for (const [m] of read(path.join(ROOT, rel)).matchAll(NPX))
+      if (m !== `npx -y @xgamesfun/xcore@${version}`) stale.push(`${rel}: ${m}`);
+  assert.deepEqual(stale, [], `run: node scripts/pin-version.mjs`);
+});

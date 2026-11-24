@@ -33,7 +33,7 @@ function agents(installed) {
   return { runAgent, calls };
 }
 
-test('connect: the skill copied for each agent found, the solana kit connected, and the project left alone', async t => {
+test('connect --scope user: the skill copied for each agent found, the solana kit connected, and the project left alone', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const home = path.join(tmp.dir, 'home');
@@ -45,7 +45,7 @@ test('connect: the skill copied for each agent found, the solana kit connected, 
   const { runAgent, calls } = agents(['claude']);
 
   // a dry run: says what it would copy and the commands it would run, and changes nothing
-  let r = await connectAgents({ dryRun: true, run: runAgent, cwd: project });
+  let r = await connectAgents({ dryRun: true, scope: 'user', run: runAgent, cwd: project });
   assert.equal(r.ok, true);
   const claude = r.agents.find(a => a.agent === 'claude');
   assert.deepEqual(claude.skill, {
@@ -67,7 +67,7 @@ test('connect: the skill copied for each agent found, the solana kit connected, 
   assert.ok(!calls.some(c => / mcp add /.test(c)), 'a dry run registers nothing');
 
   // for real: the skill (with its references) and the solana kit's skill, under this HOME only
-  r = await connectAgents({ run: runAgent, cwd: project });
+  r = await connectAgents({ scope: 'user', run: runAgent, cwd: project });
   assert.equal(r.ok, true, JSON.stringify(r));
   const copied = path.join(home, '.claude', 'skills', 'bring-your-own-game');
   assert.equal(
@@ -85,18 +85,47 @@ test('connect: the skill copied for each agent found, the solana kit connected, 
     'the xsolana tools registered',
   );
   assert.deepEqual(await readdir(project), [], "nothing written into the person's project");
-  assert.match(SNIPPET, /npx -y @xgamesfun\/xcore check/);
+  assert.match(SNIPPET, /npx -y @xgamesfun\/xcore@\d+\.\d+\.\d+ check/, 'pinned, as the README is');
   assert.match(SNIPPET, /xsolana/);
   assert.ok(SNIPPET.split('\n').length <= 5);
 
   // again: its own skill replaced; a folder of that name that is not xcore's is left as it is
-  r = await connectAgents({ run: runAgent, cwd: project });
+  r = await connectAgents({ scope: 'user', run: runAgent, cwd: project });
   assert.equal(r.agents.find(a => a.agent === 'claude').skill.action, 'replaced');
   await writeFile(path.join(copied, 'SKILL.md'), '---\nname: something-else\n---\nmine\n');
-  r = await connectAgents({ run: runAgent, cwd: project });
+  r = await connectAgents({ scope: 'user', run: runAgent, cwd: project });
   assert.equal(r.ok, false);
   assert.equal(r.agents.find(a => a.agent === 'claude').skill.action, 'left');
   assert.equal(await readFile(path.join(copied, 'SKILL.md'), 'utf8'), '---\nname: something-else\n---\nmine\n');
+});
+
+test('connect by default: this project only, and nothing under HOME', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const home = path.join(tmp.dir, 'home');
+  const project = path.join(tmp.dir, 'project');
+  await mkdir(home, { recursive: true });
+  await mkdir(project, { recursive: true });
+  homeIn(t, home);
+  const { connectAgents } = await import('../commands/connect.mjs');
+  const { runAgent, calls } = agents(['claude']);
+  const r = await connectAgents({ run: runAgent, cwd: project });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  assert.equal(r.scope, 'project');
+  const claude = r.agents.find(a => a.agent === 'claude');
+  assert.deepEqual(claude.skill, {
+    dir: path.join(project, '.claude', 'skills', 'bring-your-own-game'),
+    action: 'copied',
+  });
+  assert.ok(existsSync(path.join(claude.skill.dir, 'SKILL.md')));
+  assert.ok(
+    calls.some(c => /^claude mcp add .*--scope project xsolana -- /.test(c)),
+    calls.join('\n'),
+  );
+  assert.ok(!existsSync(path.join(home, '.claude')), 'nothing for every project');
+  assert.ok(!existsSync(path.join(project, 'AGENTS.md')) && !existsSync(path.join(project, 'CLAUDE.md')));
+  // a scope it does not have is a usage mistake
+  assert.equal(run(['connect', '--scope', 'everywhere'], { cwd: tmp.dir }).status, 2);
 });
 
 test('xcore connect --dry-run --json with no agent on this machine: says so, writes nothing', async t => {
