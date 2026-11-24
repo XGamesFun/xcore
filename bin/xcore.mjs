@@ -77,8 +77,9 @@ function runKit(kit, args) {
   });
 }
 
-const NO_KIT = `That is the kit's (@xgamesfun/kit): it makes games, the studio page, verify and the build loop. It is not
-installed here: run xcore inside a folder that has the kit, or set GAMESFUN_KIT=<folder> to use it from anywhere.`;
+const NO_KIT = `That command belongs to the game-making kit (making a game from an idea, the studio page, verify and the
+build loop). The kit is not released yet, so the command is not available here. With a copy of the kit, run xcore
+inside its folder, or set GAMESFUN_KIT=<folder>.`;
 
 /** The kit's own commands (@xgamesfun/kit's builder/commands, less those this package has): only these are said to be
  *  the kit's when there is no kit. */
@@ -129,21 +130,28 @@ export function nearest(name, names) {
 
 /** What an unknown command is told: the kit's (only for one of its commands), else the nearest of ours. */
 export function unknownCommand(name, commands) {
-  if (KIT_COMMANDS.has(name)) return `"${name}" is the kit's command. ${NO_KIT}`;
+  if (KIT_COMMANDS.has(name)) return `"${name}" is a command of the game-making kit. ${NO_KIT}`;
   const near = nearest(name, [...commands.keys(), 'help']);
   return `"${name}" is not an xcore command.${near ? ` Did you mean "${near}"? ${CMD} ${near} --help says what it does.` : ''}`;
 }
 
 function help(commands, kit) {
-  const lines = ['Usage: xcore <command> [options]', '', 'xgames.fun:'];
+  const lines = [
+    'Usage: xcore <command> [options]',
+    ...(CMD === 'xcore' ? [] : [`       (here: ${CMD} <command> [options])`]),
+    '',
+    'Host a web game you already made on xgames.fun, with a backend and an optional Solana economy.',
+    '',
+    'Commands:',
+  ];
   for (const c of commands.values()) lines.push(`  ${c.name.padEnd(10)} ${c.summary}`);
   lines.push(
     '',
     kit
-      ? `With the kit (${kit}): create, verify, slots, build and the rest; ${CMD} help there lists them.`
-      : "Making a game from an idea, the studio page and verify are the kit's (@xgamesfun/kit).",
+      ? `The game-making kit is installed (${kit}): create, verify, slots, build and its other commands run there. \`${CMD} help\` lists them.`
+      : 'Making a game from an idea, the studio page and verify belong to the game-making kit, which is not released yet.',
     '',
-    `Run \`xcore <command> --help\` for a command's options. Already have a game? ${CMD} adopt <folder>.`,
+    `Run \`${CMD} <command> --help\` for a command's options. To start with a game you have: ${CMD} adopt <folder>`,
   );
   return lines.join('\n');
 }

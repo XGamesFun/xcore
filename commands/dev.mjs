@@ -89,7 +89,7 @@ export default {
       const dir = await resolveGame(positionals[0]);
       if (madeByKit(dir))
         throw new Error(
-          `${shown(dir)} was made with the kit: its dev server is the kit's (${CMD} dev, with @xgamesfun/kit).`,
+          `${shown(dir)} was made with the game-making kit. Its dev server is the kit's own, which runs only where the kit is installed. The kit is not released yet.`,
         );
       const say = values.json ? m => console.error(m) : m => console.log(m);
       const { startDev } = await import('../lib/dev/index.mjs');

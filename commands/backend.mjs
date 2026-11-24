@@ -13,11 +13,19 @@ import { ownOrigins, studioOrigin } from '../lib/publish/client.mjs';
 
 const usage = `Usage: xcore backend use custom [dir] --url <https://…> [--origin <wss://…>]… [--json]
 
-Your own backend, already running: backend.json names its public URL's origin, its wss:// twin, and every other origin
-the page talks to (--origin, at most 8 in all), so the published page may reach them; any other site stays out of reach. Its keys stay on its server: a game carries
-only a key made to be public. It answers CORS for the game's origin (https://<slug>-play.xgames.fun once published).
-A brought game with a build keeps backend.json in the folder its build copies as it is (gamesfun.json page.static).
-A backend made for you (Supabase, Railway) is the kit's: ${CMD} backend connect supabase, with @xgamesfun/kit.`;
+Let the published game call a backend you already run.
+
+This writes backend.json with the origin of the backend's public URL, its wss:// counterpart, and every other origin
+the page connects to (--origin; at most 8 origins in all). The published page may reach these origins and no other
+site.
+
+  - Keep the backend's keys on the backend. A game may only contain keys that are meant to be public.
+  - The backend must answer CORS requests from the game's origin (https://<slug>-play.xgames.fun once published).
+  - For an adopted game with a build, backend.json goes in the folder the build copies unchanged (gamesfun.json
+    page.static).
+
+A backend set up for you (Supabase, Railway: backend connect) is part of the game-making kit, which is not released
+yet.`;
 
 export default {
   name: 'backend',

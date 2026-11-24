@@ -34,7 +34,7 @@ export default {
       const dir = await resolveGame(positionals[0]);
       if (madeByKit(dir))
         throw new Error(
-          `${shown(dir)} was made with the kit: its check is the kit's six gates (${CMD} verify, with @xgamesfun/kit installed).`,
+          `${shown(dir)} was made with the game-making kit. Its check is the kit's own (\`${CMD} verify\`, six gates), which runs only where the kit is installed. The kit is not released yet.`,
         );
       const port = values.port === undefined ? 0 : Number(values.port);
       if (values.port !== undefined && !(Number.isInteger(port) && port >= 1 && port <= 65535))
