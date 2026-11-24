@@ -16,25 +16,33 @@ const usage = `Usage: xcore db info [dir] [--live] [--json]
        xcore db import <file.sql> [dir] [--live [--yes <code>]] [--json]
        xcore db restore <time> [dir] --live [--yes <code>] [--json]
 
-The game's own database (${CMD} add database: gamesfun.json → database, one D1 database a game). Without --live,
-the one on this machine that ${CMD} dev runs (kept in .gamesfun/dev/d1/, its migrations applied first); with --live,
-the game's database on xgames.fun, which keeps every call in the game's audit log.
-  info               where it is, its size, the migrations applied (and, here, its tables and their rows)
-  query "<sql>"      one statement; it only reads (SELECT, EXPLAIN, PRAGMA table_info or table_list) unless
-                     --write. --params '["moon", 3]' fills its ? marks
-  export             the whole database as SQL, into --out <file> or .gamesfun/exports/ (hidden: never published;
-                     it holds your players' data, so keep it out of git and off shared drives)
-  import <file.sql>  run a file of SQL statements, all of it or none; at most ${sizeText(DATABASE_LIMITS.importBytes)} (live, ${sizeText(STUDIO_BODY_BYTES)} as sent). A dump
-                     from export (here, live or D1's) goes in over what is there, or into an empty database:
-                     tables kept, each row updated by its key where it is (none deleted)
-  restore <time>     live only: the database as it was at <time> (a date such as 2026-11-08T12:00:00Z, or unix
-                     seconds; up to 30 days back). A game with an economy: what happened on chain (loot balances,
-                     payouts) stays as it is, so the database and the chain can disagree after it.
-A change to the live database (query --write --live, import --live, restore) first prints exactly what it would
-change (the game, and the statement and its params; the file's name, size and SHA-256; or the time and what it goes
-back to) with a code, and changes nothing. It goes on when run again with --yes <code>, or, at a terminal, when you
-type its word (write, import, restore). A code printed for another change is refused. With --json, the printout is
-{planned: true, code, plan, next}.`;
+Work with the game's own database: one D1 database per game, added with ${CMD} add database (gamesfun.json →
+database).
+
+Without --live, the commands use the local database that ${CMD} dev runs (stored in .gamesfun/dev/d1/; its
+migrations are applied first). With --live, they use the game's database on xgames.fun, which records every call in
+the game's audit log.
+
+Commands:
+  info               where the database is, its size, and the migrations applied (locally, also its tables and row
+                     counts)
+  query "<sql>"      run one statement. It is read-only (SELECT, EXPLAIN, PRAGMA table_info or table_list) unless you
+                     pass --write. --params '["moon", 3]' fills its ? placeholders
+  export             write the whole database as SQL to --out <file> or to .gamesfun/exports/ (a hidden folder, never
+                     published). The file holds your players' data: keep it out of git and off shared drives
+  import <file.sql>  run a file of SQL statements, all or none; at most ${sizeText(DATABASE_LIMITS.importBytes)} (live, ${sizeText(STUDIO_BODY_BYTES)} as sent). A dump from
+                     export (local, live, or D1's own) loads over the existing data or into an empty database: tables
+                     are kept, each row is updated by its key, and no row is deleted
+  restore <time>     live only: return the database to its state at <time> (a date such as 2026-11-08T12:00:00Z, or
+                     unix seconds; up to 30 days back). For a game with an economy, what happened on chain (loot
+                     balances, payouts) is not rolled back, so the database and the chain can disagree afterwards
+
+Confirming live changes:
+  A change to the live database (query --write --live, import --live, restore) first prints exactly what it would
+  change, with a code, and changes nothing. The printout names the game and the statement and its params; or the
+  file's name, size and SHA-256; or the time it goes back to. Run the command again with --yes <code> to apply it,
+  or, at a terminal, type the confirmation word (write, import, restore). A code printed for a different change is
+  refused. With --json, the printout is {planned: true, code, plan, next}.`;
 
 /** A size as the person reads it (../lib/util.mjs sizeText, the one every command prints sizes with). */
 const kb = sizeText;
@@ -67,7 +75,7 @@ const onGame = c => `(game ${c.plan.game} on ${c.plan.origin})`;
 
 export default {
   name: 'db',
-  summary: "the game's own database (D1): info, query, export, import, restore; here, or --live on xgames.fun",
+  summary: "query, export, import or restore the game's D1 database, locally or live",
   usage,
   run: args =>
     guard(async () => {

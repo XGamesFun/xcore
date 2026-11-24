@@ -29,7 +29,7 @@ yet.`;
 
 export default {
   name: 'backend',
-  summary: 'use your own backend: backend.json names the origins the published page may reach',
+  summary: 'let the published page reach a backend you run (writes backend.json)',
   usage,
   run: args =>
     guard(async () => {

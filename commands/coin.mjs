@@ -24,26 +24,38 @@ const usage = `Usage: xcore coin [game] [--cluster devnet|mainnet] [--json]
                          [--yes <code>] [--json]
        xcore coin drop [game] [--cluster devnet|mainnet] [--json]
 
-A coin that trades, for a game published on xgames.fun: on Solana devnet (the default, to rehearse), or on mainnet
-with --cluster mainnet (real money, where xgames.fun has mainnet launching on). loot, the program of a game's
-economy, runs no market: a coin people can buy and sell is launched on a venue, and the economy then names it.
-  (no command)   where the game's coin stands, and what a launch can choose from: the venues, what each pairs a coin
-                 with, and the pictures among the published game's files
-  launch         what launching would do, signed by a key file on this machine (${CMD} loot keygen <file> makes one;
-                 send it about ${ABOUT_SOL} SOL on the cluster). It sends nothing until it is run again with the code it prints
-                 (--yes <code>), once the person whose game it is has read that and said yes. xgames.fun's launchpad
-                 builds the launch; before the key signs, every transaction is read and held to the launch that
-                 was printed (this name, ticker and pair, this key as the coin's creator, no buy, no move of a token
-                 the key holds, nothing of the game's economy), and an RPC of the cluster is asked that it is that cluster's
-      --name         the coin's name (at most 32 bytes)        --ticker   its ticker (2 to 10 letters or digits; or --symbol)
-      --description  the coin's description (at most 1,000 characters)
-      --picture      a picture among the published game's files (the path ${CMD} coin lists)
-      --venue        meteora (the default) or pumpfun          --pair     what it trades against (the default: SOL)
-      --keypair      the key file that signs and pays: the coin's creator fees belong to its address for good
-      --cluster      devnet (the default) or mainnet: a game has a coin on each, and mainnet's is real money
-  drop           gives up a launch that was begun and never sent
-A game has one coin a cluster, and its name and ticker stay as launched. The same from a browser wallet: the game's
-console (xgames.fun/console), Token tab. A coin made elsewhere is named in the economy with ${CMD} loot token <mint>.`;
+Launch a tradable coin for a game published on xgames.fun.
+
+It runs on Solana devnet by default, for rehearsal, or on mainnet with --cluster mainnet (real money; only where
+xgames.fun has mainnet launches turned on). loot, the program behind a game's economy, does not run a market: a coin
+people can buy and sell is launched on a trading venue, and the economy then refers to it. Costs: see docs/FEES.md.
+
+Commands:
+  (none)   show the state of the game's coin, and the launch options: the venues, what each pairs a coin with, and
+           the pictures among the published game's files
+  launch   show what the launch would do, signed with a key file on this machine (${CMD} loot keygen <file> makes
+           one; send it about ${ABOUT_SOL} SOL on the cluster). Nothing is sent until you run it again with the code it
+           prints (--yes <code>), after the game's owner has read the printout and agreed.
+           xgames.fun's launchpad builds the launch transactions. Before the key signs, xcore reads every
+           transaction and checks it matches the printed launch: this name, ticker and pair; this key as the coin's
+           creator; no buy; no transfer of a token the key holds; nothing touching the game's economy. It also asks
+           an RPC of the cluster to confirm which cluster it is.
+  drop     abandon a launch that was started and never sent
+
+Launch options:
+  --name <name>         the coin's name (at most 32 bytes)
+  --ticker <TICKER>     its ticker (2 to 10 letters or digits; --symbol also works)
+  --description <text>  the coin's description (at most 1,000 characters)
+  --picture <file>      a picture among the published game's files (the paths ${CMD} coin lists)
+  --venue <venue>       meteora (the default) or pumpfun
+  --pair <SYMBOL>       what it trades against (default: SOL)
+  --keypair <keyfile>   the key file that signs and pays. The coin's creator fees belong to its address permanently.
+  --cluster <cluster>   devnet (the default) or mainnet. A game can have one coin on each; the mainnet coin is real
+                        money.
+
+A game has one coin per cluster, and its name and ticker cannot change after launch. You can do the same from a
+browser wallet in the game's console (xgames.fun/console, Token tab). To use a coin made elsewhere in the economy,
+run ${CMD} loot token <mint>.`;
 
 const venueName = v => (typeof v === 'string' && Object.hasOwn(VENUES, v) ? VENUES[v].name : v);
 
@@ -122,7 +134,7 @@ function sameCommand(args) {
 
 export default {
   name: 'coin',
-  summary: 'a coin that trades for a published game: where it stands, and launching one with a key file',
+  summary: 'launch a tradable coin for a published game, or show its state',
   usage,
   run: args =>
     guard(async () => {

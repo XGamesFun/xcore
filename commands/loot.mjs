@@ -18,43 +18,59 @@ import { NO_REVIEW } from '../lib/review.mjs';
 
 const usage = `Usage: xcore loot <command> [options]
 
-A game's economy on loot, one shared Solana program (devnet by default; mainnet, real money and not independently
-audited, when its xsolana.json says "network": "mainnet"), with @xgamesfun/solana's tools.
-  xcore loot connect               add its tools (xsolana_*) and its xsolana-economy skill to Claude Code and Codex
-  xcore loot add [game]            where the game's economy (${ECONOMY_FILE}) and its page client (gf/loot/) go, and the
-                                   copy once the economy is there (a brought game: the folder its build copies as it is)
-  xcore loot check|simulate|cost|explain [file]   refusals and warnings; where the money goes; what it costs; in words
-  xcore loot review [file]         what a cheater gets from each route that pays, and the trade-offs in words (xcore
-                                   review adds the game's server and, with --live, the published game)
-  xcore loot token <mint>          a coin made elsewhere, read from the chain: its entry for the economy's "tokens",
-                                   with what its mint's own keys can do (mint more, freeze, a fee on transfers)
-  xcore loot keygen <file>         a key file for the game's economy, outside any repository (~/.config/xsolana/<game>.json):
-                                   it prints the key's address to send SOL to (devnet's, or real SOL on mainnet), never the key. The key is the
-                                   project's owner for good: whoever can read the file controls it, and nothing
-                                   restores a lost one
+Build and run a game's economy on loot, one shared Solana program, with @xgamesfun/solana's tools (xsolana). The
+economy runs on devnet by default. It runs on mainnet (real money; loot is not independently audited) only when its
+xsolana.json says "network": "mainnet". Fees: see docs/FEES.md.
+
+Commands:
+  xcore loot connect               add the xsolana tools (xsolana_*) and the xsolana-economy skill to Claude Code
+                                   and Codex
+  xcore loot add [game]            say where the game's economy (${ECONOMY_FILE}) and its page client (gf/loot/) go,
+                                   and copy the client once the economy exists (for an adopted game: into the folder
+                                   its build copies unchanged)
+  xcore loot check|simulate|cost|explain [file]
+                                   refusals and warnings; where the money goes; what it costs; a plain-words summary
+  xcore loot review [file]         what a cheater gets from each route that pays, and the trade-offs in plain words
+                                   (xcore review adds the game's server and, with --live, the published game)
+  xcore loot token <mint>          read a coin made elsewhere from the chain: its entry for the economy's "tokens",
+                                   and what its mint's own keys can do (mint more, freeze, charge a transfer fee)
+  xcore loot keygen <file>         create a key file for the game's economy, outside any repository
+                                   (~/.config/xsolana/<game>.json). It prints the key's address to send SOL to
+                                   (devnet SOL, or real SOL on mainnet), never the key itself. The key owns the
+                                   project permanently: whoever can read the file controls it, and a lost key cannot
+                                   be recovered
   xcore loot approve [file] --keypair <keyfile>
-                                   in a game's folder: everything putting its economy live would send, signed by that
-                                   key file. It sends nothing until it is run again with the code it prints
-                                   (--yes <code>), once the person whose game it is has read that and said yes
+                                   run in the game's folder: show everything that putting the economy live would
+                                   send, signed with that key file. Nothing is sent until you run it again with the
+                                   code it prints (--yes <code>), after the game's owner has read the printout and
+                                   agreed
   xcore loot approve [file] --browser
-                                   the same on a page on this computer, signed in a browser wallet: only when asked
-                                   for, and run by the person themselves (it serves until the page says it is live)
-  xcore loot help                  everything else xsolana does (its help says \`xsolana <command>\`: run each as
-                                   \`xcore loot <command>\`)
-A tool's command (guide, examples, check … status, token) takes --json: the kit's whole answer, passed on as it
-gives it. ${CMD} connect adds these tools and xcore's own skill in one go.
-The file is ${ECONOMY_FILE} (loot.json in a game made before it was named so). Its RPC is XSOLANA_RPC_URL (in .env),
-else xgames.fun's shared devnet RPC. Published, the page uses the shared relay, which counts every call toward the game's
-plan, unless the game brings its own RPC: ${CMD} add rpc (docs/SERVER.md, "The economy's own RPC"). Going live
-(approve) sends through XSOLANA_RPC_URL when it is set, else through Solana's public devnet RPC: the shared relay
-passes only loot's own transactions, and a setup also makes mints and token accounts. Where the public RPC refuses
-you, set XSOLANA_RPC_URL to a devnet RPC of your own.`;
+                                   the same, on a local page, signed with a browser wallet. Use it only when the
+                                   owner asks for it and runs it themselves (the page stays up until it reports the
+                                   economy is live)
+  xcore loot help                  everything else xsolana does (its help says \`xsolana <command>\`: run each one
+                                   as \`xcore loot <command>\`)
+
+Every tool command (guide, examples, check … status, token) accepts --json and passes on the economy tools' full
+answer unchanged. ${CMD} connect adds these tools and xcore's own skill in one step.
+
+The economy file is ${ECONOMY_FILE} (loot.json in games made before the rename).
+
+RPC:
+  - Locally, the tools use XSOLANA_RPC_URL (from .env), else xgames.fun's shared devnet RPC.
+  - Once published, the page uses xgames.fun's shared relay, which counts every call toward the game's plan, unless
+    the game has its own RPC: ${CMD} add rpc (docs/SERVER.md, "The economy's own RPC").
+  - Going live (approve) sends through XSOLANA_RPC_URL when it is set, else through Solana's public devnet RPC. The
+    shared relay only passes loot's own transactions, and a setup also creates mints and token accounts. If the
+    public RPC refuses your requests, set XSOLANA_RPC_URL to a devnet RPC of your own.`;
 
 const ADD_USAGE = `Usage: xcore loot add [game] [--json]
 
-Where the game's economy (${ECONOMY_FILE}) goes, and once it is there, its page client copied beside it (gf/loot/, a
-copy: never edit it; publish brings it up to date). A brought game with a build keeps both in the folder its build
-copies as it is (gamesfun.json page.static), so every build carries them. It prints the next steps.`;
+Show where the game's economy file (${ECONOMY_FILE}) goes. Once the file exists, copy the economy's page client next
+to it (gf/loot/). The client is a managed copy: do not edit it; publish keeps it up to date.
+
+For an adopted game with a build, both go in the folder the build copies unchanged (gamesfun.json page.static), so
+every build includes them. It prints the next steps.`;
 
 /** xsolana's commands that read an economy file ([file], default xsolana.json). */
 const ON_FILE = new Set(['check', 'simulate', 'cost', 'explain', 'review', 'publish', 'status', 'approve']);
@@ -106,8 +122,7 @@ export function rpcFor(command, env = process.env, rpc = solanaRpc(env)) {
 
 export default {
   name: 'loot',
-  summary:
-    'a Solana economy on loot (@xgamesfun/solana): connect its tools, add its page client, check it, put it live',
+  summary: "build and run a Solana economy on loot (@xgamesfun/solana's tools)",
   usage,
   helpFor: args => (args[0] === 'add' ? ADD_USAGE : usage),
   run: async args => {

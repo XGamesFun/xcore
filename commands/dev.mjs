@@ -8,19 +8,25 @@ import { PLAN_NAMES } from '../lib/dev/plans.mjs';
 
 const usage = `Usage: xcore dev [dir] [--port <n>] [--plan <name>] [--no-build] [--open] [--json]
 
-Play the game on this machine as xgames.fun will host it, with everything a published game has behind it:
+Run the game on this machine as xgames.fun hosts it, with the same services a published game has:
   http://127.0.0.1:<port>/game/   the published files, with the play host's headers
   /game/api/*                     the game's own server/ (Durable Objects, WebSockets, env.GF), reloaded on change
-  /platform/v1/*                  sign-in (a local player), saves and leaderboards, the same store env.GF uses,
-                                  with xgames.fun's limits on the plan it imitates (Free unless --plan)
+  /platform/v1/*                  sign-in (as a local player), saves and leaderboards: the same store env.GF uses,
+                                  with xgames.fun's limits for the plan it imitates (Free unless --plan)
   /loot/v1/rpc                    the economy's Solana devnet RPC (XSOLANA_RPC_URL in .env, else xgames.fun's relay)
-gamesfun.js (${CMD} add signin|database|multiplayer) uses all of it here, from any engine: open the page in two
-windows to play a room together. Running server/ needs Miniflare (workerd), installed once on first use (~180 MB).
-Saves, scores and Durable Object storage are kept in <dir>/.gamesfun/ (never published).
-  --port <n>      the port (default the first free one from 8787)
-  --plan <name>   the plan to imitate: free (the default), creator or scale: its boards, saves, reads and writes a
-                  minute and file sizes, as xgames.fun holds a game on that plan (${CMD} plan shows a game's own)
-  --no-build      serve what is built already; do not run gamesfun.json page.build first
+
+gamesfun.js (${CMD} add signin|database|multiplayer) uses all of these locally, from any engine. To play a room
+together, open the page in two windows.
+
+Running server/ needs Miniflare (workerd), which is installed on first use (about 180 MB). Saves, scores and Durable
+Object storage are kept in <dir>/.gamesfun/, which is never published.
+
+Options:
+  --port <n>      the port (default: the first free port from 8787)
+  --plan <name>   the plan to imitate: free (the default), creator or scale. It sets the boards, saves, reads and
+                  writes per minute, and file sizes that xgames.fun allows on that plan (${CMD} plan shows a
+                  game's own plan)
+  --no-build      serve what is already built; do not run gamesfun.json page.build first
   --open          open the page in your browser
   --json          print where it runs as JSON, then keep running`;
 
@@ -60,7 +66,7 @@ export function listenRefusal(e, port) {
 
 export default {
   name: 'dev',
-  summary: 'play the game here as xgames.fun hosts it: its server, sign-in, saves, rooms and economy RPC',
+  summary: 'run the game locally as xgames.fun hosts it, with its server, sign-in and rooms',
   usage,
   run: args =>
     guard(async () => {

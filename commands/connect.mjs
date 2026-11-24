@@ -17,12 +17,16 @@ const SKILL_SOURCE = path.join(ROOT, 'skills', SKILL);
 
 const usage = `Usage: xcore connect [--dry-run] [--json]
 
-Gives the coding agents on this machine (Claude Code, Codex) what they need to bring a game to xgames.fun: xcore's
-bring-your-own-game skill, copied into each agent's skills folder for every project of this user, and everything
-${CMD} loot connect does (the xsolana tools and the xsolana-economy skill). Then it prints a few lines you may
-paste into a project's AGENTS.md or CLAUDE.md; it never writes into your project. A skills folder of that name that
-is not xcore's is left as it is.
-  --dry-run   say what it would copy and the commands it would run, and change nothing`;
+Set up the coding agents on this machine (Claude Code, Codex) to bring games to xgames.fun.
+
+It copies xcore's bring-your-own-game skill into each agent's skills folder (for all of this user's projects), and
+does everything ${CMD} loot connect does (adds the xsolana tools and the xsolana-economy skill). It then prints a few
+lines you can paste into a project's AGENTS.md or CLAUDE.md; it never writes into your project. A skills folder with
+the same name that is not xcore's is left unchanged.
+
+Options:
+  --dry-run   show what it would copy and the commands it would run, without changing anything
+  --json      print the result as JSON`;
 
 /** The lines for a project's AGENTS.md or CLAUDE.md: where to start, for an agent that never loaded the skill. */
 export const SNIPPET = [
@@ -93,7 +97,7 @@ export async function connectAgents({ dryRun = false, run, cwd = process.cwd(), 
 
 export default {
   name: 'connect',
-  summary: "give Claude Code and Codex xcore's skill and the xsolana tools; prints lines for a project's AGENTS.md",
+  summary: "set up Claude Code and Codex with xcore's skill and the xsolana tools",
   usage,
   run: args =>
     guard(async () => {

@@ -18,23 +18,37 @@ const usage = `Usage: xcore secret set <NAME> [dir] [--from-file <path> | --from
        xcore secret list [dir] [--json]
        xcore secret delete <NAME> [dir] [--yes <code>] [--json]
 
-A key your game's server needs and no player may see (a voucher-signing key, an outside API's key, an RPC URL with
-its key): the server reads it as env.<NAME>. xgames.fun keeps the value only on the server's host (Cloudflare), never
-shows it again and never gives it to the page. Set it after the game is published with its server/; it reaches the
-server's next request, with no publish. On this machine, ${CMD} dev reads the same names from the game folder's
-.dev.vars (NAME=value lines; a hidden file, so publish never sends it; keep it out of git).
-  set <NAME>         the value from --from-file, or the folder's .dev.vars (--from-dev-vars: the same key as under
-                     xcore dev), or --new-key: a new Ed25519 key made here and sent to xgames.fun only, never kept on
-                     this machine (it prints the key's address; for VOUCHER_SEED it points the grants the server pays
-                     at it in xsolana.json, then xcore loot approve), else from stdin when it is piped, else typed (not
-                     shown)
-  list               the names (values are never shown)
-  delete <NAME>      remove one
-A new name is set at once. Replacing a name the server has already, or deleting one, can't be undone (xgames.fun
-never shows a value, so nothing brings the old one back): it first prints what it replaces or removes (never a value)
-with a code, and changes nothing; it goes on when run again with --yes <code>. With --json, the printout is
-{planned: true, code, plan, next}.
-Names: A–Z, 0–9 and _, starting with a letter, not GF or GF_*; values up to 5,120 bytes; 32 secrets a game.`;
+Store a secret for the game's server: a value the server needs and no player may see (a voucher-signing key, a
+third-party API key, an RPC URL that contains a key). The server reads it as env.<NAME>.
+
+xgames.fun stores the value only on the server's host (Cloudflare). It never shows the value again and never sends it
+to the page. Set secrets after the game is published with its server/. A new value reaches the server's next request,
+without a publish.
+
+Locally, ${CMD} dev reads the same names from the game folder's .dev.vars file (NAME=value lines). It is a hidden
+file, so publish never sends it; keep it out of git.
+
+Commands:
+  set <NAME>         set a secret. The value comes from, in order:
+                       --from-file <path>   a file
+                       --from-dev-vars      the folder's .dev.vars (the same value ${CMD} dev uses)
+                       --new-key            a new Ed25519 key, generated here and sent only to xgames.fun, never
+                                            stored on this machine. It prints the key's address. For VOUCHER_SEED it
+                                            also points the grants the server pays at that address in xsolana.json;
+                                            then run ${CMD} loot approve
+                       stdin                when input is piped
+                       a prompt             typed at the terminal (not shown)
+  list               list the names (values are never shown)
+  delete <NAME>      remove a secret
+
+Confirming changes:
+  A new name is set immediately. Replacing a name the server already has, or deleting one, cannot be undone:
+  xgames.fun never shows a value, so nothing can bring the old one back. So these first print what would be replaced
+  or removed (never the value), with a code, and change nothing. Run the command again with --yes <code> to apply
+  it. With --json, the printout is {planned: true, code, plan, next}.
+
+Limits: names use A–Z, 0–9 and _, start with a letter, and cannot be GF or GF_*; values are up to 5,120 bytes; up to
+32 secrets per game.`;
 
 /** What is wrong with `value` as the server's RPC URL (`name` XSOLANA_RPC_URL or LOOT_RPC_URL), on the economy's cluster. */
 function rpcProblem(dir, name, value) {
@@ -108,7 +122,7 @@ async function fromDevVars(dir, name) {
 
 export default {
   name: 'secret',
-  summary: "a game server's secrets on xgames.fun (env.<NAME>): set, list, delete; never the page's",
+  summary: "manage secrets for the game's server (env.<NAME>); never sent to the page",
   usage,
   run: args =>
     guard(async () => {

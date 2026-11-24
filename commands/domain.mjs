@@ -11,14 +11,22 @@ const usage = `Usage: xcore domain [list] [dir] [--json]
        xcore domain check <domain> [dir] [--json]
        xcore domain remove <domain> [dir] [--json]
 
-The published game on a domain of your own (play.mygame.com), besides its xgames.fun link: players see your
-address, and sign-in, saves, scores, rooms and the economy work there as on xgames.fun. Creator has 1 domain, Scale 5;
-Free has none. Sign-in still opens a small xgames.fun window, and a post on X still uses the xgames.fun link.
-  list              the domains and their state
-  add <domain>      ask for one: prints the DNS records to add where your domain's DNS is
-  check <domain>    look at its records now (xgames.fun also checks by itself); live once they are right
+Serve the published game on your own domain (play.mygame.com) in addition to its xgames.fun link.
+
+Players see your address, and sign-in, saves, scores, rooms and the economy work there as they do on xgames.fun.
+Sign-in still opens a small xgames.fun window, and a post on X still uses the xgames.fun link.
+
+Domains per plan: Free 0, Creator 1, Scale 5.
+
+Commands:
+  list              list the domains and their state
+  add <domain>      request a domain; prints the DNS records to add at your DNS provider
+  check <domain>    check its DNS records now (xgames.fun also checks on its own); the domain goes live once they
+                    are correct
   remove <domain>   stop serving the game there
-A game whose plan no longer has room for a domain keeps it, paused: it sends players to the xgames.fun link.`;
+
+If the game's plan no longer allows a domain, the domain is kept but paused: it redirects players to the xgames.fun
+link.`;
 
 const plainly = e => {
   // xgames.fun's own words already say what to do; add the command only when they don't
@@ -35,7 +43,7 @@ const plainly = e => {
 
 export default {
   name: 'domain',
-  summary: 'serve the published game on a domain of your own (play.mygame.com): add, check, list, remove',
+  summary: 'serve the published game on your own domain',
   usage,
   run: args =>
     guard(async () => {

@@ -8,26 +8,42 @@ import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore adopt [folder] [--build "<command>"] [--out <dir>] [--static <dir>] [--no-build] [--json]
 
-Bring a web game you already made (plain static files, or a project whose build makes them: Vite, Next.js static
-export, Astro, SvelteKit's static adapter, Nuxt generate, Create React App, Parcel, Gatsby, any build script). It reads
-the folder's shape, builds it, writes its record (gamesfun.json → page: how it builds and what is published; never
-published itself) and lists everything that does not fit xgames.fun's hosting, each with its fix: no static index.html
-(server-side rendering, a Node server as the frontend), secrets, .env files, links, files over the limits, paths from
-the root, scripts, styles, fonts or frames from other sites, sites the code names that backend.json does not list.
-Then: ${CMD} check (the page in Chrome as the host serves it), ${CMD} backend use custom (a backend you
-run), ${CMD} loot add (an economy), ${CMD} publish.
-  --build "<cmd>"  the command that makes the published files (default: the project's build script)
+Prepare a web game you already made for xgames.fun: record how it builds, and list what to fix before publishing.
+
+It takes plain static files, or a project whose build produces them: Vite, Next.js static export, Astro, SvelteKit's
+static adapter, Nuxt generate, Create React App, Parcel, Gatsby, or any build script.
+
+adopt reads the folder, runs the build, and writes the game's record to gamesfun.json ("page": how it builds and which
+folder is published; gamesfun.json itself is never published). It then lists everything that does not fit xgames.fun
+hosting, each with a fix:
+  - no static index.html (server-side rendering, or a Node server as the frontend)
+  - secrets, .env files and symbolic links
+  - files over the size limits
+  - paths from the root (/assets/x.js instead of ./assets/x.js)
+  - scripts, styles, fonts or frames loaded from other sites
+  - sites the code calls that backend.json does not list
+
+Options:
+  --build "<cmd>"  the command that builds the published files (default: the project's build script)
   --out <dir>      the folder that is published (default: the build's output, or the folder itself)
-  --static <dir>   the folder the build copies as it is (default for Vite, Next.js, Astro, CRA: public), where xcore
-                   puts the files it adds (backend.json, xsolana.json, gf/loot/); with no build, a folder apart
-                   from --out whose files are laid over it (an engine's export: xcore loot add makes gamesfun/)
-  --no-build       read what is built already; do not run the build
-  --json           the report as JSON
-The folder (default: the one you are in) may be anywhere: in games/ or outside it. Exit code: 0 when nothing is refused or left to fix, else 1.`;
+  --static <dir>   the folder the build copies unchanged (default for Vite, Next.js, Astro and CRA: public). xcore
+                   puts the files it adds there (backend.json, xsolana.json, gf/loot/). With no build: a separate
+                   folder whose files are laid over --out (for an engine's export; xcore loot add creates gamesfun/)
+  --no-build       use what is already built; do not run the build
+  --json           print the report as JSON
+
+The folder defaults to the current directory and can be anywhere.
+Exit code: 0 when nothing is refused or left to fix, otherwise 1.
+
+Next steps:
+  ${CMD} check                 run the page in Chrome as xgames.fun serves it
+  ${CMD} backend use custom    use a backend you run yourself
+  ${CMD} loot add              add an economy
+  ${CMD} publish`;
 
 export default {
   name: 'adopt',
-  summary: 'bring a web game you already made: its record, and what to fix for xgames.fun hosting',
+  summary: 'prepare a game you already made: write its record and list what to fix for hosting',
   usage,
   run: args =>
     guard(async () => {

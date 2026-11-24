@@ -8,21 +8,29 @@ import { cardPrinted } from '../lib/card.mjs';
 
 const usage = `Usage: xcore check [dir] [--no-build] [--out <dir>] [--port <n>] [--json]
 
-The page check, as xgames.fun hosts the game: 1 it builds (gamesfun.json page.build), 2 it fits the hosting (what
-publish would refuse, and what breaks once hosted: paths from the root, scripts, styles, fonts or frames from other
-sites), 3 it starts clean in Chrome at a phone's size and a desktop's under the play host's page policy, 4 it stays
-inside its origins (its own files, the host's own paths, backend.json's origins). It does not check that the game plays
-as it should: that is your own game's tests. Run ${CMD} adopt <dir> first. It also says whether the game has a preview
-picture (assets/card.jpg, what a shared link shows; ${CMD} card makes one): a warning when it has none, or one that
-will not draw, or be cropped or blurry; never a failed check.
-  --no-build   check what is built already; do not run the build
-  --out <dir>  where the record and the screenshots go (default: <dir>/evidence/verify-N/)
-  --port <n>   the port the check serves the page on (default: any free one)
-  --json       the record as JSON`;
+Check the game's page as xgames.fun hosts it. Run ${CMD} adopt <dir> first.
+
+The check has four steps:
+  1. It builds (gamesfun.json page.build).
+  2. It fits the hosting: nothing publish would refuse, and nothing that breaks once hosted (paths from the root;
+     scripts, styles, fonts or frames from other sites).
+  3. It starts without errors in Chrome, at a phone's size and a desktop's, under the play host's page policy.
+  4. It stays inside its origins: its own files, the host's own paths, and the origins in backend.json.
+
+It does not check that the game plays correctly; that is for your game's own tests.
+
+It also reports on the preview picture (assets/card.jpg, shown when a link to the game is shared; ${CMD} card makes
+one). A missing picture, or one that will not draw or will be cropped or blurry, is a warning, never a failure.
+
+Options:
+  --no-build   check what is already built; do not run the build
+  --out <dir>  where the record and screenshots go (default: <dir>/evidence/verify-N/)
+  --port <n>   the port to serve the page on (default: any free port)
+  --json       print the record as JSON`;
 
 export default {
   name: 'check',
-  summary: 'the page check: it builds, fits xgames.fun hosting, starts clean, stays inside its origins',
+  summary: 'check the page as xgames.fun hosts it: build, hosting rules, a clean start in Chrome',
   usage,
   run: args =>
     guard(async () => {

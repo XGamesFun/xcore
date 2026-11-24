@@ -4,8 +4,8 @@ import { forgetReach } from '../lib/login-reach.mjs';
 
 const usage = `Usage: xcore logout [--json]
 
-Sign this computer out of xgames.fun: the publish token is revoked at xgames.fun and forgotten on this computer. Your
-published games stay published.`;
+Sign this computer out of xgames.fun. The publish token is revoked on xgames.fun and deleted from this computer.
+Your published games stay published.`;
 
 // signed out here, but not revoked at xgames.fun: why, and whether anything is left to do
 const NOT_REVOKED = {
@@ -20,7 +20,7 @@ const NOT_REVOKED = {
 
 export default {
   name: 'logout',
-  summary: 'sign this computer out of xgames.fun (revokes its publish token)',
+  summary: 'sign this computer out of xgames.fun and revoke its publish token',
   usage,
   run: args =>
     guard(async () => {
