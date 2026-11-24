@@ -267,7 +267,7 @@ test(
     const r = await pageVerify(dir, { out: path.join(tmp.dir, 'out') });
     const three = r.checks.find(c => c.n === 3);
     assert.equal(three.ok, false);
-    assert.match(three.detail, /moved itself out of its folder, to \/ .*hash router/);
+    assert.match(three.detail, /moved itself out of its folder, to \/ .*hash routing/);
     assert.doesNotMatch(three.detail, /asked for from the root/);
   },
 );
@@ -294,7 +294,7 @@ test(
     assert.equal(three.ok, false);
     assert.match(three.detail, /the game's own pages are linked from the root \(\/level\/2\/\)/);
     assert.doesNotMatch(three.detail, /\/level\/2\/ asked for from the root/);
-    assert.match(three.detail, /not under a folder \(Studio's preview, .*xcore(\.mjs)? dev\)/);
+    assert.match(three.detail, /not under a folder; see docs\/HOSTING\.md, "A game of several pages"/);
     assert.doesNotMatch(three.detail, /the kit/);
   },
 );

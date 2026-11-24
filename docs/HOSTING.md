@@ -47,6 +47,34 @@ The host serves static files as they are (GET and HEAD).
 
 Use relative URLs (`./assets/x.js`, not `/assets/x.js`) so the game works in all three.
 
+### Paths from the root
+
+`xcore adopt` and `xcore check` name each file the page loads by a path from the root (`/assets/x.js`), with the
+setting for the framework adopt detected. Every framework's setting:
+
+| Framework             | Setting for relative paths                                                                                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Plain HTML            | `./x` instead of `/x`                                                                                                                                                                                  |
+| Vite                  | `base: './'` in `vite.config` (not with React Router's framework mode: see [React Router's framework mode](#react-routers-framework-mode))                                                             |
+| Next.js static export | `assetPrefix: '.'` in `next.config`, production builds only, so `next dev` keeps working. One page only: with more, Next.js has no relative mode ([A game of several pages](#a-game-of-several-pages)) |
+| Astro                 | `build: { assetsPrefix: '.' }` in `astro.config` (`base: './'` does not do it). One page only                                                                                                          |
+| Nuxt                  | `ssr: false`, `app: { cdnURL: './' }` and `router: { options: { hashMode: true } }` in `nuxt.config`; in templates, `:src="'x.png'"` for a file in `public/` (`src="./x.png"` is read as an import)    |
+| Create React App      | `"homepage": "."` in `package.json`                                                                                                                                                                    |
+| Parcel                | build with the option --public-url ./                                                                                                                                                                  |
+
+### Routing by path
+
+The host serves files only, with no fallback to `index.html`. A route such as `/level/2` answers "not found" when it
+is opened or reloaded, and under a folder (the preview, `xcore dev`) no route matches. A `<base href>` is refused too.
+Use hash routing (`#/level/2`); links people already shared keep their old paths.
+
+| Router       | Hash routing                                                                                               |
+| ------------ | ---------------------------------------------------------------------------------------------------------- |
+| Vue Router   | `createWebHashHistory()`                                                                                   |
+| Nuxt         | `router: { options: { hashMode: true } }` in `nuxt.config`                                                 |
+| React Router | `createHashRouter` or `<HashRouter>` (framework mode has none: [see below](#react-routers-framework-mode)) |
+| Angular      | `withHashLocation()` in `provideRouter` (or `useHash: true`), and no `<base href>` in `src/index.html`     |
+
 ### Inside the play page
 
 xgames.fun shows the game in a frame with `sandbox="allow-scripts allow-same-origin allow-pointer-lock"` and

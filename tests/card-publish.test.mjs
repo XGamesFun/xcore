@@ -190,7 +190,10 @@ test('xcore publish as a person or an agent runs it: the refusal with its verdic
   assert.equal(check.card.status, 'missing');
   assert.equal(check.cardWarnings.length, 1);
   assert.match(check.cardWarnings[0], /^none .*Fix: .* card /);
-  assert.match(run(['publish', dir, '--check'], cli).stdout, /warning: preview picture: none .*Publish stops for it/);
+  assert.match(
+    run(['publish', dir, '--check'], cli).stdout,
+    /warning: preview picture: none .*Publish makes one from the page check's screenshot when there is one/,
+  );
 
   await putCard(dir, 'card.jpg', png(960, 960));
   await remember();
@@ -318,6 +321,54 @@ test('a damaged PNG, whole but with broken image data, stops publish: it would d
     e => e.code === 'card' && /cannot be drawn: it is damaged: its image data does not unpack/.test(e.message),
   );
 });
+
+test(
+  "publish with no preview picture makes one from the page check's screenshot, and says so; with none, it stops",
+  { skip: noBrowser, timeout: 120_000 },
+  async t => {
+    const { g, env, dir } = await signedIn(t);
+    const cli = { env: { ...env, GAMESFUN_STUDIO: g.origin } };
+    const remember = async () => {
+      await mkdir(path.join(dir, '.gamesfun'), { recursive: true });
+      const report = { pass: true, quick: true, passed: 4, ran: 4, failed: [], at: new Date().toISOString(), run: 'v' };
+      await writeFile(
+        path.join(dir, '.gamesfun', 'gate.json'),
+        JSON.stringify({ fingerprint: (await buildTree(dir)).fingerprint, report }),
+      );
+    };
+    const yes = async () => ['--yes', JSON.parse((await runAsync(['publish', dir, '--json'], cli)).stdout).code];
+    // no screenshot yet: it stops, and says the check would give one
+    await remember();
+    const stopped = await runAsync(['publish', dir, ...(await yes())], cli);
+    assert.equal(stopped.status, 1);
+    assert.match(
+      stopped.stderr,
+      /no preview picture[\s\S]*Or run .* check .* first: publish then makes one from its screenshot/,
+    );
+    // an earlier check's screenshot: the card is made from it, held to the card's rules, and the publish goes on
+    await mkdir(path.join(dir, 'evidence', 'verify-2'), { recursive: true });
+    await writeFile(path.join(dir, 'evidence', 'verify-2', 'desktop.png'), png(1280, 800, { color: [30, 160, 90] }));
+    const card = path.join(dir, 'assets', 'card.jpg');
+    assert.equal(existsSync(card), false);
+    const r = await runAsync(['publish', dir, ...(await yes())], cli);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(
+      r.stderr,
+      /No preview picture, so assets\/card\.jpg was made from the page check's screenshot \(evidence\/verify-2\/desktop\.png\)\. Look at it; to use another: .* card .*--force/,
+    );
+    const { imageFacts } = await import('../lib/card.mjs');
+    const facts = imageFacts(await readFile(card));
+    assert.deepEqual([facts.format, facts.width, facts.height], ['jpeg', 960, 960]);
+    assert.ok((await readFile(card)).length <= 1_500_000);
+    assert.ok(
+      g.state.tree.files.some(f => f.path === 'assets/card.jpg'),
+      'it went up with the game',
+    );
+    // it has a picture now: publishing again leaves it alone
+    const again = await runAsync(['publish', dir], cli);
+    assert.doesNotMatch(again.stderr, /No preview picture/);
+  },
+);
 
 // ---- xcore card, in a browser ---------------------------------------------------------------------------------------
 
@@ -462,8 +513,11 @@ test(
     await adopt(dir);
     const r = run(['check', dir, '--out', path.join(tmp.dir, 'out')]);
     assert.equal(r.status, 0, r.stdout + r.stderr);
-    assert.match(r.stdout, /^warning: preview picture: none .*Fix: .* card .*Publish stops for it/m);
-    assert.match(r.stdout, /check: PASS 3\/3/);
+    assert.match(
+      r.stdout,
+      /^warning: preview picture: none .*Fix: .* card .*Publish makes one from the page check's screenshot/m,
+    );
+    assert.match(r.stdout, /check: PASS, 3 passed/);
     await putCard(dir, 'card.png', png(300, 300));
     const w = run(['check', dir, '--out', path.join(tmp.dir, 'out2')]);
     assert.equal(w.status, 0, w.stdout + w.stderr);

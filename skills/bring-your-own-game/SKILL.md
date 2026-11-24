@@ -146,8 +146,9 @@ A shared link shows a square card built from `assets/card.jpg` (best a 960×960 
 picture of the game as it plays (`--tap`, `--wait <seconds>`, `--path <page?query>` for a game that needs them;
 `--from <picture>` for key art they have). Then **open the picture and look at it**: a loading screen, a blank page or a
 menu makes a poor card. Keep the subject clear of the top third (the title) and the bottom left (the button).
-`xcore publish` stops without a picture xgames.fun can draw (code `card`; `next` names the fix); go without one
-(`--no-card`, or `"card": false` in `gamesfun.json`) only when the person says so.
+With no picture, `xcore publish` makes one from the check's screenshot and says so: open it and look, as for any card.
+It stops when there is no picture and no screenshot, or one xgames.fun can't draw (code `card`; `next` names the fix);
+go without one (`--no-card`, or `"card": false` in `gamesfun.json`) only when the person says so.
 
 ## 7. Publish (only when they ask)
 

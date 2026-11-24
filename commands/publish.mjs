@@ -12,6 +12,7 @@ import { confirmFirstPublish, firstPublish } from '../lib/publish/first.mjs';
 import { reviewNudge } from '../lib/review.mjs';
 import { cardPrinted, drawable } from '../lib/card.mjs';
 import { plural, sizeText } from '../lib/util.mjs';
+import { uploadWords } from '../lib/publish/tree.mjs';
 
 const usage = `Usage: xcore publish [dir] [--draft] [--new] [--title <name>] [--no-card] [--yes <code>] [--status] [--check [--verify [--port <n>]]] [--json]
 
@@ -43,9 +44,11 @@ Preview picture:
   A link to the game shared on X or in a chat shows a square card with the game's picture behind its title. The
   picture is assets/card.jpg (or assets/card.png) in the published files: a JPEG or PNG with the matching extension,
   at most 1,500,000 bytes, ideally 960×960.
-  - Publish stops before uploading anything if there is no picture, or xgames.fun cannot draw it (too big, not a
-    JPEG or PNG, the wrong extension, truncated, or a JPEG variant it does not support). Make one with
-    ${CMD} card [dir], or publish without one with --no-card (or "card": false in gamesfun.json).
+  - With no picture, publish makes one from the newest ${CMD} check screenshot (evidence/verify-N/), says so, and goes
+    on. Replace it with ${CMD} card [dir] --force.
+  - Publish stops before uploading anything if there is no picture and no screenshot, or xgames.fun cannot draw the
+    picture (too big, not a JPEG or PNG, the wrong extension, truncated, or a JPEG variant it does not support). Make
+    one with ${CMD} card [dir], or publish without one with --no-card (or "card": false in gamesfun.json).
   - A picture that is small (under 600 px a side: blurry) or far from square (cropped to its middle) is uploaded
     with a warning and its fix.
   - X and chat apps cache cards, so a link shared earlier can show the old card for a while.
@@ -246,8 +249,7 @@ function statusLine(where, origin, s) {
 function checkLines(where, out, p) {
   const talks = p.backend.length ? ` It may talk to: ${p.backend.join(', ')}.` : '';
   const lines = [
-    `${where}: ${plural(out.files, 'file')}${out.added?.length ? ` (with the ${plural(out.added.length, 'record')} xgames.fun keeps: ${out.added.join(', ')})` : ''}, ${sizeText(out.bytes)}, nothing refused.${talks} ` +
-      `Left out: ${out.skipped.join(', ') || 'nothing'}.`,
+    `${where}: ${uploadWords(out)}; nothing refused.${talks} ` + `Left out: ${out.skipped.join(', ') || 'nothing'}.`,
   ];
   const sv = out.server;
   if (sv?.has && sv.ok) {
@@ -277,7 +279,7 @@ function verifyLine(v, where) {
   const evidence = v.run && !v.reused ? ` Evidence: ${where}/evidence/${v.run}/.` : '';
   if (v.pass) {
     const reused = v.reused ? ', these exact files passed before' : '';
-    return `checks: PASS (${v.passed}/${v.ran}${reused}); publish will not run them again for these files.${evidence}`;
+    return `checks: PASS (${v.passed} of ${v.ran} passed${reused}); publish will not run them again for these files.${evidence}`;
   }
   const why = failedNames(v.failed) || (v.changedDuring ? 'the files changed while it ran' : 'the checks did not run');
   return `the checks did not pass: ${why}. A publish now saves a private draft.${evidence}`;

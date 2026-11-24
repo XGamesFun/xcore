@@ -28,6 +28,15 @@ Options:
   --port <n>   the port to serve the page on (default: any free port)
   --json       print the record as JSON`;
 
+/** The checks' results in words: "3 passed, 1 skipped", "1 passed, 2 failed, 1 skipped". */
+export function checkCounts(checks) {
+  const n = ok => checks.filter(c => c.ok === ok).length;
+  const parts = [`${n(true)} passed`];
+  if (n(false)) parts.push(`${n(false)} failed`);
+  if (n(null)) parts.push(`${n(null)} skipped`);
+  return parts.join(', ');
+}
+
 export default {
   name: 'check',
   summary: 'check the page as xgames.fun hosts it: build, hosting rules, a clean start in Chrome',
@@ -72,12 +81,7 @@ export default {
         for (const n of r.notes) console.log(`note: ${n}`);
         // a warning when it is missing, cannot be drawn, or will be cropped or blurry; never a failed check
         if (r.card) console.log(cardPrinted(r.card));
-        const ran = r.checks.filter(c => c.ok !== null),
-          skipped = r.checks.length - ran.length;
-        console.log(
-          `\ncheck: ${r.pass ? 'PASS' : 'FAIL'} ${ran.filter(c => c.ok).length}/${ran.length}` +
-            `${skipped ? ` (${skipped} skipped)` : ''} · evidence ${shown(r.outDir)}`,
-        );
+        console.log(`\ncheck: ${r.pass ? 'PASS' : 'FAIL'}, ${checkCounts(r.checks)} · evidence ${shown(r.outDir)}`);
       }
       return r.pass ? 0 : 1;
     }, args),

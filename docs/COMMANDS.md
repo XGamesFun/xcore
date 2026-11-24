@@ -412,7 +412,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
-      - run: npx -y @xgamesfun/xcore@<version> publish ./my-game
+      - run: npx -y @xgamesfun/xcore@0.11.0 publish ./my-game
 ```
 
 Commit the game's preview picture (`assets/card.jpg`, made once with `xcore card`). A publish without one stops, in a
@@ -476,8 +476,12 @@ Open the picture and look at it before you publish.
 
 ### Publish asks for it
 
-- With no picture, or one xgames.fun cannot draw, `xcore publish` stops before anything is uploaded, says what is
-  wrong, and names the ways forward. With `--json`: `"code": "card"`, `"card"` (what it found) and `"next"` (the
+- With no picture, `xcore publish` makes one from the newest page check screenshot (`evidence/verify-N/desktop.png`,
+  else `phone.png`), as `xcore card --from <screenshot>` would: 960×960, a JPEG of at most 1,500,000 bytes. It says so in
+  one line; replace it with `xcore card <folder> --force`. It writes the picture where `xcore card` does, before the
+  build, so the build includes it.
+- With no picture and no screenshot (run `xcore check` first), or with a picture xgames.fun cannot draw, `xcore publish`
+  stops before anything is uploaded, says what is wrong, and names the ways forward. With `--json`: `"code": "card"`, `"card"` (what it found) and `"next"` (the
   command that fixes it).
 - `--draft`, `--status` and `--check` do not stop for it. `--check --json` reports it in `card` and `cardWarnings`.
 - `xcore publish --no-card` publishes without a picture (the link shows the plain card). `"card": false` in
