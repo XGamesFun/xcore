@@ -1,56 +1,31 @@
-// The package's public modules: package.json "exports" lists each one by name (no wildcards), so an internal module
-// is not public by accident. The list is what the game-making kit imports (its builder imports these subpaths from
-// its own copy of this package); each one must resolve and load.
+// The package's public API: one entry point (lib/api.mjs, with types in types/index.d.ts) and package.json. Every
+// other module is internal: not reachable by an import of the package, so it can change in any release.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+const PUBLIC = ['PLAN_LIMITS', 'adopt', 'check', 'publishCheck', 'publishStatus'];
 
-/** The subpaths the kit's builder imports (xgames-kit: builder/, bin/ and tests/), as of 2026-11-24. */
-const KIT_IMPORTS = [
-  'browser',
-  'check',
-  'cli',
-  'commands/check',
-  'commands/publish',
-  'config-dir',
-  'credentials',
-  'economy',
-  'open',
-  'package.json',
-  'play-policy',
-  'publish',
-  'publish/adopt',
-  'publish/client',
-  'publish/gate',
-  'publish/hosting',
-  'publish/names',
-  'publish/oidc',
-  'publish/page',
-  'publish/scan',
-  'publish/tree',
-  'secret-patterns',
-  'secret-store',
-  'server/bundle',
-  'server/contract',
-  'solana-rpc',
-];
-
-test('exports names each public module, with no wildcard', () => {
-  for (const key of Object.keys(pkg.exports)) assert.doesNotMatch(key, /\*/, key);
+test('exports: the entry point and package.json, nothing else', () => {
+  assert.deepEqual(Object.keys(pkg.exports), ['.', './package.json']);
+  assert.equal(pkg.exports['.'].types, './types/index.d.ts');
+  assert.equal(pkg.types, './types/index.d.ts');
+  assert.ok(pkg.files.includes('types/'), 'the types are published');
 });
 
-test('every subpath the kit imports is exported, and every export loads', async () => {
-  for (const sub of KIT_IMPORTS) assert.ok(pkg.exports[`./${sub}`], `./${sub} is exported`);
-  for (const key of Object.keys(pkg.exports)) {
-    if (key.endsWith('.json')) continue;
-    const mod = await import(`${pkg.name}/${key.slice(2)}`);
-    assert.ok(Object.keys(mod).length > 0, `${key} exports something`);
-  }
+test('the entry point exports the documented calls, and its types declare the same', async () => {
+  const api = await import(pkg.name);
+  assert.deepEqual(Object.keys(api).sort(), PUBLIC);
+  for (const name of PUBLIC.filter(n => n !== 'PLAN_LIMITS')) assert.equal(typeof api[name], 'function', name);
+  assert.equal(api.PLAN_LIMITS.free.cpuMs, 50);
+  const types = await readFile(new URL('../types/index.d.ts', import.meta.url), 'utf8');
+  for (const name of PUBLIC) assert.match(types, new RegExp(`export (?:function|const) ${name}\\b`), name);
+  const doc = await readFile(new URL('../docs/API.md', import.meta.url), 'utf8');
+  for (const name of PUBLIC) assert.ok(doc.includes(`\`${name}`), `docs/API.md documents ${name}`);
 });
 
 test('an internal module is not public', async () => {
-  await assert.rejects(import(`${pkg.name}/review`), e => e.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED');
-  await assert.rejects(import(`${pkg.name}/commands/adopt`), e => e.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED');
+  for (const sub of ['review', 'publish', 'secret-store', 'credentials', 'publish/oidc', 'commands/publish'])
+    await assert.rejects(import(`${pkg.name}/${sub}`), e => e.code === 'ERR_PACKAGE_PATH_NOT_EXPORTED', sub);
 });

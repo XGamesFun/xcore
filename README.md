@@ -17,8 +17,6 @@ The package is `@xgamesfun/xcore` on npm, and the command is `xcore`. The econom
 [`@xgamesfun/solana`](https://github.com/XGamesFun/solana-kit) (`xsolana`), which `xcore loot` runs for you. See
 [Names](#names) for how the pieces fit together.
 
-A game-making kit, for a game that starts from an idea, is coming as `@xgamesfun/kit`.
-
 ## Install
 
 You need Node 24 or newer. The page check uses Chrome, Edge or Chromium if one is installed; otherwise it downloads
@@ -128,13 +126,14 @@ xcore domain add play.mygame.com ./my-game       # serve it on your own domain (
 ```
 
 `xcore --help` lists every command, and `xcore <command> --help` shows its options. Every command accepts `--json`.
+Exit codes: 0 success, 1 failure, 2 usage mistake, and 3 for an INCONCLUSIVE `xcore review`.
 [docs/COMMANDS.md](docs/COMMANDS.md) is the full reference.
 
 ## Hosting rules and limits
 
 - The host serves static files that run in the browser, unchanged. `index.html` is the entry point. A missing path
   returns "not found"; there is no fallback to `index.html`.
-- Use relative URLs (`./assets/x.js`, not `/assets/x.js`), so the game works at its own origin, under Studio's preview
+- Use relative URLs (`./assets/x.js`, not `/assets/x.js`), so the game works at its own origin, under xgames.fun's preview
   folder, and in `xcore dev`.
 - In xgames.fun's play page, the game runs in a sandboxed frame: no form submissions, pop-ups or top-level navigation.
 - Scripts, style sheets, fonts and frames must come from the game's own files. The page can connect to its own origin
@@ -188,15 +187,17 @@ Reasons and alternatives: [docs/HOSTING.md](docs/HOSTING.md#what-is-not-supporte
 
 ## Names
 
-| Name                  | What it is                                                                                                         | Required?                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------- |
-| **xgames.fun**        | The site that hosts the games and runs sign-in, saves, leaderboards, databases and plans.                          | Yes: xcore publishes there. |
-| **gamesfun**          | The name xgames.fun uses in code: the `GamesFun` page client, `gamesfun.json`, `.gamesfun/`, `GAMESFUN_*`.         | Comes with xcore.           |
-| **xcore**             | This command line (`@xgamesfun/xcore` on npm).                                                                     | Yes.                        |
-| **@xgamesfun/solana** | The economy toolkit: checks, simulates, prices and publishes an economy. Installed as a dependency of xcore.       | Only for an economy.        |
-| **xsolana**           | The command line of `@xgamesfun/solana`. `xcore loot <command>` runs it for you.                                   | Only for an economy.        |
-| **solana-kit**        | The GitHub repository of `@xgamesfun/solana` ([XGamesFun/solana-kit](https://github.com/XGamesFun/solana-kit)).    | No: source and docs only.   |
-| **loot**              | The shared Solana program every economy runs on, so you deploy no contract of your own. Not independently audited. | Only for an economy.        |
+| Name                  | What it is                                                                                                                   | Required?                   |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| **xgames.fun**        | The site that hosts the games and runs sign-in, saves, leaderboards, databases and plans.                                    | Yes: xcore publishes there. |
+| **gamesfun**          | The name xgames.fun uses in code: the `GamesFun` page client, `gamesfun.json`, `.gamesfun/`, `GAMESFUN_*`.                   | Comes with xcore.           |
+| **xcore**             | This command line (`@xgamesfun/xcore` on npm).                                                                               | Yes.                        |
+| **@xgamesfun/solana** | The economy toolkit: checks, simulates, prices and publishes an economy. Installed as a dependency of xcore.                 | Only for an economy.        |
+| **xsolana**           | The command line of `@xgamesfun/solana`. `xcore loot <command>` runs it for you.                                             | Only for an economy.        |
+| **solana-kit**        | The GitHub repository of `@xgamesfun/solana` ([XGamesFun/solana-kit](https://github.com/XGamesFun/solana-kit)).              | No: source and docs only.   |
+| **loot**              | The shared Solana program every economy runs on, so you deploy no contract of your own. Not independently audited.           | Only for an economy.        |
+| **Studio**            | xgames.fun's creator side: your games, drafts, plans, secrets and signed-in computers. Its console is at xgames.fun/console. | With an account.            |
+| **game-making kit**   | A separate tool for making a game from an idea. Not released; xcore does not need it.                                        | No.                         |
 
 ## With a coding agent
 
@@ -260,6 +261,7 @@ it with `npm i -g @xgamesfun/xcore`.
 - [docs/HOSTING.md](docs/HOSTING.md): the hosting rules, limits and plans, frameworks and engines, your own site and
   domain, your data, and what is not supported
 - [docs/FEES.md](docs/FEES.md): every cost, in one table
+- [docs/API.md](docs/API.md): the library entry point (`adopt`, `check`, `publishCheck`, `publishStatus`), with types
 - [docs/CLIENT.md](docs/CLIENT.md): the page client (`gamesfun.js`, Godot, Unity): sign-in, saves, leaderboards, full
   screen, the wallet app, live settings, the database, rooms, the economy
 - [docs/SERVER.md](docs/SERVER.md): a game's own server code (`server/`, the `gf-server-v1` contract), its database and

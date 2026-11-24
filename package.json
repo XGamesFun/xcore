@@ -47,33 +47,13 @@
     "xcore": "bin/xcore.mjs"
   },
   "exports": {
-    "./package.json": "./package.json",
-    "./commands/check": "./commands/check.mjs",
-    "./commands/publish": "./commands/publish.mjs",
-    "./publish": "./lib/publish/index.mjs",
-    "./publish/adopt": "./lib/publish/adopt.mjs",
-    "./publish/client": "./lib/publish/client.mjs",
-    "./publish/gate": "./lib/publish/gate.mjs",
-    "./publish/hosting": "./lib/publish/hosting.mjs",
-    "./publish/names": "./lib/publish/names.mjs",
-    "./publish/oidc": "./lib/publish/oidc.mjs",
-    "./publish/page": "./lib/publish/page.mjs",
-    "./publish/scan": "./lib/publish/scan.mjs",
-    "./publish/tree": "./lib/publish/tree.mjs",
-    "./server/bundle": "./lib/server/bundle.mjs",
-    "./server/contract": "./lib/server/contract.mjs",
-    "./browser": "./lib/browser.mjs",
-    "./check": "./lib/check.mjs",
-    "./cli": "./lib/cli.mjs",
-    "./config-dir": "./lib/config-dir.mjs",
-    "./credentials": "./lib/credentials.mjs",
-    "./economy": "./lib/economy.mjs",
-    "./open": "./lib/open.mjs",
-    "./play-policy": "./lib/play-policy.mjs",
-    "./secret-patterns": "./lib/secret-patterns.mjs",
-    "./secret-store": "./lib/secret-store.mjs",
-    "./solana-rpc": "./lib/solana-rpc.mjs"
+    ".": {
+      "types": "./types/index.d.ts",
+      "default": "./lib/api.mjs"
+    },
+    "./package.json": "./package.json"
   },
+  "types": "./types/index.d.ts",
   "files": [
     "bin/",
     "commands/",
@@ -81,6 +61,7 @@
     "lib/",
     "loot-page/",
     "skills/",
+    "types/",
     "README.md",
     "LICENSE"
   ],

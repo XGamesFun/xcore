@@ -31,6 +31,26 @@ Every game sits in a slot. The full plan table and its rules are in [HOSTING.md]
 | Creator | a paid slot                    | $15 per game per 30 days, SOL or USDC | $10 per paid slot    | 200 ms a request; 6,000 requests a minute; 1 GB of saves; 10 GB of files       |
 | Scale   | granted by xgames.fun          | as granted                            | as granted           | 1,000 ms a request; 30,000 requests a minute; 10 GB of saves; 100 GB of files  |
 
+### What a game gets on each plan
+
+Every plan has the same services. A paid slot (Creator) raises their limits and adds a domain of your own.
+
+|                                                    | Free (free slot)                                                   | Creator ($15 per game per 30 days)              |
+| -------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------- |
+| Hosting at an xgames.fun link                      | 3,000 files, 100 MiB per game                                      | the same                                        |
+| Player sign-in (X or Google, with a linked wallet) | included                                                           | included                                        |
+| Saves                                              | 10 MB per game                                                     | 1 GB per game                                   |
+| Leaderboards                                       | 8 boards of 10,000 entries                                         | 16 boards of 1,000,000 entries                  |
+| A D1 (SQLite) database                             | one per game                                                       | one per game                                    |
+| Multiplayer rooms                                  | included (each player's connection counts as one server request)   | included                                        |
+| The game's server (a Cloudflare Worker)            | 50 ms of CPU a request; 600 requests a minute, 120 from one player | 200 ms; 6,000 a minute, 600 from one player     |
+| Project files                                      | 100 MB                                                             | 10 GB                                           |
+| Live settings (announcement, remote config)        | included                                                           | included                                        |
+| Sites that may embed the game                      | 3                                                                  | 10                                              |
+| A domain of your own                               | none                                                               | 1                                               |
+| Use included a month                               | $1                                                                 | $10 per paid slot, shared by your Creator games |
+| Past what is included                              | capped until the month ends                                        | usage credit at twice cost; without it, capped  |
+
 - **Paying:** paid slots are prepaid on xgames.fun (your console → Plans) in SOL or USDC. They do not renew
   automatically. After a period ends there are 7 days' grace; then the game moves back to a free slot and nothing is
   taken down.

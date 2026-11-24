@@ -24,16 +24,17 @@ Set `GAMESFUN_DEBUG=1` to print stack traces for errors.
 
 ## Project layout
 
-| Path            | What it holds                                                                                                                                                                      |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bin/xcore.mjs` | the command's entry point: loads `commands/` and passes other commands to the game-making kit when it is installed                                                                 |
-| `commands/`     | one module per command (`adopt`, `check`, `dev`, `publish`, `add`, `backend`, `loot`, `review`, `secret`, …)                                                                       |
-| `lib/`          | the code the commands use; `lib/publish/` is the publish pipeline, `lib/server/` the `gf-server-v1` contract                                                                       |
-| `lib/client/`   | templates copied into a game: `gamesfun.js` (and its generated copy `signin-v1.js`), the Godot and Unity glue, and `server/` (the files `xcore add` writes into the game's server) |
-| `loot-page/`    | the browser-side wallet helper, copied into a game that has an economy                                                                                                             |
-| `skills/`       | instructions for coding agents                                                                                                                                                     |
-| `docs/`         | longer documentation                                                                                                                                                               |
-| `tests/`        | `node:test` tests, with sample games in `tests/fixtures/`                                                                                                                          |
+| Path                    | What it holds                                                                                                                                                                      |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bin/xcore.mjs`         | the command's entry point: loads `commands/` and passes other commands to the game-making kit when it is installed                                                                 |
+| `commands/`             | one module per command (`adopt`, `check`, `dev`, `publish`, `add`, `backend`, `loot`, `review`, `secret`, …)                                                                       |
+| `lib/`                  | the code the commands use; `lib/publish/` is the publish pipeline, `lib/server/` the `gf-server-v1` contract                                                                       |
+| `lib/client/`           | templates copied into a game: `gamesfun.js` (and its generated copy `signin-v1.js`), the Godot and Unity glue, and `server/` (the files `xcore add` writes into the game's server) |
+| `loot-page/`            | the browser-side wallet helper, copied into a game that has an economy                                                                                                             |
+| `skills/`               | instructions for coding agents                                                                                                                                                     |
+| `docs/`                 | longer documentation                                                                                                                                                               |
+| `lib/api.mjs`, `types/` | the public library entry point and its types; every other module is internal (docs/API.md)                                                                                         |
+| `tests/`                | `node:test` tests, with sample games in `tests/fixtures/`                                                                                                                          |
 
 ## Making a change
 

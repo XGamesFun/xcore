@@ -9,7 +9,8 @@ The person already has a game. Make it fit xgames.fun's hosting with the smalles
 would throw away their work. Every command here is `@xgamesfun/xcore`: run it as `npx -y @xgamesfun/xcore <command>`,
 or `xcore <command>` once installed with `npm i -g @xgamesfun/xcore` (a bare `npx xcore` finds another package on npm).
 Each command prints its findings with their fix and the command that comes next, and `<command> --help` gives its
-options and limits: they are the reference, so this file holds the method and the order, not the details.
+options and limits: they are the reference, so this file holds the method and the order, not the details. `xcore add`
+and `xcore loot add` print short next steps: add `--verbose` (or `--json`) to read every note before wiring it in.
 
 The order: **adopt → fix → check → (players, data, a server) → (economy) → (review, when it pays) → preview picture →
 publish when they ask → (review --live).**

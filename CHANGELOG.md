@@ -13,11 +13,28 @@ Readability and accuracy, and fixes, from two outside reviews. No price or limit
   `ctx[k]`, `{ [k]: req } = ctx`, `Reflect.get(ctx, k)`). Each is now INCONCLUSIVE, and a computed key is never taken
   as state the server keeps. `review.json` has `verdict` (`PASS`, `FAIL`, `INCONCLUSIVE`), and each payout entry in
   `unread` has `payout: true`. A high finding is still FAIL (exit code 1).
-
 - **Breaking: the first publish of a folder asks first.** It creates a new game on the account this computer is signed
   in to and takes one of its slots, so it now prints the account, the game's name and the slot, and changes nothing.
   At a terminal, type `publish` to go on; otherwise run it again with `--yes <code>` (`--json`: `planned: true`, with
   `code` and `next`). A folder already linked to its game, and a GitHub Actions job's OIDC publish, are not asked.
+- **Breaking: one public entry point.** `exports` was every module (`./*`, `./publish/*`, `./server/*`,
+  `./commands/*`). It is now `@xgamesfun/xcore` (`lib/api.mjs`: `adopt`, `check`, `publishCheck`, `publishStatus`,
+  `PLAN_LIMITS`) and `@xgamesfun/xcore/package.json`. Types ship in `types/index.d.ts`, and
+  [docs/API.md](docs/API.md) documents the calls. Any other subpath (`@xgamesfun/xcore/publish`,
+  `/secret-store`, `/server/contract`, …) now fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`. No published package
+  imported them (the game-making kit uses its own copy).
+- **Fixed: sign-in is X or Google**, as the client does it. A Solana wallet is linked to the player's account and
+  comes with the sign-in; it never signs anyone in. The README and `xcore add --help` said "X first, or a wallet".
+- **Changed: `xcore add` and `xcore loot add` print a short result**: what was written and the next steps (two to
+  five lines). `--verbose` prints every note, as before; `--json` has both (`next`, `steps`).
+- **Changed: every usage mistake says what was wrong** (`xcore add bogus`: `"bogus" is not something xcore can add`),
+  then the command's usage lines and where its help is, with exit code 2. It printed the whole help, and some mistakes
+  said nothing else. `xcore backend <word>` that is neither ours nor the kit's is a usage mistake (it was exit code 1).
+- **Changed: `.dev.vars` is git-ignored as soon as xcore uses it.** `xcore add vouchers` (the test seed) and
+  `xcore add rpc` (an RPC URL with its key) add `.dev.vars` to the folder's `.gitignore`, writing one if needed, and
+  say so in one line. Before, they did so only in a folder that was already in git.
+- **Changed: the README and `--help` no longer promote the unreleased game-making kit**; the Names table says what it
+  is in one line, and defines Studio. docs/FEES.md lists what a paid slot includes beyond hosting.
 - **Changed: a project install prints `npx @xgamesfun/xcore`, never `npx xcore`.** The unscoped `xcore` on npm is
   another package.
 - **Changed: no message tells you to install `@xgamesfun/kit`.** A kit command, or a game made with the kit, now says
@@ -30,11 +47,6 @@ Readability and accuracy, and fixes, from two outside reviews. No price or limit
   shorter sentences. The README and docs/ are rewritten the same way.
 - **Added: [docs/FEES.md](docs/FEES.md)**, every cost in one table, and a section on getting a game's data out
   (docs/HOSTING.md). Player saves and leaderboards are not in `xcore db export`.
-- **Changed: package.json `exports` lists each public module by name.** The wildcards made every internal module
-  public. The listed modules are the ones the game-making kit imports; any other subpath now fails with
-  `ERR_PACKAGE_PATH_NOT_EXPORTED`.
-- **Fixed: sign-in is X or Google**, as the client does it. A Solana wallet is linked to the player's account and
-  comes with the sign-in; it never signs anyone in. The README and `xcore add --help` said "X first, or a wallet".
 
 ## 0.11.0 — 2026-11-23
 
