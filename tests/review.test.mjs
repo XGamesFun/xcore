@@ -166,7 +166,7 @@ test('the two sample servers: no server finding in either; the economy review of
   assert.deepEqual(json.ledger, b.ledger, 'the ledger in review.json');
   assert.deepEqual(json.custody, b.custody, 'the custody list in review.json');
   // the next review is the next folder; the command says it all and exits 0
-  const c = run(['review', bounded], { env: { GAMESFUN_SOLANA: '' } });
+  const c = run(['review', bounded, '--verbose'], { env: { GAMESFUN_SOLANA: '' } });
   assert.equal(c.status, 0, c.stderr);
   assert.match(c.stdout, /^review: PASS 0 high/);
   assert.match(c.stdout, /evidence .*review-2/);
@@ -1258,7 +1258,7 @@ test('the sample bounded server: a Tell line names its ceiling and what a leaked
     assert.ok(block('## What this build allows', '## Findings').includes(`\n> ${x.text}\n`), x.text);
 
   // the command: the counts, and where both lists are
-  const c = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
+  const c = run(['review', dir, '--verbose'], { env: { GAMESFUN_SOLANA: '' } });
   assert.match(
     c.stdout,
     new RegExp(
@@ -1596,7 +1596,7 @@ test('a check read through a computed key or Reflect is INCONCLUSIVE, never PASS
   }
   // the outside reviewer's own case, through the command: exit code 3 and ok: false, in words and in JSON
   const dir = path.join(tmp.dir, 'e0');
-  const c = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
+  const c = run(['review', dir, '--verbose'], { env: { GAMESFUN_SOLANA: '' } });
   assert.equal(c.status, 3, c.stdout + c.stderr);
   assert.match(c.stdout, /^review: INCONCLUSIVE 0 high, /);
   const j = run(['review', dir, '--json'], { env: { GAMESFUN_SOLANA: '' } });
@@ -1721,7 +1721,7 @@ test('an economy file or a gamesfun.json that is there and cannot be read is a h
   assert.match(md, /^\*\*FAIL\*\*: 1 high, 0 medium, 0 low, 0 info; 1 part not read\. Fix every high finding/m);
   assert.match(md, /## Not read\n\n.*\n\n- xsolana\.json: it is not valid JSON/);
   assert.ok(md.includes(`@xgamesfun/solana ${kit}`), 'no "no @xgamesfun/solana" while it is installed');
-  const c = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
+  const c = run(['review', dir, '--verbose'], { env: { GAMESFUN_SOLANA: '' } });
   assert.equal(c.status, 1);
   assert.match(c.stdout, /^review: FAIL 1 high, 0 medium, 0 low, 0 info; 1 part not read · evidence /);
   assert.match(c.stdout, /^ {2}not read: xsolana\.json: it is not valid JSON/m);
@@ -1762,11 +1762,24 @@ test('every result says how it was read and what a PASS means: the same lines on
   assert.deepEqual(r.unread, []);
   assert.deepEqual(JSON.parse(await readFile(path.join(r.outDir, 'review.json'), 'utf8')).method, METHOD);
   const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
-  const c = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
+  const c = run(['review', dir, '--verbose'], { env: { GAMESFUN_SOLANA: '' } });
   for (const line of METHOD) {
     assert.ok(md.includes(`\n- ${line}\n`), line);
     assert.ok(c.stdout.includes(`\n  ${line}\n`), line);
   }
+  // by default: the verdict, one line on what it is, the findings, what was read, and at most three next steps
+  const short = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } }).stdout;
+  assert.match(
+    short,
+    /^review: PASS 0 high, .*\n {2}Pattern-based, not a security audit: a PASS is not proof \(--verbose says how it reads\)\.\n/,
+  );
+  for (const line of METHOD) assert.ok(!short.includes(line), "the method is --verbose's");
+  assert.match(
+    short,
+    /^read: xsolana\.json \(1 route\); server\/ \(1 paid route, 1 key, 5 api\/ routes\); live: not asked$/m,
+  );
+  assert.ok((short.match(/^ {2}\d\. /gm) ?? []).length <= 3, 'at most three next steps');
+  assert.ok(short.split('\n').length < 20, short);
   assert.ok(md.indexOf(METHOD[0]) < md.indexOf('## Questions to decide'), 'under the verdict, before anything else');
   assert.match(md, /^\*\*PASS\*\*: 0 high, .* info\. No high finding\.$/m);
   assert.deepEqual(JSON.parse(run(['review', dir, '--json'], { env: { GAMESFUN_SOLANA: '' } }).stdout).method, METHOD);
@@ -1834,7 +1847,7 @@ test('what the review could not read is said beside the verdict; a check that an
     /## Not read\n\nThe verdict does not cover these: read them yourself\.\n\n- server\/vouchers\.js: PAY\.check hands env to `Tides`/,
   );
   assert.match(md, /\| state the server keeps \(taken so: env goes to code not read\) \|/);
-  const c = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
+  const c = run(['review', dir, '--verbose'], { env: { GAMESFUN_SOLANA: '' } });
   assert.equal(c.status, 3);
   assert.match(c.stdout, /^review: INCONCLUSIVE 0 high, .* info; 1 part not read · evidence /);
   assert.match(c.stdout, /^ {2}not read: server\/vouchers\.js: PAY\.check hands env to `Tides`, which was not read/m);

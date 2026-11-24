@@ -5,8 +5,9 @@ import { resolveGame, shown } from '../lib/games.mjs';
 import { madeByKit } from '../lib/publish/index.mjs';
 import { CMD } from '../lib/command.mjs';
 import { cardPrinted } from '../lib/card.mjs';
+import { SECTION } from '../lib/journey.mjs';
 
-const usage = `Usage: xcore check [dir] [--no-build] [--out <dir>] [--port <n>] [--json]
+const usage = `Usage: xcore check [dir] [--no-build] [--out <dir>] [--port <n>] [--verbose] [--json]
 
 Check the game's page as xgames.fun hosts it. Run ${CMD} adopt <dir> first.
 
@@ -26,7 +27,26 @@ Options:
   --no-build   check what is already built; do not run the build
   --out <dir>  where the record and screenshots go (default: <dir>/evidence/verify-N/)
   --port <n>   the port to serve the page on (default: any free port)
+  --verbose    print each check's detail and every tap of the first-session walk (the record always has them)
   --json       print the record as JSON`;
+
+/** The note every brought game's check carries (lib/check.mjs). */
+const OWN_PLAY = "A brought game's play is its own";
+
+/**
+ * The check's lines as printed by default: each check's verdict (a PASS without its detail, a FAIL or SKIP with it),
+ * the build's output, and nothing of the first-session walk (the command prints its summary in one line).
+ */
+function shortLog() {
+  let walk = false;
+  return line => {
+    if (line.startsWith(SECTION)) return (walk = true);
+    if (walk && /^ {2}/.test(line)) return;
+    walk = false;
+    if (/^PASS \d /.test(line)) return console.log(line.replace(/^(PASS \d [^:]+):.*$/, '$1'));
+    console.log(line);
+  };
+}
 
 /** The checks' results in words: "3 passed, 1 skipped", "1 passed, 2 failed, 1 skipped". */
 export function checkCounts(checks) {
@@ -45,7 +65,12 @@ export default {
     guard(async () => {
       const { values, positionals } = parse(
         args,
-        { 'no-build': { type: 'boolean' }, out: { type: 'string' }, port: { type: 'string' } },
+        {
+          'no-build': { type: 'boolean' },
+          out: { type: 'string' },
+          port: { type: 'string' },
+          verbose: { type: 'boolean' },
+        },
         usage,
       );
       const dir = await resolveGame(positionals[0]);
@@ -61,7 +86,7 @@ export default {
         noBuild: values['no-build'] === true,
         out: values.out ?? null,
         port,
-        log: l => (values.json ? console.error : console.log)(l),
+        log: values.json ? l => console.error(l) : values.verbose ? l => console.log(l) : shortLog(),
       });
       // the record, and a failed check said as every command's --json says a failure (ok, error, code)
       const failed = r.checks.filter(c => c.ok === false);
@@ -78,9 +103,17 @@ export default {
           ...r,
         });
       else {
-        for (const n of r.notes) console.log(`note: ${n}`);
+        // (the note every brought game gets, that its play is its own, is --verbose's)
+        for (const n of r.notes) if (values.verbose || !n.startsWith(OWN_PLAY)) console.log(`note: ${n}`);
+        if (!values.verbose && r.firstSession?.tell?.length)
+          console.log(`first session: ${r.firstSession.tell[0]} (--verbose: every tap)`);
         // a warning when it is missing, cannot be drawn, or will be cropped or blurry; never a failed check
-        if (r.card) console.log(cardPrinted(r.card));
+        if (r.card)
+          console.log(
+            !values.verbose && r.card.level === 'stop' && r.card.missing
+              ? `warning: no preview picture. Publish makes one from this check's screenshot, or make your own: ${CMD} card${shown(dir) === '.' ? '' : ` ${shown(dir)}`}`
+              : cardPrinted(r.card),
+          );
         console.log(`\ncheck: ${r.pass ? 'PASS' : 'FAIL'}, ${checkCounts(r.checks)} · evidence ${shown(r.outDir)}`);
       }
       return r.pass ? 0 : 1;

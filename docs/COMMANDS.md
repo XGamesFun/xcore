@@ -507,8 +507,13 @@ For other agents (Cursor, Copilot, Gemini CLI and more), `npx skills add XGamesF
 
 ## For scripts and agents: `--json` and exit codes
 
-Every command takes `--json`. `xcore add` and `xcore loot add` print what they wrote and the next steps in short;
-`--verbose` prints every note, and `--json` has both (`next` and `steps`).
+Every command takes `--json`. By default the commands print a short result: a verdict, one line per finding, and at
+most three next steps. `--verbose` prints the rest, and `--json` always has everything:
+
+- `xcore add` and `xcore loot add`: every note on using what was added (`--json`: `next` and `steps`);
+- `xcore check`: each check's detail and every tap of the first-session walk (also in `record.json`);
+- `xcore review`: how it reads, every finding with its fix, every question and the trade-offs (also in `review.md`);
+- `xcore dev`: where saves are kept, the economy's RPC, and what the stand-in does not imitate.
 
 - A failure is then also printed on stdout as `{ "ok": false, "error", "code", "state", "next" }`:
   - `code` is the reason (`usage`, `login`, `files`, `secrets`, `build`, `card`, `size`…; `failed` when there is no

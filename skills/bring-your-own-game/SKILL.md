@@ -82,8 +82,9 @@ offer a button: [references/sign-in-saves-rooms.md](references/sign-in-saves-roo
 ## 2. Check
 
 `xcore check <folder>` serves the game as xgames.fun does and runs it in Chrome, including inside the play page's
-sandboxed frame. Open the screenshots in `evidence/verify-N/` and look at them. Read its "First session" walk (a
-first-time player on a phone: taps, sign-in, wallet, waits) and pass its "In short" lines to the person; when the walk can't
+sandboxed frame. Open the screenshots in `evidence/verify-N/` and look at them. Run it with `--verbose` to read the
+"First session" walk (a first-time player on a phone: taps, sign-in, wallet, waits) and pass its "In short" lines to
+the person; when the walk can't
 reach the first reward, declare the path in `gamesfun.json` (`"journey": [{"tap": "<css selector>"} | {"wait": ms}]`)
 and check again.
 
@@ -129,6 +130,8 @@ part alone.
 - Fix every high finding and run it again. Mediums are the person's to decide with you: say each one plainly.
 - Declare each voucher grant's `trust` as what `PAY.check` really does
   ([references/server-and-payouts.md](references/server-and-payouts.md), "Review: trust levels").
+- The command prints a short summary. Read review.md (or run it with `--verbose`, or `--json`) for every finding,
+  question and trade-off.
 - review.md opens with "Questions to decide" (`? ` lines, `ask` in review.json: ask the person each one before
   building on the answer) and "What this build allows" (`> ` lines, `tell` in review.json: what a cheater gets, the
   key-leak ceiling). Tell the person every "What this build allows" line as written, in your answer and not only in

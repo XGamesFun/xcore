@@ -154,7 +154,18 @@ test("the command it tells people to run is one that finds this package (`xcore`
     'xcore',
     'installed globally on Windows',
   );
-  assert.equal(at('/home/a/my-game/node_modules/@xgamesfun/xcore'), 'npx @xgamesfun/xcore', 'installed in the project');
+  assert.match(
+    at('/home/a/my-game/node_modules/@xgamesfun/xcore'),
+    /^npx -y @xgamesfun\/xcore@(\d+\.\d+\.\d+|latest)$/,
+    'installed in the project: pinned, as the README is',
+  );
+  // the version is the installed package's own, read at run time
+  const away = await tempDir();
+  const installed = path.join(away.dir, 'my-game', 'node_modules', '@xgamesfun', 'xcore');
+  await mkdir(installed, { recursive: true });
+  await writeFile(path.join(installed, 'package.json'), JSON.stringify({ name: '@xgamesfun/xcore', version: '9.8.7' }));
+  assert.equal(at(installed), 'npx -y @xgamesfun/xcore@9.8.7');
+  await away.cleanup();
   assert.equal(
     commandOf({ root: '/home/a/xcore', env: {}, cwd: '/home/a/xcore' }),
     'node bin/xcore.mjs',

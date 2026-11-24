@@ -515,9 +515,19 @@ test(
     assert.equal(r.status, 0, r.stdout + r.stderr);
     assert.match(
       r.stdout,
-      /^warning: preview picture: none .*Fix: .* card .*Publish makes one from the page check's screenshot/m,
+      /^warning: no preview picture\. Publish makes one from this check's screenshot, or make your own: .* card /m,
     );
     assert.match(r.stdout, /check: PASS, 3 passed/);
+    // by default each passed check is its name alone, and the walk is one line; --verbose has the rest
+    assert.match(r.stdout, /^PASS 3 the page starts$/m);
+    assert.match(r.stdout, /^first session: .* \(--verbose: every tap\)$/m);
+    const v = run(['check', dir, '--out', path.join(tmp.dir, 'out3'), '--verbose']);
+    assert.match(
+      v.stdout,
+      /^warning: preview picture: none .*Fix: .* card .*Publish makes one from the page check's screenshot/m,
+    );
+    assert.match(v.stdout, /^PASS 3 the page starts: no errors/m);
+    assert.match(v.stdout, /^ {2}In short:$/m);
     await putCard(dir, 'card.png', png(300, 300));
     const w = run(['check', dir, '--out', path.join(tmp.dir, 'out2')]);
     assert.equal(w.status, 0, w.stdout + w.stderr);

@@ -10,7 +10,7 @@ import { designCodeLine } from '../lib/design-code.mjs';
 import { plural } from '../lib/util.mjs';
 import { ASK_HEADING, TELL_HEADING } from '../lib/review/record.mjs';
 
-const usage = `Usage: xcore review [game] [--live [origin]] [--out <dir>] [--json]
+const usage = `Usage: xcore review [game] [--live [origin]] [--out <dir>] [--verbose] [--json]
 
 A pattern-based check of a game's economy and server code for payout and key-handling mistakes, read the way a
 cheater would: what a script can get without playing, and what to fix first. It is not a security audit.
@@ -45,6 +45,8 @@ Options:
                    against this folder's. The origin defaults to the game's link from its last publish. Under
                    ${CMD} dev, give its address (--live http://127.0.0.1:<port>/game/).
   --out <dir>      where the record goes (default: <game>/evidence/review-N/, with review.md and review.json)
+  --verbose        print how it reads, every finding with its fix, every question, and the trade-offs (review.md and
+                   --json always have all of it)
   --json           print the record as JSON
 
 The record:
@@ -82,7 +84,7 @@ export default {
   run: args =>
     guard(async () => {
       const { rest, live } = liveFlag(args);
-      const { values, positionals } = parse(rest, { out: { type: 'string' } }, usage);
+      const { values, positionals } = parse(rest, { out: { type: 'string' }, verbose: { type: 'boolean' } }, usage);
       const dir = await resolveGame(positionals[0]);
       let base = null,
         liveWhy = `not asked for (${CMD} review --live)`;
@@ -104,13 +106,56 @@ export default {
       if (base && !values.json) console.error(`Asking ${base} as a stranger (no sign-in, and a forged one)…`);
       const r = await reviewGame(dir, { live: base, liveWhy, out: values.out ?? null });
       if (values.json) printJson(r);
-      else console.log(summary(r, shown(dir), unreadWords(r)));
+      else console.log(summary(r, shown(dir), unreadWords(r), values.verbose === true));
       return EXIT[r.verdict];
     }, args),
 };
 
-/** What the command prints: the verdict, how it was reached, each finding, and where the record and the trade-offs are. */
-function summary(r, where, unread) {
+/** What the command prints by default: the verdict, what it could not read, high and medium findings with their fix,
+ *  low and info findings by name, what was read in one line, and at most three next steps. `verbose`: everything. */
+function summary(r, where, unread, verbose = false) {
+  if (verbose) return fullSummary(r, where, unread);
+  const c = r.counts;
+  const lines = [
+    `review: ${r.verdict} ${c.high} high, ${c.medium} medium, ${c.low} low, ${c.info} info${unread} · evidence ${shown(r.outDir)}`,
+    `  Pattern-based, not a security audit: a PASS is not proof (--verbose says how it reads).`,
+    ...r.unread.map(u => `  not read: ${u.what}: ${u.why}`),
+  ];
+  for (const f of r.findings.filter(f => f.severity === 'high' || f.severity === 'medium')) {
+    lines.push(`  ${f.severity.padEnd(6)} ${f.id}${f.route ? ` (${f.route})` : ''}: ${f.message}`);
+    if (f.fix) lines.push(`         fix: ${f.fix}`);
+  }
+  const minor = new Map();
+  for (const f of r.findings.filter(f => f.severity === 'low' || f.severity === 'info')) {
+    const key = `${f.severity} ${f.id}`;
+    minor.set(key, (minor.get(key) ?? 0) + 1);
+  }
+  for (const [key, n] of minor) lines.push(`  ${key}${n > 1 ? ` ×${n}` : ''}`);
+  const read = [
+    r.economy.file
+      ? r.economy.available
+        ? `${r.economy.file} (${plural(r.economy.routes.length, 'route')})`
+        : `${r.economy.file} (not reviewed: ${r.economy.why})`
+      : 'no economy',
+    `server/ (${plural(r.ledger.length, 'paid route')}, ${plural(r.custody.length, 'key')}, ${plural(r.server.routes.length, 'api/ route')})`,
+    r.live ? `live: ${r.live.base}` : 'live: not asked',
+  ];
+  lines.push(`read: ${read.join('; ')}`);
+  const ask = r.ask ?? [];
+  const next = [
+    ...(c.high ? ['Fix every high finding, then run review again.'] : []),
+    ...(ask.length
+      ? [`Decide the ${plural(ask.length, 'question')} in ${shown(r.outDir)}/review.md ("${ASK_HEADING}").`]
+      : []),
+    ...(r.tradeoffs.length ? [`Choose each paid route's level: review.md ends with the trade-offs.`] : []),
+    ...(r.live ? [] : [`After publishing: ${CMD} review ${where === '.' ? '.' : where} --live`]),
+  ].slice(0, 3);
+  if (next.length) lines.push('Next:', ...next.map((n, i) => `  ${i + 1}. ${n}`));
+  return lines.join('\n');
+}
+
+/** What the command prints with --verbose: the verdict, how it was reached, each finding, and where the record and the trade-offs are. */
+function fullSummary(r, where, unread) {
   const c = r.counts;
   const lines = [
     `review: ${r.verdict} ${c.high} high, ${c.medium} medium, ${c.low} low, ${c.info} info${unread} · evidence ${shown(r.outDir)}`,

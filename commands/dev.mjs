@@ -6,7 +6,7 @@ import { madeByKit } from '../lib/publish/index.mjs';
 import { CMD } from '../lib/command.mjs';
 import { PLAN_NAMES } from '../lib/dev/plans.mjs';
 
-const usage = `Usage: xcore dev [dir] [--port <n>] [--plan <name>] [--no-build] [--open] [--json]
+const usage = `Usage: xcore dev [dir] [--port <n>] [--plan <name>] [--no-build] [--open] [--verbose] [--json]
 
 Run the game on this machine as xgames.fun hosts it, with the same services a published game has:
   http://127.0.0.1:<port>/game/   the published files, with the play host's headers
@@ -28,6 +28,7 @@ Options:
                   game's own plan)
   --no-build      serve what is already built; do not run gamesfun.json page.build first
   --open          open the page in your browser
+  --verbose       also print where saves are kept, the economy's RPC, and what the stand-in does not imitate
   --json          print where it runs as JSON, then keep running`;
 
 /** The first port from `from` (step 2: the page's, and the next for its files) free on 127.0.0.1, or null. */
@@ -77,6 +78,7 @@ export default {
           plan: { type: 'string' },
           'no-build': { type: 'boolean' },
           open: { type: 'boolean' },
+          verbose: { type: 'boolean' },
         },
         usage,
       );
@@ -101,7 +103,13 @@ export default {
       const { startDev } = await import('../lib/dev/index.mjs');
       let dev;
       try {
-        dev = await startDev(dir, { port, plan, noBuild: values['no-build'] === true, log: say });
+        dev = await startDev(dir, {
+          port,
+          plan,
+          noBuild: values['no-build'] === true,
+          verbose: values.verbose === true,
+          log: say,
+        });
       } catch (e) {
         throw listenRefusal(e, port) ?? e;
       }
@@ -115,14 +123,14 @@ export default {
           plan: dev.plan,
         });
       else {
-        say(`\n${shown(dir)} on this machine: ${dev.url}`);
-        say(`  server: ${dev.server ? (dev.server.running ? 'running' : 'not running (above)') : 'none (no server/)'}`);
+        say(`\n${shown(dir)} is running at ${dev.url}  (Ctrl+C stops it)`);
         say(
-          `  sign-in, saves, scores: a local player, with the ${dev.store.plan.name} plan's limits; kept in ${shown(dev.store.file)}`,
+          `  server: ${dev.server ? (dev.server.running ? 'running' : 'not running (above)') : 'none (no server/)'} · sign-in: a local player · public project files: ${dev.files}/`,
         );
-        say(`  project files (env.GF.files, xcore files): public ones at ${dev.files}/, an origin of their own`);
-        say(`  economy RPC: ${dev.rpc}`);
-        say('Ctrl+C stops it.');
+        if (values.verbose) {
+          say(`  saves and scores: kept in ${shown(dev.store.file)}, with the ${dev.store.plan.name} plan's limits`);
+          say(`  economy RPC: ${dev.rpc}`);
+        }
       }
       if (values.open) {
         const { openUrl } = await import('../lib/open.mjs');

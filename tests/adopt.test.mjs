@@ -26,21 +26,21 @@ test('plain static files are their own published folder', async t => {
   assert.match(r.warn.map(w => w.what).join('\n'), /it has no way to go full screen/);
   assert.match(
     reportLines(r).join('\n'),
-    /plain static files[\s\S]*Next: (npx (-y )?@xgamesfun\/xcore|xcore|node bin\/xcore\.mjs) check/,
+    /plain static files[\s\S]*Next:\n {2}1\. (npx (-y )?@xgamesfun\/xcore(@[\d.]+)?|xcore|node bin\/xcore\.mjs) check/,
   );
   // the next commands name the folder, unless they run in it
   const next = shown => reportLines(r, { shown }).at(-1);
   assert.match(
     next(() => 'my-game'),
-    / check my-game \(.* publish my-game\.$/,
+    / check my-game {3}run the page[\s\S]* publish my-game$/,
   );
   assert.match(
     next(() => 'my game'),
-    / check "my game" \(/,
+    / check "my game" {3}run the page/,
   );
   assert.match(
     next(() => '.'),
-    / check \(.* publish\.$/,
+    / check {3}run the page[\s\S]* publish$/,
   );
 });
 
