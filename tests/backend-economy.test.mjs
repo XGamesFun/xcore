@@ -285,7 +285,7 @@ test("the RPC: xgames.fun's shared relay unless XSOLANA_RPC_URL (or LOOT_RPC_URL
   );
 });
 
-test('the RPC follows the economy’s cluster: mainnet’s relay with ?cluster=mainnet, an RPC of the other cluster refused, commands left to the tools on mainnet’s relay', async () => {
+test('the RPC follows the economy’s cluster: mainnet’s relay with ?cluster=mainnet, an RPC of the other cluster refused, commands left to the tools on mainnet’s relay', async t => {
   const { economyCluster, relayFor } = await import('../lib/solana-rpc.mjs');
   assert.deepEqual(solanaRpc({}, { file: null, cluster: 'mainnet' }), {
     url: `${SHARED_RPC}?cluster=mainnet`,
@@ -320,38 +320,37 @@ test('the RPC follows the economy’s cluster: mainnet’s relay with ?cluster=m
     'https://mainnet.example/rpc',
   );
   // the cluster of a folder's economy: its file's network, devnet when it names none or there is none
-  const { mkdtempSync, writeFileSync } = await import('node:fs');
-  const { tmpdir } = await import('node:os');
-  const pathMod = (await import('node:path')).default;
-  const dir = mkdtempSync(pathMod.join(tmpdir(), 'xcore-cluster-'));
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const { dir } = tmp;
   assert.equal(economyCluster(dir), 'devnet');
-  writeFileSync(pathMod.join(dir, 'xsolana.json'), JSON.stringify({ version: 2, network: 'mainnet' }));
+  await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify({ version: 2, network: 'mainnet' }));
   assert.equal(economyCluster(dir), 'mainnet');
-  writeFileSync(pathMod.join(dir, 'xsolana.json'), JSON.stringify({ version: 2 }));
+  await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify({ version: 2 }));
   assert.equal(economyCluster(dir), 'devnet');
 });
 
-test('the cluster is read where the economy is: a named file, the folder, a brought game’s static folder; loot.json too; an unknown network is devnet', async () => {
+test('the cluster is read where the economy is: a named file, the folder, a brought game’s static folder; loot.json too; an unknown network is devnet', async t => {
   const { economyCluster, LOOT_PROGRAMS } = await import('../lib/solana-rpc.mjs');
-  const { mkdtempSync, mkdirSync, writeFileSync } = await import('node:fs');
-  const { tmpdir } = await import('node:os');
-  const p = (await import('node:path')).default;
-  const dir = mkdtempSync(p.join(tmpdir(), 'xcore-where-'));
-  writeFileSync(p.join(dir, 'other.json'), JSON.stringify({ version: 2, network: 'mainnet' }));
-  assert.equal(economyCluster(p.join(dir, 'other.json')), 'mainnet', 'a file named on the command');
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = path.join(tmp.dir, 'where'),
+    brought = path.join(tmp.dir, 'brought');
+  await mkdir(dir);
+  await writeFile(path.join(dir, 'other.json'), JSON.stringify({ version: 2, network: 'mainnet' }));
+  assert.equal(economyCluster(path.join(dir, 'other.json')), 'mainnet', 'a file named on the command');
   assert.equal(economyCluster(dir), 'devnet', 'the folder has none');
-  writeFileSync(p.join(dir, 'loot.json'), JSON.stringify({ version: 2, network: 'mainnet' }));
+  await writeFile(path.join(dir, 'loot.json'), JSON.stringify({ version: 2, network: 'mainnet' }));
   assert.equal(economyCluster(dir), 'mainnet', 'an older game’s loot.json');
-  writeFileSync(p.join(dir, 'xsolana.json'), JSON.stringify({ version: 2, network: 'testnet' }));
+  await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify({ version: 2, network: 'testnet' }));
   assert.equal(economyCluster(dir), 'devnet', 'a network loot does not know');
   // a brought game: its economy in its static folder (gamesfun.json)
-  const brought = mkdtempSync(p.join(tmpdir(), 'xcore-brought-'));
-  mkdirSync(p.join(brought, 'public'));
-  writeFileSync(
-    p.join(brought, 'gamesfun.json'),
+  await mkdir(path.join(brought, 'public'), { recursive: true });
+  await writeFile(
+    path.join(brought, 'gamesfun.json'),
     JSON.stringify({ name: 'g', page: { static: 'public', out: 'dist' } }),
   );
-  writeFileSync(p.join(brought, 'public', 'xsolana.json'), JSON.stringify({ version: 2, network: 'mainnet' }));
+  await writeFile(path.join(brought, 'public', 'xsolana.json'), JSON.stringify({ version: 2, network: 'mainnet' }));
   assert.equal(economyCluster(brought), 'mainnet');
   assert.deepEqual(Object.keys(LOOT_PROGRAMS), ['devnet', 'mainnet']);
 });

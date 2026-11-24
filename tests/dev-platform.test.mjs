@@ -4,13 +4,14 @@
 // bodies it holds in memory. What is refused here is what the published game is refused; nothing more.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { GF_METHODS } from '../lib/server/contract.mjs';
 import { createPlatformStore } from '../lib/dev/platform.mjs';
 import { startDev } from '../lib/dev/index.mjs';
 import { createFileStore } from '../lib/dev/files.mjs';
 import { PLANS, RULES, devPlan, planLine } from '../lib/dev/plans.mjs';
-import { run, tempDir } from './helpers.mjs';
+import { ROOT, run, tempDir } from './helpers.mjs';
 
 const MB = 1024 * 1024;
 
@@ -51,6 +52,24 @@ test('the plans: one table, Free by default, and a plan that is not one is refus
   const bad = run(['dev', '--plan', 'gold']);
   assert.equal(bad.status, 2);
   assert.match(bad.stderr, /--plan is free, creator or scale/);
+});
+
+test('env.GF is the contract’s list of methods: the stand-in passes each one on, and the platform answers each and no other', async t => {
+  const { s } = await storeOf(t);
+  // every call lib/dev/gf-local.js (env.GF under xcore dev) passes to the dev host, by its name
+  const local = await readFile(path.join(ROOT, 'lib', 'dev', 'gf-local.js'), 'utf8');
+  const passed = [...local.matchAll(/\bcall\(this\.#?env, '([\w.]+)'/g), ...local.matchAll(/gf\.local\/([\w.]+)/g)];
+  assert.deepEqual([...new Set(passed.map(m => m[1]))].sort(), [...GF_METHODS].sort());
+  assert.equal(new Set(GF_METHODS).size, GF_METHODS.length, 'each named once');
+  const asked = async op =>
+    (await s.handleHost(new Request(`http://gf.local/${op}`, { method: 'POST', body: '[]' }))).json();
+  for (const op of GF_METHODS) {
+    const a = await asked(op);
+    assert.equal(typeof a.ok, 'boolean', op);
+    assert.doesNotMatch(String(a.why ?? ''), /^env\.GF has no /, op);
+  }
+  for (const op of ['scores.clear', 'saves', 'constructor', 'toString'])
+    assert.deepEqual(await asked(op), { ok: false, code: 'unknown', why: `env.GF has no ${op}.` });
 });
 
 test('boards a page makes: "high" only, two a player, half the plan’s boards; the server makes the rest', async t => {
@@ -157,6 +176,20 @@ test('saves: a page’s player keeps 1/128 of the game’s bytes; a full game ke
   assert.deepEqual([past.code, /saves are full .* a player may still keep 4 KB/.test(past.why)], ['full', true]);
   assert.equal((await full.s.run('saves.put', ['srv', 'x', 'x'.repeat(5000)])).code, 'full', 'the server too');
   void dir;
+});
+
+test('saves: a player keeps 16; one more is refused, while a save they have is still written over', async t => {
+  const { s } = await storeOf(t);
+  const keys = PLANS.free.saves.keysPerPlayer;
+  assert.equal(keys, 16);
+  for (let i = 1; i <= keys; i++) assert.equal((await s.run('saves.put', ['dev:a', `slot-${i}`, i])).ok, true, i);
+  const over = await s.run('saves.put', ['dev:a', 'slot-17', 17]);
+  assert.deepEqual([over.code, over.why], ['too-many', 'A player may have 16 saves.']);
+  assert.equal((await s.run('saves.list', ['dev:a'])).keys.length, keys, 'none was kept past the plan');
+  assert.equal((await s.run('saves.put', ['dev:a', 'slot-16', 'again'])).ok, true, 'writing over one they have');
+  assert.equal((await s.run('saves.delete', ['dev:a', 'slot-1'])).ok, true);
+  assert.equal((await s.run('saves.put', ['dev:a', 'slot-17', 17])).ok, true, 'room again once one is deleted');
+  assert.equal((await s.run('saves.put', ['dev:b', 'slot-1', 1])).ok, true, 'each player their own 16');
 });
 
 test('writes a minute: a page’s player 60 saves and 30 scores; the server the plan’s 600', async t => {

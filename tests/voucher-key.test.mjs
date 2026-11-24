@@ -4,7 +4,7 @@
 // it, and add vouchers run again keeps the owner's own code beside PAY.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { addVouchers, keepSettings, newVoucherKey } from '../lib/add.mjs';
 import { pointGrantsAt } from '../lib/voucher-key.mjs';
@@ -164,4 +164,38 @@ test('add vouchers run again keeps what the owner wrote beside PAY, and a settin
   const before = "export const RPC = {\n  scanPrograms: ['mine'],\n};\n";
   const now = "export const RPC = {\n  scanPrograms: ['9cwq'],\n  loot: ['xgamesVs', 'xgames8C'],\n};\n";
   assert.match(keepSettings(before, now, ['RPC']), /loot: \['xgamesVs', 'xgames8C'\]/);
+});
+
+test('an economy file that is not valid JSON is refused by name before add vouchers or a live key writes anything', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  // cut short: the file is there, and it does not parse
+  const cut = '{\n  "grants": [\n    {';
+  await writeFile(path.join(dir, 'xsolana.json'), cut);
+  const before = (await readdir(dir)).sort();
+  await assert.rejects(
+    addVouchers(dir),
+    e => e.code === 'not-json' && /^xsolana\.json is not valid JSON \(.+\); fix it first$/.test(e.message),
+  );
+  assert.deepEqual(
+    (await readdir(dir)).sort(),
+    before,
+    'no .dev.vars, no server/, no gamesfun.json: the game is as it was',
+  );
+  await assert.rejects(pointGrantsAt(dir, await key()), /^Error: xsolana\.json is not valid JSON/);
+  assert.deepEqual((await readdir(dir)).sort(), before, "the live key's address is not kept either");
+  assert.equal(await readFile(path.join(dir, 'xsolana.json'), 'utf8'), cut);
+  // a file that parses and holds no economy is said too
+  await writeFile(path.join(dir, 'xsolana.json'), 'null');
+  await assert.rejects(addVouchers(dir), /xsolana\.json holds no economy/);
+  // a record of the last live key that does not read is no reason to stop: the key it named is left in the grant, and said
+  const { dir: live, read } = await game(t, { grants: [{ key: 'clear', id: 1 }] }, { check: PAY_VIA_VARIABLE });
+  const first = await key();
+  await pointGrantsAt(live, first);
+  await writeFile(path.join(live, '.gamesfun', 'vouchers.json'), '{ "liveKey": ');
+  const second = await key();
+  const r = await pointGrantsAt(live, second);
+  assert.ok((await read()).grants[0].vouchers.includes(second));
+  assert.match(r.left.join('\n'), new RegExp(`"clear" also takes vouchers from .*${first}`));
 });

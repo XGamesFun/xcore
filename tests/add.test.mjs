@@ -521,6 +521,66 @@ test('signin for a Godot project: the autoload carries the client; for a Unity p
   await assert.rejects(addSignin(path.join(tmp.dir)), /not a game xcore knows/);
 });
 
+test("each add says its own steps once: the sign-in's come with whichever add put the sign-in into the game", async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const signInWords = /takes the tab to X and back|Framed by another site|a local player and this browser/;
+  // sign-in first: its steps are said then, and the adds after it say only their own
+  const dir = await fixture(tmp, 'static');
+  const first = await addSignin(dir);
+  assert.equal(first.steps.filter(x => signInWords.test(x)).length, 3, first.steps.join('\n'));
+  for (const add of [addDatabase, addMultiplayer, addSignin]) {
+    const r = await add(dir);
+    const said = r.steps.filter(x => signInWords.test(x));
+    assert.equal(said.length, add === addSignin ? 3 : 0, `${add.name}: ${said.join('\n')}`);
+    assert.equal(new Set(r.steps).size, r.steps.length, `${add.name} says no step twice`);
+  }
+  // the database or the rooms first: the sign-in comes with them, so its steps do too, after the command's own
+  for (const [add, own] of [
+    [addDatabase, /^From the game: await gf\.db\.add/],
+    [addMultiplayer, /GamesFun\.rooms\.join\(code\)/],
+  ]) {
+    const tmp2 = await tempDir();
+    t.after(tmp2.cleanup);
+    const fresh = await fixture(tmp2, 'static');
+    const r = await add(fresh);
+    assert.match(r.steps[0], own, 'its own subject first');
+    assert.equal(r.steps.filter(x => signInWords.test(x)).length, 3, r.steps.join('\n'));
+    assert.ok(!r.steps.some(x => /^In the game: const gf = GamesFun/.test(x)), "add signin's own first step");
+    assert.equal((await add(fresh)).steps.filter(x => signInWords.test(x)).length, 0, 'run again: said already');
+  }
+});
+
+test('add signin tells a Godot or Unity author what the glue has: the player value and its change signal or event', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const godot = path.join(tmp.dir, 'godot');
+  await mkdir(godot);
+  await writeFile(path.join(godot, 'project.godot'), 'config_version=5\n');
+  const g = (await addSignin(godot)).steps.join('\n');
+  assert.match(g, /GamesFun\.player is the signed-in player \(a Dictionary\), or null/);
+  assert.match(g, /the signal GamesFun\.player_changed/);
+  const unity = path.join(tmp.dir, 'unity');
+  await mkdir(path.join(unity, 'ProjectSettings'), { recursive: true });
+  await mkdir(path.join(unity, 'Assets'));
+  await writeFile(path.join(unity, 'ProjectSettings', 'ProjectVersion.txt'), 'm_EditorVersion: 6000.0.30f1\n');
+  const u = (await addSignin(unity)).steps.join('\n');
+  assert.match(u, /GamesFun\.Player is the signed-in player as JSON, or "null" \(GamesFun\.SignedIn says which\)/);
+  assert.match(u, /the event GamesFun\.PlayerChanged/);
+  // every GamesFun.<name> a step names is one the glue declares (a `ready` it does not have is Godot's own node signal,
+  // which an autoload has emitted before any scene runs: awaiting it never returns)
+  const gd = await readFile(path.join(ROOT, 'lib/client/godot/gamesfun.gd'), 'utf8');
+  const cs = await readFile(path.join(ROOT, 'lib/client/unity/GamesFun.cs'), 'utf8');
+  // (a name after a slash is a file's: Assets/Plugins/GamesFun/GamesFun.cs)
+  const named = text => [...new Set([...text.matchAll(/(?<![/\w])GamesFun\.([A-Za-z_]+)/g)].map(m => m[1]))];
+  assert.ok(named(g).length >= 5 && named(u).length >= 5, 'the steps name the calls');
+  for (const name of named(g))
+    assert.ok(new RegExp(`^(?:signal|var|func) ${name}\\b`, 'm').test(gd), `gamesfun.gd has no ${name}`);
+  for (const name of named(u))
+    assert.ok(new RegExp(`public static [^\\n=(]*\\b${name}\\b`).test(cs), `GamesFun.cs has no ${name}`);
+  assert.doesNotMatch(`${g}\n${u}`, /GamesFun\.ready|ready call/);
+});
+
 test('the older database (server/database.js): its object declared; the bundle is one publish takes; a server of its own is left to its owner', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
@@ -618,6 +678,25 @@ test('the Godot client refuses an offset but 0 in db_list before it reaches the 
   assert.match(fn, /"code": "offset"/);
   const cs = await readFile(path.join(ROOT, 'lib', 'client', 'unity', 'GamesFun.cs'), 'utf8');
   assert.doesNotMatch(/public static Task<string> DbList\([^)]*\)/.exec(cs)[0], /offset/, "Unity's DbList takes after");
+});
+
+test('outside a Web export nobody is signed in: Godot keeps no error answer as the player, and Unity\'s SignIn answers "null"', async () => {
+  const gd = await readFile(path.join(ROOT, 'lib', 'client', 'godot', 'gamesfun.gd'), 'utf8');
+  // with no bridge every call answers {data, error, status}, sign_in's too, and sign_in hands its answer to _set_player
+  assert.match(gd, /\tif _bridge == null:\n\t\treturn \{"data": null, "error": "[^"]+", "status": 0\}/);
+  const signIn = /func sign_in\([^)]*\):\n([\s\S]*?)\n\n/.exec(gd)?.[1] ?? '';
+  assert.match(signIn, /var p = await _run\("signIn", \[opts\]\)\n\t_set_player\(p\)\n\treturn player$/);
+  const set = /func _set_player\(p\):\n([\s\S]*?)\n\n/.exec(gd)?.[1] ?? '';
+  const nobody = set.indexOf('if typeof(p) != TYPE_DICTIONARY or p.has("error"):\n\t\tp = null');
+  assert.ok(nobody >= 0, set);
+  assert.ok(nobody < set.indexOf('player = p'), 'before the player is kept');
+  const cs = await readFile(path.join(ROOT, 'lib', 'client', 'unity', 'GamesFun.cs'), 'utf8');
+  const fn = /public static Task<string> SignIn\([^)]*\)\n {4}\{\n([\s\S]*?)\n {4}\}\n/.exec(cs)?.[1] ?? '';
+  assert.match(
+    fn,
+    /^#if UNITY_WEBGL && !UNITY_EDITOR\n {8}return Call\("signIn", [^\n]+\);\n#else\n(?: {8}\/\/[^\n]*\n)* {8}return Task\.FromResult\("null"\);\n#endif$/,
+    fn,
+  );
 });
 
 test("the engines' glue files hold no raw control character or line separator (C# and GDScript break on them)", async () => {
@@ -1209,8 +1288,9 @@ test('rpc: the game’s server passes either cluster’s loot transactions', asy
   for (const p of R.loot) assert.ok(R.scanPrograms.includes(p), p);
 });
 
-test('vouchers on mainnet: the steps never suggest the test key, and say to take it out when a grant names it', async () => {
+test('vouchers on mainnet: the steps never suggest the test key, and say to take it out when a grant names it', async t => {
   const tmp = await tempDir();
+  t.after(tmp.cleanup);
   const dir = await fixture(tmp, 'static');
   const spec = {
     network: 'mainnet',

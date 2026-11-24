@@ -11,7 +11,7 @@ import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { printJson } from '../lib/cli.mjs';
+import { guard, printJson, UsageError } from '../lib/cli.mjs';
 import { CMD } from '../lib/command.mjs';
 import { readJson } from '../lib/util.mjs';
 import { madeByKit } from '../lib/games.mjs';
@@ -37,8 +37,9 @@ export function findKit({ cwd = process.cwd(), env = process.env, here = HERE } 
 }
 
 // the flags of check, publish, dev and backend that take a value: their value is never the game's folder
+// (tests/states-cli.test.mjs holds this list to the flags those commands' usage names)
 const VALUE_FLAGS = Object.fromEntries(
-  ['out', 'port', 'title', 'url', 'origin'].map(f => [f, { type: 'string', multiple: true }]),
+  ['out', 'port', 'plan', 'title', 'url', 'origin'].map(f => [f, { type: 'string', multiple: true }]),
 );
 
 /** Does this command, with these arguments, belong to the kit even though this package has a command by its name?
@@ -147,17 +148,26 @@ function help(commands, kit) {
   return lines.join('\n');
 }
 
-export async function main([name, ...args]) {
+export async function main(argv) {
+  const [name, ...args] = argv;
   const commands = await loadCommands();
   const kit = findKit();
-  if (!name || name === '--help' || name === '-h') {
+  if (name === '--help' || name === '-h') {
     console.log(help(commands, kit));
-    return name ? 0 : 1;
+    return 0;
   }
   if (name === '--version' || name === '-v') {
     console.log(readJson(path.join(HERE, '..', 'package.json')).version);
     return 0;
   }
+  // no command (or a flag where one belongs) is a usage mistake, answered as every command answers one
+  // (lib/cli.mjs guard): the help on stderr, exit code 2, and with --json the failure as JSON too
+  if (!name || name.startsWith('-'))
+    return guard(() => {
+      throw new UsageError(
+        `${name ? `No command before ${name}: xcore <command> [options].\n\n` : ''}${help(commands, kit)}`,
+      );
+    }, argv);
   const own = commands.get(name);
   const wantsHelp = args.includes('--help') || args.includes('-h');
   // `connect` with no kit here is this package's own; every other kit's turn without the kit says how to get it
@@ -185,7 +195,8 @@ export async function main([name, ...args]) {
         error: (own ? NO_KIT : unknownCommand(name, commands)).replace(/\s*\n\s*/g, ' '),
         code: own || KIT_COMMANDS.has(name) ? 'no-kit' : 'unknown-command',
       });
-    return 1;
+    // the kit's command with no kit here is a refusal (1); a name that is no command is a usage mistake (2)
+    return own || KIT_COMMANDS.has(name) ? 1 : 2;
   }
   if (wantsHelp) {
     console.log(own.helpFor?.(args) ?? own.usage ?? own.summary);

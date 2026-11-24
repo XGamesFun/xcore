@@ -9,6 +9,7 @@ import { adopt } from '../lib/publish/adopt.mjs';
 import { findChrome, playwrightChromium, playwrightCli } from '../lib/browser.mjs';
 import { FRAME_BLOCKS, pageVerify } from '../lib/check.mjs';
 import { PLAY_FRAME_ALLOW, PLAY_FRAME_SANDBOX } from '../lib/play-policy.mjs';
+import { hostedRefusal } from '../lib/publish/hosting.mjs';
 import { buildTree } from '../lib/publish/tree.mjs';
 import { fixture, ROOT, tempDir } from './helpers.mjs';
 
@@ -68,12 +69,15 @@ async function pageWith(tmp, script, html = '') {
 }
 const FRAMED = "inside the play page's frame (as players meet it)";
 
-test('the play frame the check builds is the one README.md names', () => {
-  const row = readFileSync(path.join(ROOT, 'README.md'), 'utf8')
-    .split('\n')
-    .find(l => l.includes('**Inside the play page**'));
-  assert.ok(row.includes(`sandbox="${PLAY_FRAME_SANDBOX}"`), row);
-  assert.ok(row.includes(`allow="${PLAY_FRAME_ALLOW}"`), row);
+test('the play frame the check builds is the one docs/HOSTING.md names', () => {
+  // its section "Inside the play page", up to the next heading
+  const section = readFileSync(path.join(ROOT, 'docs', 'HOSTING.md'), 'utf8')
+    .split(/\n(?=#)/)
+    .find(part => part.startsWith('### Inside the play page\n'));
+  assert.ok(section, 'docs/HOSTING.md has its section "Inside the play page"');
+  const text = section.replace(/\s+/g, ' ');
+  assert.ok(text.includes(`sandbox="${PLAY_FRAME_SANDBOX}"`), section);
+  assert.ok(text.includes(`allow="${PLAY_FRAME_ALLOW}"`), section);
 });
 
 test(
@@ -87,7 +91,7 @@ test(
     const three = r.checks.find(c => c.n === 3);
     assert.equal(three.ok, false, JSON.stringify(r.checks));
     assert.equal(three.detail, `${FRAMED}: ${FRAME_BLOCKS.popup}`);
-    assert.match(three.detail, /README\.md.*"Inside the play page"/);
+    assert.match(three.detail, /docs\/HOSTING\.md, "Inside the play page"/);
     assert.equal(r.checks.find(c => c.n === 4).ok, true, JSON.stringify(r.checks));
   },
 );
@@ -190,6 +194,12 @@ test(
       r.notes.some(n => /It calls its own server \(api\/room, api\/visits\)/.test(n)),
       r.notes.join('\n'),
     );
+    // where it does answer on this machine is the command the person has, by name
+    assert.ok(
+      r.notes.some(n => /answers there once published \(and under .*xcore(\.mjs)? dev, which runs it\)/.test(n)),
+      r.notes.join('\n'),
+    );
+    assert.doesNotMatch(r.notes.join('\n'), /the kit/);
   },
 );
 
@@ -284,6 +294,8 @@ test(
     assert.equal(three.ok, false);
     assert.match(three.detail, /the game's own pages are linked from the root \(\/level\/2\/\)/);
     assert.doesNotMatch(three.detail, /\/level\/2\/ asked for from the root/);
+    assert.match(three.detail, /not under a folder \(Studio's preview, .*xcore(\.mjs)? dev\)/);
+    assert.doesNotMatch(three.detail, /the kit/);
   },
 );
 
@@ -459,8 +471,19 @@ ${$('shop')}.onclick = () => { ${$('said')}.textContent = 'The shop is open'; };
 ${$('start')}.onclick = () => { ${$('said')}.textContent = 'Go!'; ${$('start')}.remove(); };
 </script>`;
     const dir = await firstVisit(tmp, page, { journey: [{ tap: '#shop' }, { wait: 200 }, { tap: '#start' }] });
+    // this one has an economy: a first reward is something its walk can stop short of
+    await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify({ name: 'First visit', grants: [] }));
     const w = (await pageVerify(dir, { out: path.join(tmp.dir, 'out') })).firstSession;
     assert.equal(w.journey, 'declared in gamesfun.json');
+    assert.equal(w.shortOfReward, true);
+    assert.ok(
+      w.tell.some(l =>
+        /^Before any wallet prompt, the walk stopped at the end of the declared journey, so it did not reach a first reward/.test(
+          l,
+        ),
+      ),
+      w.tell.join('\n'),
+    );
     assert.deepEqual(
       w.steps.map(s => [s.selector, s.tapped, s.appeared]),
       [
@@ -476,12 +499,15 @@ ${$('start')}.onclick = () => { ${$('said')}.textContent = 'Go!'; ${$('start')}.
     const m = (await pageVerify(missing, { out: path.join(tmp2.dir, 'out') })).firstSession;
     assert.equal(m.taps, 1);
     assert.equal(m.stopped, "the declared journey's tap 2 (#claim), which was not on the page");
+    // a game with no economy has no reward to reach: where the walk stopped is said, and nothing of wallets or SOL
+    assert.equal(m.shortOfReward, false);
     assert.ok(
       m.tell.includes(
-        "Before any wallet prompt, the walk stopped at the declared journey's tap 2 (#claim), which was not on the page, so it did not reach a first reward: what claiming one asks (a sign-in, a wallet, SOL for its fee) was not seen.",
+        "The walk stopped at the declared journey's tap 2 (#claim), which was not on the page, so what follows it was not seen.",
       ),
       m.tell.join('\n'),
     );
+    assert.doesNotMatch(m.tell.join('\n'), /first reward|SOL for its fee/);
   },
 );
 
@@ -513,19 +539,177 @@ test(
   },
 );
 
+// ---- a page that stops answering -----------------------------------------------------------------------------------
+
+/** Run `fn` with a short wait for a page's answer (GF_PAGE_ANSWER_MS), so a page that never answers costs seconds. */
+async function quickToGiveUp(fn) {
+  const was = process.env.GF_PAGE_ANSWER_MS;
+  process.env.GF_PAGE_ANSWER_MS = '5000';
+  try {
+    return await fn();
+  } finally {
+    if (was === undefined) delete process.env.GF_PAGE_ANSWER_MS;
+    else process.env.GF_PAGE_ANSWER_MS = was;
+  }
+}
+
+test(
+  'a page whose script never yields fails "the page starts" in words, at the first view: the check does not wait on it',
+  { skip, timeout: 120_000 },
+  async t => {
+    const tmp = await tempDir();
+    t.after(tmp.cleanup);
+    // a loop with no end, a moment after the page has loaded
+    const dir = await pageWith(tmp, 'setTimeout(() => { for (;;) {} }, 300);');
+    const out = path.join(tmp.dir, 'out');
+    const lines = [];
+    const began = Date.now();
+    const r = await quickToGiveUp(() => pageVerify(dir, { out, log: l => lines.push(l) }));
+    assert.ok(Date.now() - began < 60_000, `it answered in ${Date.now() - began} ms`);
+    assert.equal(r.pass, false);
+    const three = r.checks.find(c => c.n === 3);
+    assert.equal(three.ok, false);
+    assert.match(three.detail, /^phone: the page stopped answering: a script of its own keeps the browser busy/);
+    assert.doesNotMatch(three.detail, /desktop|nothing on screen|Chrome could not run/);
+    assert.deepEqual(
+      [r.checks.find(c => c.n === 4).ok, r.checks.find(c => c.n === 4).detail],
+      [null, 'not run: the page stopped answering'],
+    );
+    assert.equal(r.firstSession, undefined, 'a page that stopped answering is not walked');
+    assert.ok(!lines.some(l => l.startsWith('First session')));
+  },
+);
+
+test(
+  'first session: a tap that leaves the page in a loop with no end is said, with the tap, and the walk ends there',
+  { skip, timeout: 180_000 },
+  async t => {
+    const tmp = await tempDir();
+    t.after(tmp.cleanup);
+    const dir = await firstVisit(
+      tmp,
+      `<button id="play" style="font-size:32px">Play</button>
+<script>${$('play')}.onclick = () => { for (;;) {} };</script>`,
+    );
+    const lines = [];
+    const r = await quickToGiveUp(() => pageVerify(dir, { out: path.join(tmp.dir, 'out'), log: l => lines.push(l) }));
+    const w = r.firstSession;
+    assert.equal(r.pass, true, 'the walk never fails the check');
+    assert.equal(w.froze, 1);
+    assert.equal(w.taps, 1);
+    assert.deepEqual(
+      [w.steps[0].tapped, w.steps[0].froze, w.steps[0].screen],
+      ['“Play” (button)', true, null],
+      JSON.stringify(w.steps),
+    );
+    assert.equal(w.stopped, 'a page that stopped answering after the tap on “Play” (button)');
+    assert.ok(
+      w.tell.some(l =>
+        /^After tap 1 \(“Play”\) the page stopped answering \(.*\), and the walk ended there\.$/.test(l),
+      ),
+      w.tell.join('\n'),
+    );
+    assert.ok(lines.includes('  1. tapped “Play” (button) → the page stopped answering'), lines.join('\n'));
+  },
+);
+
 test('the check and the dev host leave out what publish leaves out, so a page that loads it fails there too', async t => {
   const { servePage } = await import('../lib/check.mjs');
   const tmp = await tempDir();
   t.after(tmp.cleanup);
-  await mkdir(path.join(tmp.dir, 'node_modules/three'), { recursive: true });
-  await writeFile(path.join(tmp.dir, 'node_modules/three/three.js'), 'export {};');
-  await writeFile(path.join(tmp.dir, 'README.md'), 'notes');
-  await writeFile(path.join(tmp.dir, 'index.html'), '<!doctype html><title>x</title>');
-  await mkdir(path.join(tmp.dir, 'levels'), { recursive: true });
-  await writeFile(path.join(tmp.dir, 'levels/README.md'), 'a level’s notes, published');
+  const files = {
+    'node_modules/three/three.js': 'export {};',
+    'README.md': 'notes',
+    'index.html': '<!doctype html><title>x</title>',
+    'levels/README.md': 'a level’s notes, published',
+    // hidden files and folders, at the top and below it: the server's secrets on this machine among them
+    '.dev.vars': 'VOUCHER_SEED=not-for-a-browser',
+    '.git/config': '[core]',
+    '.gamesfun/publish.json': '{}',
+    'levels/.draft.json': '{}',
+    'levels/.cache/1.json': '{}',
+  };
+  for (const [p, text] of Object.entries(files)) {
+    await mkdir(path.dirname(path.join(tmp.dir, p)), { recursive: true });
+    await writeFile(path.join(tmp.dir, p), text);
+  }
   const site = await servePage(tmp.dir);
   t.after(site.close);
   const published = (await buildTree(tmp.dir)).tree.files.map(f => f.path);
-  for (const p of ['node_modules/three/three.js', 'README.md', 'index.html', 'levels/README.md'])
-    assert.equal((await fetch(`${site.url}${p}`)).status === 200, published.includes(p), p);
+  const players = ['index.html', 'levels/README.md'];
+  for (const p of Object.keys(files)) {
+    assert.equal(published.includes(p), players.includes(p), `published: ${p}`);
+    assert.equal((await fetch(`${site.url}${p}`)).status, players.includes(p) ? 200 : 404, `served: ${p}`);
+  }
+});
+
+test('every file of a game goes out with the play host’s headers: its type by its name, and never second-guessed', async t => {
+  const { servePage } = await import('../lib/check.mjs');
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  for (const [p, text] of [
+    ['index.html', '<!doctype html><title>x</title>'],
+    ['game.js', 'export {};'],
+    ['art/hero.png', 'PNG'],
+    ['src/main.ts', 'export {};'],
+    ['data/level.bin', 'bytes'],
+  ]) {
+    await mkdir(path.dirname(path.join(tmp.dir, p)), { recursive: true });
+    await writeFile(path.join(tmp.dir, p), text);
+  }
+  const site = await servePage(tmp.dir);
+  t.after(site.close);
+  for (const [p, type] of [
+    ['index.html', 'text/html; charset=utf-8'],
+    ['game.js', 'text/javascript; charset=utf-8'],
+    ['art/hero.png', 'image/png'],
+    // no type of its own: bytes, which nosniff keeps a browser from running as a script or a style
+    ['src/main.ts', 'application/octet-stream'],
+    ['data/level.bin', 'application/octet-stream'],
+  ]) {
+    const r = await fetch(`${site.url}${p}`);
+    const sent = name => r.headers.get(name);
+    assert.equal(r.status, 200, p);
+    assert.equal(sent('content-type'), type, p);
+    assert.equal(sent('x-content-type-options'), 'nosniff', p);
+    assert.equal(sent('referrer-policy'), 'no-referrer', p);
+    assert.equal(sent('cross-origin-resource-policy'), 'same-origin', p);
+    assert.equal(sent('permissions-policy'), 'camera=(), microphone=(), geolocation=(), payment=(), usb=()', p);
+    const policy = sent('content-security-policy').split('; ');
+    for (const rule of ["default-src 'self'", "object-src 'none'", "base-uri 'none'", "form-action 'none'"])
+      assert.ok(policy.includes(rule), `${p}: ${rule}`);
+  }
+});
+
+test('what a page may load from another site: nothing it runs, pictures and sounds from a declared https origin, calls to a declared one', () => {
+  const backend = ['https://api.example.com', 'wss://rooms.example.com'];
+  const refused = (origin, kind) => hostedRefusal(origin, kind, { backend });
+  // what a browser runs or frames comes from the game's own files, declared or not
+  for (const kind of ['script', 'stylesheet', 'font', 'document', 'frame', 'iframe', 'object', 'manifest'])
+    for (const origin of ['https://api.example.com', 'https://cdn.example.net'])
+      assert.match(refused(origin, kind), /from its own files only; put a copy in the game$/, `${kind} ${origin}`);
+  // a picture or a sound: only from an origin backend.json lists, and only over https
+  for (const [kind, what] of [
+    ['image', 'a picture'],
+    ['img', 'a picture'],
+    ['media', 'a sound or video'],
+  ]) {
+    assert.equal(refused('https://api.example.com', kind), null, kind);
+    for (const origin of ['https://cdn.example.net', 'wss://rooms.example.com', 'http://api.example.com'])
+      assert.equal(refused(origin, kind), `${what} from ${origin}, not in backend.json origins`, kind);
+  }
+  // a call (fetch, a socket): only to an origin backend.json lists
+  for (const kind of ['fetch', 'xhr', 'websocket']) {
+    for (const origin of backend) assert.equal(refused(origin, kind), null, `${kind} ${origin}`);
+    assert.equal(
+      refused('https://cdn.example.net', kind),
+      'a connection to https://cdn.example.net, not in backend.json origins',
+      kind,
+    );
+  }
+  assert.equal(
+    hostedRefusal('https://api.example.com', 'image'),
+    'a picture from https://api.example.com, not in backend.json origins',
+    'with no origin declared',
+  );
 });

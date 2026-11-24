@@ -4,7 +4,6 @@
 // the economy check see the loop. The kit's own wording is never pinned: its findings are read by their structure.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { reviewGame } from '../lib/review.mjs';
@@ -55,7 +54,7 @@ const spec = (more = {}) => ({
   ...more,
 });
 
-// (a) a claim multiplied by a boost from a code lookup
+// a claim multiplied by a boost from a code lookup
 const CARD_PAY = `// The raid's pay: the server ran the raid (a room), and a raid card's code boosts what it pays.
 export const PAY = {
   async check({ body, player, env }) {
@@ -70,7 +69,7 @@ export const PAY = {
 export const VOUCHERS = { payOnly: 'x', perMinute: 20 };
 `;
 
-test('(a) a claim multiplied by a boost a code lookup gives, with no offchain: code-undeclared at its line, with a draft', async t => {
+test('a claim multiplied by a boost a code lookup gives, with no offchain: code-undeclared at its line, with a draft', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await game(tmp, 'card-raid', spec(), { 'vouchers.js': CARD_PAY });
@@ -118,7 +117,7 @@ test('(a) a claim multiplied by a boost a code lookup gives, with no offchain: c
   );
 });
 
-test('(b) the same game with a matching offchain declaration: no design finding', async t => {
+test('the same game with a matching offchain declaration: no design finding', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const declared = spec({
@@ -126,7 +125,7 @@ test('(b) the same game with a matching offchain declaration: no design finding'
   });
   const dir = await game(tmp, 'card-raid', declared, { 'vouchers.js': CARD_PAY });
   const r = await review(dir);
-  // (its check reads state the server keeps, so its bound is asked about: bound-undeclared, as in (d))
+  // (its check reads state the server keeps, so its bound is asked about: bound-undeclared, as for the cap an hour below)
   const offchain = r => design(r).filter(f => f.id !== 'bound-undeclared');
   assert.deepEqual(offchain(r), []);
   assert.equal(r.designCode.conversions.length, 1, 'the conversion is still read');
@@ -137,7 +136,7 @@ test('(b) the same game with a matching offchain declaration: no design finding'
   assert.deepEqual(offchain(await review(dir2)), []);
 });
 
-test('(c) a declared offchain entry no server code does: design-unbuilt', async t => {
+test('a declared offchain entry no server code does: design-unbuilt', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const plain = CARD_PAY.replace(/\n {4}const card[^\n]*\n[^\n]*\n/, '\n').replace('100 * boost', "'grant'");
@@ -153,7 +152,7 @@ test('(c) a declared offchain entry no server code does: design-unbuilt', async 
   assert.deepEqual(of(r, 'code-undeclared'), []);
 });
 
-// (d) a bounds grant whose check keeps a cap an hour
+// a bounds grant whose check keeps a cap an hour
 const HOURLY_PAY = `// The raid's pay: the page plays and reports; the server times the run and caps what one player takes an hour.
 const PER_HOUR = 300; // GOLD one player may take in an hour
 
@@ -170,7 +169,7 @@ export const PAY = {
 export const VOUCHERS = { payOnly: 'x', perMinute: 20 };
 `;
 
-test('(d) a bounds grant whose check enforces a cap an hour, with no serverLimit: bound-undeclared and a question naming the constant', async t => {
+test('a bounds grant whose check enforces a cap an hour, with no serverLimit: bound-undeclared and a question naming the constant', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await game(tmp, 'hourly', spec({ grants: [raid({ trust: 'bounds' })] }), { 'vouchers.js': HOURLY_PAY });
@@ -231,7 +230,7 @@ test('(d) a bounds grant whose check enforces a cap an hour, with no serverLimit
   );
 });
 
-// (e) a guild: staked GOLD earns EMBER, and EMBER buys a forge boost on the raid prize, on the server
+// a guild: staked GOLD earns EMBER, and EMBER buys a forge boost on the raid prize, on the server
 const guild = (more = {}) => ({
   version: 2,
   network: 'devnet',
@@ -291,7 +290,7 @@ export const VOUCHERS = { payOnly: 'x', perMinute: 20 };
 const loopsThrough = (warnings, draft) =>
   warnings.filter(w => w.code === 'W-VALUE' && w.message.includes(`“${draft.name ?? draft.key}”`));
 
-test('(e) a guild whose farm yield buys a boost on the prize: drafted, the economy check reports a loop it did not before', async t => {
+test('a guild whose farm yield buys a boost on the prize: drafted, the economy check reports a loop it did not before', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await game(tmp, 'ember-guild', guild(), { 'vouchers.js': GUILD_PAY, 'forge.js': FORGE });
@@ -322,64 +321,39 @@ test('(e) a guild whose farm yield buys a boost on the prize: drafted, the econo
     w.gone.warnings.some(x => x.where === 'economy.offchain'),
     JSON.stringify(w.gone),
   );
-  // with the kit as installed, serverLimit is left out of the check (until the kit takes it), and said so
-  if (!kitTakes(INSTALLED).serverLimit)
-    assert.ok(w.left.some(l => l.draft === 'grant:raid-prize' && /takes no "serverLimit"/.test(l.why)));
   const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
   const section = md.slice(md.indexOf('## Design and code'), md.indexOf('## Live'));
   assert.match(section, /Only with the drafts, the economy check now reports:\n\n- W-VALUE \((high|medium)\): /);
-  t.diagnostic(section);
 });
 
-// A kit that reads serverLimit (@xgamesfun/solana after 0.28.12): the installed one when it does, else a checkout named
-// by GAMESFUN_SOLANA_NEXT (e.g. the kit at commit 30c2fb3).
-const NEXT = (() => {
-  if (kitTakes(INSTALLED).serverLimit) return INSTALLED;
-  const next = process.env.GAMESFUN_SOLANA_NEXT;
-  return next &&
-    existsSync(path.join(next, 'package.json')) &&
-    kitTakes({ ...process.env, GAMESFUN_SOLANA: next }).serverLimit
-    ? { ...process.env, GAMESFUN_SOLANA: next }
-    : null;
-})();
+test('the drafted bound, declared as serverLimit: the economy check brings its "server signs at most" line and drops its question', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await game(tmp, 'ember-guild', guild(), { 'vouchers.js': GUILD_PAY, 'forge.js': FORGE });
+  assert.equal(kitTakes(INSTALLED).serverLimit, true, 'the installed @xgamesfun/solana reads serverLimit');
+  const r = await review(dir);
+  const w = r.designCode.withDrafts;
+  assert.equal(w.ran, true, JSON.stringify(w));
+  assert.deepEqual(w.added[SERVER_LIMIT.field], ['raid-prize']);
+  assert.deepEqual(w.refused, []);
+  // the kit now reasons from the server's own bound: a tell line that names it, and its question about it gone
+  assert.ok(
+    w.only.tell.some(x => x.includes('“Raid prize”') && x.includes('300')),
+    JSON.stringify(w.only.tell),
+  );
+  assert.ok(
+    w.gone.warnings.some(
+      x =>
+        x.code === 'W-ASSUMPTION' && x.where === 'economy.grants.raid-prize' && x.message.includes(SERVER_LIMIT.field),
+    ),
+    JSON.stringify(w.gone.warnings),
+  );
+  assert.equal(loopsThrough(w.only.warnings, of(r, 'code-undeclared')[0].draft).length, 1);
+  const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
+  assert.ok(md.includes('### The economy check, with the drafts'), 'review.md has the section');
+});
 
-test(
-  '(e, serverLimit) with a kit that reads serverLimit, the drafted bound brings its "server signs at most" line and drops its question',
-  {
-    skip: NEXT
-      ? false
-      : 'no @xgamesfun/solana here reads serverLimit: set GAMESFUN_SOLANA_NEXT to a kit checkout that does (30c2fb3 or later)',
-  },
-  async t => {
-    const tmp = await tempDir();
-    t.after(tmp.cleanup);
-    const dir = await game(tmp, 'ember-guild', guild(), { 'vouchers.js': GUILD_PAY, 'forge.js': FORGE });
-    const r = await review(dir, NEXT);
-    const w = r.designCode.withDrafts;
-    assert.equal(w.ran, true, JSON.stringify(w));
-    assert.deepEqual(w.added[SERVER_LIMIT.field], ['raid-prize']);
-    assert.deepEqual(w.refused, []);
-    // the kit now reasons from the server's own bound: a tell line that names it, and its question about it gone
-    assert.ok(
-      w.only.tell.some(x => x.includes('“Raid prize”') && x.includes('300')),
-      JSON.stringify(w.only.tell),
-    );
-    assert.ok(
-      w.gone.warnings.some(
-        x =>
-          x.code === 'W-ASSUMPTION' &&
-          x.where === 'economy.grants.raid-prize' &&
-          x.message.includes(SERVER_LIMIT.field),
-      ),
-      JSON.stringify(w.gone.warnings),
-    );
-    assert.equal(loopsThrough(w.only.warnings, of(r, 'code-undeclared')[0].draft).length, 1);
-    const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
-    t.diagnostic(md.slice(md.indexOf('### The economy check, with the drafts'), md.indexOf('## Live')));
-  },
-);
-
-// (f) two grants in one PAY.check, each in its own branch: a cap a function of the game's own keeps, called from one
+// two grants in one PAY.check, each in its own branch: a cap a function of the game's own keeps, called from one
 // branch, bounds that branch's grant only
 const TWO_LEDGER = `// The popping reward's ledger: one person's claims a day.
 const PER_DAY = 3; // claims one person may make a day
@@ -410,7 +384,7 @@ export const PAY = {
 export const VOUCHERS = { payOnly: 'x', perMinute: 20 };
 `;
 
-test('(f) two grants in one check: a cap called from one branch is filed under that branch’s grant only', async t => {
+test('two grants in one check: a cap called from one branch is filed under that branch’s grant only', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const free = {
@@ -433,7 +407,7 @@ test('(f) two grants in one check: a cap called from one branch is filed under t
   );
 });
 
-// (g) the cap in a function of vouchers.js outside PAY that PAY calls, named "a day": read, and filed under the grant
+// the cap in a function of vouchers.js outside PAY that PAY calls, named "a day": read, and filed under the grant
 // the code after the call pays (not the one an earlier branch returned)
 const SLOT_PAY = `// Two grants; the popping reward's claims are held to so many a day by takeSlot, below PAY.
 export const PAY = {
@@ -458,7 +432,7 @@ async function takeSlot(env, sub) {
 }
 `;
 
-test('(g) a cap a day in a vouchers.js function PAY calls: read, under the grant the code after the call pays', async t => {
+test('a cap a day in a vouchers.js function PAY calls: read, under the grant the code after the call pays', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const free = {
@@ -485,7 +459,7 @@ test('(g) a cap a day in a vouchers.js function PAY calls: read, under the grant
   assert.deepEqual(of(r, 'design-unbuilt'), []);
 });
 
-// (h) a multiplier applied under a condition the server stores: a code redeemed in one file turns a stored flag on,
+// a multiplier applied under a condition the server stores: a code redeemed in one file turns a stored flag on,
 // a round started later copies it, and the round's pay is doubled under it. Read through the fields, across files.
 const BANK = `// One player's bank: rounds, the boost a code turned on, and what each round earned.
 const RULES = { boostTimes: 2, boostMs: 86_400_000 };
@@ -532,7 +506,7 @@ async function sha256(s) {
 }
 `;
 
-test('(h) a code turns a stored flag on, a later round doubles its pay under it: code-undeclared, read across files', async t => {
+test('a code turns a stored flag on, a later round doubles its pay under it: code-undeclared, read across files', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await game(tmp, 'boosted', spec({ grants: [raid({ trust: 'bounds' })] }), {
@@ -550,7 +524,7 @@ test('(h) a code turns a stored flag on, a later round doubles its pay under it:
   assert.match(f.message, /a code lookup at server\/routes\.js:\d+/);
 });
 
-// (i) a stored multiplier read into a local and added, in a rules file outside server/ that server/ imports; the
+// a stored multiplier read into a local and added, in a rules file outside server/ that server/ imports; the
 // server sets it from what a wallet holds (through an object: deps.collectiblesOf)
 const RULES_FILE = `// The farm's rules, shared by the page and the server.
 export function harvest(farm, plot) {
@@ -578,7 +552,7 @@ export async function tap(farm, plot) {
 }
 `;
 
-test('(i) a stored multiplier in an imported rules file, set from a wallet read in another: built when declared, drafted when not', async t => {
+test('a stored multiplier in an imported rules file, set from a wallet read in another: built when declared, drafted when not', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const golden = { key: 'golden', name: 'Golden Sickle doubles harvests', takes: 'item:card', gives: 'gold', rate: 2 };
@@ -601,7 +575,7 @@ test('(i) a stored multiplier in an imported rules file, set from a wallet read 
   assert.match(f.message, /it reads what a wallet holds at server\/farm\.js:\d+/);
 });
 
-// (j) a streak's bonus beside an unrelated rule that takes and gives the same token (a hint paid in GOLD): the hint's
+// a streak's bonus beside an unrelated rule that takes and gives the same token (a hint paid in GOLD): the hint's
 // declaration does not cover the streak
 const QUIZ = `// A learner's answers: a streak of right answers pays double; a hint costs GOLD.
 const RULES = { reward: 10, streakAfter: 5, streakMultiplier: 2, hintCost: 20 };
@@ -626,7 +600,7 @@ export async function hint(env, sub) {
 }
 `;
 
-test('(j) a streak bonus beside a declared hint paid in the same token: still code-undeclared, named a streak', async t => {
+test('a streak bonus beside a declared hint paid in the same token: still code-undeclared, named a streak', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const hintRule = { key: 'hint', name: 'A hint', takes: 'gold', gives: 'gold', rate: 1 };
@@ -643,7 +617,7 @@ test('(j) a streak bonus beside a declared hint paid in the same token: still co
   assert.deepEqual(of(r, 'design-unbuilt'), []);
 });
 
-// (k) a factor chosen by a condition that reads a wallet's holdings, written into the harvest by any means
+// a factor chosen by a condition that reads a wallet's holdings, written into the harvest by any means
 // (`const count = golden ? 2 : 1`, then a database write): a boost by any name; a plain `x ? 3 : 1` is not
 const HARVEST = `// The farm: a golden tool in the player's wallet doubles each harvest.
 import { collectiblesOf } from './gf-loot/results/index.js';
@@ -666,7 +640,7 @@ export async function retry(env, failed) {
 }
 `;
 
-test('(k) a factor chosen by a holdings condition and written by a query: code-undeclared; an ordinary x ? 3 : 1 is not', async t => {
+test('a factor chosen by a holdings condition and written by a query: code-undeclared; an ordinary x ? 3 : 1 is not', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await game(tmp, 'golden', spec({ grants: [raid({ trust: 'bounds' })] }), {
@@ -683,7 +657,7 @@ test('(k) a factor chosen by a holdings condition and written by a query: code-u
   assert.match(found[0].message, /it reads what a wallet holds at server\/harvest\.js:\d+/);
 });
 
-// (l) a cap held by a ranking: the check pays only a player in the month's top 10 (an ordered query's LIMIT, its size
+// a cap held by a ranking: the check pays only a player in the month's top 10 (an ordered query's LIMIT, its size
 // a parameter's default), once each a month: a bound of 10 claims a month for everyone, so a declared serverLimit is
 // built
 const RANK_PAY = `// The monthly prize: the top ten of a month that is over, once each.
@@ -715,7 +689,7 @@ export async function rowOf(env, farmer) {
 }
 `;
 
-test('(l) a prize paid only to a ranking’s top N: a bound of N claims a month, so the declared serverLimit is built', async t => {
+test('a prize paid only to a ranking’s top N: a bound of N claims a month, so the declared serverLimit is built', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const declared = { per: 'all', amount: 1000, claims: 10, every: '30d' };
@@ -734,7 +708,7 @@ test('(l) a prize paid only to a ranking’s top N: a bound of N claims a month,
   assert.deepEqual(of(r, 'design-unbuilt'), []);
 });
 
-// (m) a server that banks first and pays later: a code redeemed sets a boost's end, a run banks its pops under it
+// a server that banks first and pays later: a code redeemed sets a boost's end, a run banks its pops under it
 // (`n * (boostedAt(p, now) ? RULES.BOOST : 1)`, a ternary inside the product), and PAY.check hands the claim to a
 // helper that hands it to the store, where the claims a day are counted and the bank is read. The boost is read as ×2
 // of the grant the bank feeds, and the claims a day as its bound, three calls deep
@@ -798,7 +772,7 @@ export async function payCheck({ body, player, env }) {
 }
 `;
 
-test('(m) banked under a code’s boost, claimed three calls deep: ×2 of the grant the bank feeds, and its claims a day', async t => {
+test('banked under a code’s boost, claimed three calls deep: ×2 of the grant the bank feeds, and its claims a day', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const declared = { per: 'person', amount: 3000, claims: 3, every: '1d' };
@@ -822,9 +796,9 @@ test('(m) banked under a code’s boost, claimed three calls deep: ×2 of the gr
   assert.deepEqual(of(r, 'design-unbuilt'), []);
 });
 
-// (n) to (q): what the eval games of 2026-11-12 hid from the pass. A holding read by hand two helpers down; a code
-// credited by a call, not multiplied; one check paying two grants, each branch with its own bound; and a cap held as a
-// count against the number the grant declares.
+// Four more shapes of server code. A holding read by hand two helpers down; a code credited by a call, not
+// multiplied; one check paying two grants, each branch with its own bound; and a cap held as a count against the
+// number the grant declares.
 const TOOLS = `const RPC = 'https://rpc.example';
 export async function toolsOf(wallet) {
   const r = await fetch(RPC, { method: 'POST', body: JSON.stringify({ method: 'getProgramAccounts', params: [wallet] }) });
@@ -846,7 +820,7 @@ export async function harvest(player, env) {
 }
 `;
 
-test('(n) a holding read by hand (an RPC call) in a helper two levels down: code-undeclared at the call that applies it', async t => {
+test('a holding read by hand (an RPC call) in a helper two levels down: code-undeclared at the call that applies it', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await game(tmp, 'tool-farm', spec(), {
@@ -874,7 +848,7 @@ const BONUS = `export async function redeem(request, env, player) {
 }
 `;
 
-test('(o) a code that credits a bonus by a call (no multiplying): code-undeclared, reading a code lookup', async t => {
+test('a code that credits a bonus by a call (no multiplying): code-undeclared, reading a code lookup', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const dir = await game(tmp, 'bonus-codes', spec(), { 'vouchers.js': CARD_PAY, 'bonus.js': BONUS });
@@ -917,7 +891,7 @@ export const PAY = {
 export const VOUCHERS = { payOnly: 'x', perMinute: 20 };
 `;
 
-test('(p) one check paying two grants: a bound belongs to the grant of its own branch only', async t => {
+test('one check paying two grants: a bound belongs to the grant of its own branch only', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const s = spec({ grants: [raid({ trust: 'bounds' }), TWO] });
@@ -942,7 +916,7 @@ const MONTHLY = `export const PAY = {
 export const VOUCHERS = { payOnly: 'x', perMinute: 20 };
 `;
 
-test('(q) a cap held as a count against the declared number (no cap-like name): built, at the count, not the rank', async t => {
+test('a cap held as a count against the declared number (no cap-like name): built, at the count, not the rank', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
   const s = spec({ grants: [raid({ serverLimit: { per: 'all', amount: 10, every: '30d' } })] });

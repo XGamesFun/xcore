@@ -1,6 +1,6 @@
 // `xcore check [dir]`: the page check (../lib/check.mjs) on a game you brought: it builds, fits xgames.fun's hosting,
 // starts clean in Chrome as the play host serves it, and stays inside its origins. publish runs the same check first.
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { failureJson, guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { madeByKit } from '../lib/publish/index.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -46,7 +46,20 @@ export default {
         port,
         log: l => (values.json ? console.error : console.log)(l),
       });
-      if (values.json) printJson(r);
+      // the record, and a failed check said as every command's --json says a failure (ok, error, code)
+      const failed = r.checks.filter(c => c.ok === false);
+      if (values.json)
+        printJson({
+          ...(r.pass
+            ? { ok: true }
+            : failureJson(
+                failed.length
+                  ? `the page check failed: ${failed.map(c => `${c.n} ${c.name}`).join('; ')}`
+                  : 'the page check did not run',
+                'check',
+              )),
+          ...r,
+        });
       else {
         for (const n of r.notes) console.log(`note: ${n}`);
         // a warning when it is missing, cannot be drawn, or will be cropped or blurry; never a failed check

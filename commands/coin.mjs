@@ -35,7 +35,8 @@ economy, runs no market: a coin people can buy and sell is launched on a venue, 
                  builds the launch; before the key signs, every transaction is read and held to the launch that
                  was printed (this name, ticker and pair, this key as the coin's creator, no buy, no move of a token
                  the key holds, nothing of the game's economy), and an RPC of the cluster is asked that it is that cluster's
-      --name         the coin's name (at most 32 bytes)        --ticker   its ticker (2 to 10 letters or digits)
+      --name         the coin's name (at most 32 bytes)        --ticker   its ticker (2 to 10 letters or digits; or --symbol)
+      --description  the coin's description (at most 1,000 characters)
       --picture      a picture among the published game's files (the path ${CMD} coin lists)
       --venue        meteora (the default) or pumpfun          --pair     what it trades against (the default: SOL)
       --keypair      the key file that signs and pays: the coin's creator fees belong to its address for good

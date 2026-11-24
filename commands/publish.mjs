@@ -10,7 +10,7 @@ import { buildFailure, pageRoots, runBuild } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
 import { reviewNudge } from '../lib/review.mjs';
 import { cardPrinted, drawable } from '../lib/card.mjs';
-import { plural } from '../lib/util.mjs';
+import { plural, sizeText } from '../lib/util.mjs';
 
 const usage = `Usage: xcore publish [dir] [--draft] [--new] [--title <name>] [--no-card] [--status] [--check [--verify [--port <n>]]] [--json]
 
@@ -190,7 +190,6 @@ export function publishCommand({
 
 // ---- What the command prints. `where` is the game's folder as the person reads it. ----------------------------------
 
-const kb = bytes => `${(bytes / 1024).toFixed(1)} KB`;
 const failedNames = failed => failed.map(c => `${c.n} ${c.name}`).join('; ');
 
 /** `publish --status`: where this folder's game is published, and whether it is live. */
@@ -218,7 +217,7 @@ function statusLine(where, origin, s) {
 function checkLines(where, out, p) {
   const talks = p.backend.length ? ` It may talk to: ${p.backend.join(', ')}.` : '';
   const lines = [
-    `${where}: ${out.files} files${out.added?.length ? ` (with the ${plural(out.added.length, 'record')} xgames.fun keeps: ${out.added.join(', ')})` : ''}, ${(out.bytes / 1048576).toFixed(1)} MB, nothing refused.${talks} ` +
+    `${where}: ${plural(out.files, 'file')}${out.added?.length ? ` (with the ${plural(out.added.length, 'record')} xgames.fun keeps: ${out.added.join(', ')})` : ''}, ${sizeText(out.bytes)}, nothing refused.${talks} ` +
       `Left out: ${out.skipped.join(', ') || 'nothing'}.`,
   ];
   const sv = out.server;
@@ -229,9 +228,9 @@ function checkLines(where, out, p) {
     ];
     lines.push(
       sv.stock
-        ? `  server code: xcore's stock server (${kb(sv.bytes)}, sha256 ${sv.sha256.slice(0, 12)}…), which serves the page's api/db/ from the game's database under gamesfun.json → database.collections`
+        ? `  server code: xcore's stock server (${sizeText(sv.bytes)}, sha256 ${sv.sha256.slice(0, 12)}…), which serves the page's api/db/ from the game's database under gamesfun.json → database.collections`
         : `  server code: ${sv.entry} bundled from ${plural(sv.files.length, 'file')} (${sv.files.join(', ')}) ` +
-            `into one ${kb(sv.bytes)} file, sha256 ${sv.sha256.slice(0, 12)}…${extras.map(e => `, ${e}`).join('')}; ` +
+            `into one ${sizeText(sv.bytes)} file, sha256 ${sv.sha256.slice(0, 12)}…${extras.map(e => `, ${e}`).join('')}; ` +
             'server/ and gamesfun.json are not public files',
       ...(sv.database
         ? [
@@ -262,11 +261,11 @@ function publishedLines(where, r) {
     `  the game itself: ${r.gameUrl}`,
   ];
   if (r.friendsUrl) lines.push(`  play with friends: ${r.friendsUrl}`);
-  lines.push(`  uploaded ${r.uploaded} new files; xgames.fun already had ${r.alreadyThere}.`);
+  lines.push(`  uploaded ${plural(r.uploaded, 'new file')}; xgames.fun already had ${r.alreadyThere}.`);
   if (r.server) {
     lines.push(
       r.server.sent
-        ? `  its server code went up too (${kb(r.server.bytes)}), at ${r.gameUrl ?? r.url}api/`
+        ? `  its server code went up too (${sizeText(r.server.bytes)}), at ${r.gameUrl ?? r.url}api/`
         : `  its server code did not go up: ${r.server.why}`,
     );
   }

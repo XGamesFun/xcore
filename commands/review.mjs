@@ -7,10 +7,13 @@ import { readLinks } from '../lib/publish/index.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
 import { CMD } from '../lib/command.mjs';
 import { designCodeLine } from '../lib/design-code.mjs';
+import { plural } from '../lib/util.mjs';
 
 const usage = `Usage: xcore review [game] [--live [origin]] [--out <dir>] [--json]
 
 The security review of a game, read as a cheater would: what a script gets without playing, and what to fix first.
+It reads the game's code as text, by patterns, and runs none of it: a PASS means no high finding in what it read,
+never that the game is safe to pay from. Each result says so, and lists what it could not read.
   the economy  @xgamesfun/solana's own review of the economy file (each route that pays: what it trusts, its ceiling,
                its findings, the trade-offs in words), when the installed one has it
   the server   two analyses. The payout ledger: each route that pays, who signs it, what decides it (the request
@@ -75,20 +78,22 @@ export default {
           if (!values.json) console.error(`Not asked live: ${liveWhy}.`);
         }
       }
-      const { reviewGame } = await import('../lib/review.mjs');
+      const { reviewGame, unreadWords } = await import('../lib/review.mjs');
       if (base && !values.json) console.error(`Asking ${base} as a stranger (no sign-in, and a forged one)…`);
       const r = await reviewGame(dir, { live: base, liveWhy, out: values.out ?? null });
       if (values.json) printJson(r);
-      else console.log(summary(r, shown(dir)));
+      else console.log(summary(r, shown(dir), unreadWords(r)));
       return r.ok ? 0 : 1;
     }, args),
 };
 
-/** What the command prints: the verdict, each finding, and where the record and the trade-offs are. */
-function summary(r, where) {
+/** What the command prints: the verdict, how it was reached, each finding, and where the record and the trade-offs are. */
+function summary(r, where, unread) {
   const c = r.counts;
   const lines = [
-    `review: ${r.ok ? 'PASS' : 'FAIL'} ${c.high} high, ${c.medium} medium, ${c.low} low, ${c.info} info · evidence ${shown(r.outDir)}`,
+    `review: ${r.ok ? 'PASS' : 'FAIL'} ${c.high} high, ${c.medium} medium, ${c.low} low, ${c.info} info${unread} · evidence ${shown(r.outDir)}`,
+    ...r.method.map(l => `  ${l}`),
+    ...r.unread.map(u => `  not read: ${u.what}: ${u.why}`),
   ];
   for (const f of r.findings) {
     lines.push(`  ${f.severity.padEnd(6)} ${f.id}${f.route ? ` (${f.route})` : ''}: ${f.message}`);
@@ -97,10 +102,10 @@ function summary(r, where) {
   lines.push(
     r.economy.file
       ? r.economy.available
-        ? `economy: ${r.economy.file}, ${r.economy.routes.length} routes reviewed by @xgamesfun/solana ${r.economy.version}`
+        ? `economy: ${r.economy.file}, ${plural(r.economy.routes.length, 'route')} reviewed by @xgamesfun/solana ${r.economy.version}`
         : `economy: ${r.economy.file} not reviewed: ${r.economy.why}`
       : `economy: ${where} has none`,
-    `server: ${r.ledger.length} paid routes in the ledger, ${r.custody.length} keys in custody; ${r.server.routes.length} api/ routes named${r.server.facts.vouchers ? `; PAY.check ${r.server.facts.pay === 'template' ? 'is still the template' : r.server.facts.pay}, payOnly ${r.server.facts.payOnly ?? '?'}` : ''}`,
+    `server: ${plural(r.ledger.length, 'paid route')} in the ledger, ${plural(r.custody.length, 'key')} in custody; ${plural(r.server.routes.length, 'api/ route')} named${r.server.facts.vouchers ? `; PAY.check ${r.server.facts.pay === 'template' ? 'is still the template' : r.server.facts.pay}, payOnly ${r.server.facts.payOnly ?? '?'}` : ''}`,
     designCodeLine(r.designCode),
     r.live ? `live: ${r.live.base}, ${r.live.probes.length} requests` : `live: ${r.liveWhy}`,
   );

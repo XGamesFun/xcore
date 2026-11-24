@@ -1,9 +1,10 @@
 // GamesFun: sign-in, saves, leaderboards and the game's own database on xgames.fun, for a Unity WebGL build.
 // Written by `xcore add signin` (with GamesFun.jslib beside it); `xcore add signin` again brings it up to date.
-// Every call answers the JSON text {"data": …, "error": …, "status": …}; parse it with JsonUtility or your own JSON
-// library. Outside a WebGL build (the editor, a desktop build) the error says so and the game plays on. In Player
-// Settings → Publishing Settings, keep Compression Format Disabled (or turn on Decompression Fallback) and keep
-// threads off: xgames.fun sends files as they are and its pages are not cross-origin isolated.
+// A call that asks for something (saves, scores, the database, Api, loot) answers the JSON text {"data": …, "error": …,
+// "status": …}; SignIn answers the player's JSON or "null". Parse them with JsonUtility or your own JSON library.
+// Outside a WebGL build (the editor, a desktop build) the error says so, nobody is signed in, and the game plays on.
+// In Player Settings → Publishing Settings, keep Compression Format Disabled (or turn on Decompression Fallback) and
+// keep threads off: xgames.fun sends files as they are and its pages are not cross-origin isolated.
 //
 //   string player = await GamesFun.SignIn();                     // from a button press: the player JSON, or "null"
 //   GamesFun.PlayerChanged += json => { … };                     // sign-in and sign-out
@@ -36,7 +37,7 @@ public class GamesFun : MonoBehaviour
     [DllImport("__Internal")] internal static extern void GamesFunRoomLeave(int handle);
 #endif
 
-    /// <summary>The signed-in player as JSON ({id, name, level, wallet, x}), or "null".</summary>
+    /// <summary>The signed-in player as JSON ({id, name, level, wallet, x, google}), or "null".</summary>
     public static string Player { get; private set; } = "null";
     public static bool SignedIn => Player != "null";
     public static event Action<string> PlayerChanged;
@@ -71,11 +72,19 @@ public class GamesFun : MonoBehaviour
 #endif
     }
 
-    /// <summary>The player's sign-in, from a button press. → the player JSON, or "null". `how`: "x" or "google".
-    /// `stay`: true never leaves the page (a window instead); left out (or false), on the game's own link the tap takes
-    /// the tab to X and back, and the game starts again, signed in (framed by another site: a window).</summary>
-    public static Task<string> SignIn(string how = "x", bool? stay = null) =>
-        Call("signIn", "[{\"how\":" + Str(how) + (stay.HasValue ? ",\"stay\":" + (stay.Value ? "true" : "false") : "") + "}]");
+    /// <summary>The player's sign-in, from a button press. → the player JSON, or "null" when nobody signed in, as
+    /// outside a WebGL build. `how`: "x" or "google". `stay`: true never leaves the page (a window instead); left out
+    /// (or false), on the game's own link the tap takes the tab to X and back, and the game starts again, signed in
+    /// (framed by another site: a window).</summary>
+    public static Task<string> SignIn(string how = "x", bool? stay = null)
+    {
+#if UNITY_WEBGL && !UNITY_EDITOR
+        return Call("signIn", "[{\"how\":" + Str(how) + (stay.HasValue ? ",\"stay\":" + (stay.Value ? "true" : "false") : "") + "}]");
+#else
+        // Call's answer here is an error, which is no player
+        return Task.FromResult("null");
+#endif
+    }
     public static Task<string> SignOut() => Call("signOut", "[]");
 
     public static Task<string> SavesGet(string key) => Call("saves.get", "[" + Str(key) + "]");

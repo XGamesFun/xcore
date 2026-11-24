@@ -12,7 +12,7 @@ register(
     ),
 );
 globalThis.WebSocketRequestResponsePair ??= class {};
-const { GameRoom, ROOM, reach, roomCode } = await import('../lib/client/server/rooms.js');
+const { GameRoom, ROOM, handleRooms, reach, roomCode } = await import('../lib/client/server/rooms.js');
 
 class Socket {
   constructor() {
@@ -253,4 +253,33 @@ test('a Host button opens a room of its own, a Join button joins one that is the
     reason: 'Someone is in this room already: choose another code.',
   });
   assert.ok((await join({ host: false })).last('welcome').id > 1);
+});
+
+test('a room path that is not a code is refused in words, one that does not decode among them', async () => {
+  const asked = [];
+  const env = {
+    GAME_ROOMS: {
+      idFromName: code => code,
+      get: code => ({
+        fetch: async request => {
+          asked.push([code, request.headers.get('x-room-code')]);
+          return Response.json({ ok: true });
+        },
+      }),
+    },
+  };
+  const at = p => handleRooms(new Request('https://moth-play.example/api/rooms/' + p), env);
+  for (const p of ['%E0%A4%A', '%', 'AB', 'K7-MX']) {
+    const res = await at(p);
+    assert.equal(res.status, 400, p);
+    assert.deepEqual(await res.json(), { ok: false, code: 'bad', why: 'A room code is 4 to 8 letters and digits.' }, p);
+  }
+  assert.deepEqual(asked, [], 'no room is asked');
+  assert.equal((await at('k7mxq2')).status, 200);
+  assert.equal((await at('%4B7MXQ2')).status, 200, 'an encoded code is decoded');
+  assert.deepEqual(asked, [
+    ['K7MXQ2', 'K7MXQ2'],
+    ['K7MXQ2', 'K7MXQ2'],
+  ]);
+  assert.equal(await handleRooms(new Request('https://moth-play.example/api/scores'), env), null, 'another path');
 });

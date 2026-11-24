@@ -1,12 +1,14 @@
 // Publishing a brought game against a stand-in xgames.fun: sign in, the files and checks, only new files uploaded, the
-// same link updated, a secret refused, sign out; a game the kit made is never published by this package alone.
+// same link updated, a secret refused, sign out; a game the kit made is never published by this package alone. The
+// account's limits, and each way a file's bytes go up (inside the call, or straight to storage).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
+import { mkdir, readdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { adopt } from '../lib/publish/adopt.mjs';
 import { credentialKey, logout, savedLogin } from '../lib/publish/client.mjs';
-import { preflight, publishGame } from '../lib/publish/index.mjs';
+import { preflight, publishGame, readLinks } from '../lib/publish/index.mjs';
 import { buildTree } from '../lib/publish/tree.mjs';
 import { fixture, passing, run, signIn, standIn, tempDir } from './helpers.mjs';
 
@@ -125,6 +127,102 @@ test('a timeout on the last step says the game may be published, and publishing 
   assert.deepEqual(g.state.lastBegin?.projectId ?? g.state.beganWith, 'g1', 'the retry names the same game');
 });
 
+/** A signed-in stand-in xgames.fun and the static fixture, adopted. → {g, env, dir, files (what a publish sends), publish} */
+async function ready(t) {
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = { GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'), GAMESFUN_CREDENTIALS: 'file' };
+  await signIn(g, env);
+  const dir = await fixture(tmp, 'static');
+  await adopt(dir);
+  const files = (await preflight(dir, { origin: g.origin })).built.tree.files;
+  return { g, env, dir, files, publish: () => publishGame(dir, { origin: g.origin, env, check: passing }) };
+}
+const began = g => g.state.calls.filter(c => c === 'POST /api/kit/publish').length;
+
+test('the account’s limits: a game at every one of them is published; one file, one byte or one file’s byte over is refused, nothing sent', async t => {
+  const { g, dir, publish } = await ready(t);
+  // a file big enough for the refusals to name sizes a person can read: 2 MiB, beside the game's small ones
+  await writeFile(path.join(dir, 'world.bin'), Buffer.alloc(2 * 1048576, 7));
+  const files = (await preflight(dir, { origin: g.origin })).built.tree.files;
+  const total = files.reduce((n, f) => n + f.bytes, 0);
+  const at = { files: files.length, totalBytes: total, fileBytes: 2 * 1048576 };
+  for (const [limits, words] of [
+    [{ ...at, files: at.files - 1 }, `This game has ${at.files} files; a published game may have ${at.files - 1}.`],
+    [
+      { ...at, totalBytes: total - 1 },
+      // over by one byte: said in bytes, where megabytes would read the same
+      `This game is ${total.toLocaleString('en-US')} bytes; a published game may be ${(total - 1).toLocaleString('en-US')} bytes.`,
+    ],
+    [{ ...at, totalBytes: 1048576 }, 'This game is 2 MB; a published game may be 1 MB.'],
+    [{ ...at, fileBytes: at.fileBytes - 1 }, 'world.bin is 2,097,152 bytes; one file may be 2,097,151 bytes.'],
+    [{ ...at, fileBytes: 1048576 }, 'world.bin is 2 MB; one file may be 1 MB.'],
+  ]) {
+    g.state.me = { limits };
+    await assert.rejects(publish(), e => {
+      assert.deepEqual([e.code, e.message], ['size', words]);
+      return true;
+    });
+    assert.equal(began(g), 0, `nothing was sent: ${words}`);
+  }
+  g.state.me = { limits: at };
+  const r = await publish();
+  assert.deepEqual([r.url, r.uploaded], ['http://x/play/dot-catch', at.files]);
+});
+
+test('a file xgames.fun takes straight into its storage is put at the address it hands out, with its method and headers, then named by its key', async t => {
+  const { g, dir, files, publish } = await ready(t);
+  g.state.direct = true;
+  // every file is put at its own address (the stand-in refuses a PUT without the headers it named, and a key whose
+  // bytes do not hash to the file announced), none inside a call
+  const one = await publish();
+  assert.deepEqual([one.url, one.uploaded], ['http://x/play/dot-catch', files.length]);
+  assert.deepEqual([...g.state.blobs].sort(), files.map(f => f.sha256).sort());
+  assert.equal(g.state.staged.size, files.length);
+  // storage refuses the next file: the publish stops there, and says what is kept
+  await writeFile(path.join(dir, 'game.js'), 'console.log("v2")');
+  g.state.putStatus = 503;
+  await assert.rejects(publish(), {
+    message: 'Uploading a file failed (503). Run publish again; files already sent are kept.',
+  });
+  assert.equal(g.state.calls.filter(c => c === 'POST /api/kit/publish/p1').length, 1, 'that publish was not finished');
+  g.state.putStatus = null;
+  const two = await publish();
+  assert.deepEqual([g.state.beganWith, two.uploaded, two.version.number], ['g1', 1, 2], 'the same game, one file');
+  assert.equal([...g.state.staged.values()].at(-1).toString(), 'console.log("v2")');
+});
+
+test('a file xgames.fun came to hold while the publish ran is not sent again', async t => {
+  const { g, files, publish } = await ready(t);
+  const held = files.find(f => f.path === 'game.js').sha256;
+  // another publish of the same account stores game.js after this one began
+  g.state.handle = (method, url) => (url.includes('/blobs/') && g.state.blobs.add(held), null);
+  const r = await publish();
+  assert.deepEqual([r.url, r.uploaded], ['http://x/play/dot-catch', files.length - 1]);
+  assert.equal(g.state.uploads.has(held), false, 'its bytes never went up');
+});
+
+test('a file that changes while it is being published stops the publish: what was checked is what goes up', async t => {
+  const { g, dir, publish } = await ready(t);
+  await publish();
+  await writeFile(path.join(dir, 'game.js'), 'console.log("v2")');
+  // an editor saves game.js again after its bytes were read and checked, before they are uploaded
+  g.state.handle = (method, url) => {
+    if (method === 'POST' && url === '/api/kit/publish') writeFileSync(path.join(dir, 'game.js'), 'fetch("//evil")');
+    return null;
+  };
+  await assert.rejects(publish(), {
+    code: 'changed',
+    message: 'A file changed while it was being published. Publish again when nothing is editing the game.',
+  });
+  assert.equal(g.state.calls.filter(c => c === 'POST /api/kit/publish/p1').length, 1, 'that publish was not finished');
+  assert.ok(![...g.state.uploads.values()].some(b => b.includes('evil')), 'the changed bytes never went up');
+});
+
 test("the sign-in's storage key never changes: 0.1.0 and the kit keep the token under it", () => {
   // renaming the platform to xgames.fun once changed it, which signed everyone out and orphaned their tokens
   assert.equal(credentialKey('https://xgames.fun'), 'games.fun https://xgames.fun');
@@ -235,7 +333,7 @@ test('a mainnet game whose server/vouchers.js predates its cluster is refused, w
   );
 });
 
-test('a mainnet game that names its cluster in a server file of its own (as Bubble Day does) is published', async t => {
+test('a mainnet game that names its cluster in a server file of its own is published', async t => {
   const tmp = await tempDir(),
     g = await standIn();
   t.after(async () => {
@@ -280,4 +378,64 @@ test('a published folder linked from outside the game is refused; one linked ins
     ok.tree.files.some(f => f.path === 'index.html'),
     JSON.stringify(ok.refused),
   );
+});
+
+test('a publish record that does not read refuses the publish: read as no record, it would make a second game', async t => {
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = { GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'), GAMESFUN_CREDENTIALS: 'file' };
+  await signIn(g, env);
+  const dir = await fixture(tmp, 'static');
+  await adopt(dir);
+  assert.deepEqual(await readLinks(dir), {}, 'a folder never published has no record');
+  await publishGame(dir, { origin: g.origin, env, check: passing });
+  const record = path.join(dir, '.gamesfun', 'publish.json');
+  const whole = await readFile(record, 'utf8');
+  assert.deepEqual(
+    (await readdir(path.dirname(record))).filter(f => f.startsWith('publish.json')),
+    ['publish.json'],
+    'the record is written whole and moved into place: nothing is left beside it',
+  );
+  // cut short, as a write that was interrupted leaves it
+  const cut = whole.slice(0, 40);
+  await writeFile(record, cut);
+  g.state.calls.length = 0;
+  await assert.rejects(
+    publishGame(dir, { origin: g.origin, env, check: passing }),
+    e =>
+      e.code === 'publish-record' &&
+      /^\.gamesfun\/publish\.json is not valid JSON \(.+\)\. .*would make a second game/.test(e.message) &&
+      /Put it back from a copy, or write it again as \{"http.*": \{"projectId"/.test(e.message),
+  );
+  assert.deepEqual(g.state.calls, [], 'nothing is asked of xgames.fun');
+  assert.equal(await readFile(record, 'utf8'), cut, 'the record is left as it was found');
+  // the offline check names it with what else publish would refuse, and every command that needs the game does too
+  assert.match((await preflight(dir, { origin: g.origin })).problems.join('\n'), /publish\.json is not valid JSON/);
+  const plan = run(['plan', dir], { env: { ...env, GAMESFUN_STUDIO: g.origin } });
+  assert.equal(plan.status, 1);
+  assert.match(plan.stderr, /publish\.json is not valid JSON/);
+  assert.doesNotMatch(plan.stderr, /publish it first/);
+  // put back, the next publish updates the same game
+  await writeFile(record, whole);
+  await publishGame(dir, { origin: g.origin, env, check: passing });
+  assert.equal(g.state.beganWith, 'g1');
+});
+
+test('an economy file or a backend.json that is not valid JSON is named among what publish refuses', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  await adopt(dir);
+  await writeFile(path.join(dir, 'xsolana.json'), '{ "network": "mainnet", "grants": [');
+  await writeFile(path.join(dir, 'backend.json'), '{ "origins": [ }');
+  const said = (await preflight(dir)).problems.join('\n');
+  assert.match(said, /^xsolana\.json is not valid JSON \(.+\)$/m);
+  assert.match(said, /^backend\.json is not valid JSON \(.+\)$/m);
+  await writeFile(path.join(dir, 'xsolana.json'), '{ "grants": [] }');
+  await writeFile(path.join(dir, 'backend.json'), '{ "version": 1, "origins": [] }');
+  assert.deepEqual((await preflight(dir)).problems, []);
 });

@@ -9,6 +9,17 @@ The contract is `gf-server-v1`. Every name and number in it lives in one module,
 [`lib/server/contract.mjs`](../lib/server/contract.mjs); the bundler and its checks are
 [`lib/server/bundle.mjs`](../lib/server/bundle.mjs).
 
+- [What goes in the game folder](#what-goes-in-the-game-folder)
+- [What the server is](#what-the-server-is): requests, `env`, limits, what is not allowed;
+  [the token](#check-the-token-first), [rooms over a WebSocket](#a-room-over-a-websocket),
+  [`env.GF`](#envgf-the-platform), [project files](#project-files-envgffiles), [secrets](#secrets),
+  [the economy's own RPC](#the-economys-own-rpc), [what a payout rests on](#what-a-payout-rests-on),
+  [what your server does, declared](#what-your-server-does-declared),
+  [paying a result](#paying-a-result-xgamesfuns-keeper-or-a-voucher-key-of-your-own)
+- [A database of its own](#a-database-of-its-own): from a server, with no server, and `xcore db`
+- [Running it locally](#running-it-locally)
+- [Publishing it](#publishing-it): what a stopped, capped or paused server answers
+
 ## What goes in the game folder
 
 ```
@@ -70,7 +81,7 @@ export default {
   `https://play.xgames.fun/loot/v1/rpc` (the methods loot's client uses, one request a call): the public devnet RPC
   (`api.devnet.solana.com`) answers the Workers runtime with 403 ("Your IP or provider is blocked"), under `xcore dev`
   as well.
-- **Limits**: set by the game's plan (README §5, `xcore plan`). Free: 50 ms of CPU per request to `fetch`, **600
+- **Limits**: set by the game's plan ([HOSTING.md](HOSTING.md#plans-xcore-plan), `xcore plan`). Free: 50 ms of CPU per request to `fetch`, **600
   requests a minute per game and 120 from one player**; Creator: 200 ms, 6,000 and 600; a 5 MB bundle on every plan.
   Requests with no good game token share half of the game's minute (Free: 300), so signed-in players always have the
   other half. Past a rate, `/api/*` answers 429 with `retry-after: 60`, `scope` (`"player"` or `"game"`) and `plan`.
@@ -144,6 +155,12 @@ export default {
   and that it has not expired. A backend of your own that checks tokens with a JWT library checks all three:
   `jwtVerify(token, keys, { issuer: 'xgames.fun', audience: 'game:<slug>' })`, never the signature alone (every
   game's tokens are signed with one key, so a token without its audience checked is any game's).
+- A backend of your own checks it with any JWT library against `https://<slug>-play.xgames.fun/player/v1/key` (issuer
+  `xgames.fun`, audience `game:<slug>`). Its `sub` is the player's account (`x:<X id>`, or `g:<id>` for Google,
+  different in every game); `wallet` is a claim of its own, and may be absent: a game that keeps a player's data by
+  wallet reads `wallet`. xgames.fun replaces its signing key from time to time: a backend that keeps the key set must
+  fetch it again when a token names a key id (`kid`) it does not hold, once, not in a loop (most JWT libraries' remote
+  key sets do).
 - The page sends it for you: `GamesFun.api(path)` adds `Authorization: Bearer …` for a signed-in player. A WebSocket
   cannot carry that header: send `GamesFun.token` in the address (below).
 - `server/gf-db.js`'s `withPlayer(request, env)` is the same check (null without a token, with no call made).
@@ -204,14 +221,14 @@ talking to the other (a version number in the first message is enough to tell a 
 
 Every call answers `{ok: true, …}` or `{ok: false, code, why}` (`why` is words a game may show); none throws.
 
-| Call                                                                                                                                                                                                | Answer                                                                                                                                                                                                                                                                                                                                                                                                               |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GF.verifyPlayer(token)`                                                                                                                                                                            | `{ok, sub, wallet, x, lvl, exp, banned}`: who the player is, from the sign-in token the page sends (no display name: show `x.handle` when they signed in with X, else a name the page sends, cleaned). `banned`: the creator's ban from the console (`{kind: 'ban' \| 'hide', until}`, or null; always null in `xcore dev`). A token made before a ban still verifies for its hour, so refuse `kind: 'ban'` yourself |
-| `GF.saves.get(player, key = 'main')`, `.put(player, key, value)`, `.delete(player, key)`, `.list(player)`                                                                                           | a player's saves: any JSON value, 64 KB each, 16 a player                                                                                                                                                                                                                                                                                                                                                            |
-| `GF.scores.submit(board, player, score, {name, order, writer})`, `.setup(board, {order, writer})`, `.top(board, {limit, offset})`, `.best(board, player)`, `.remove(board, player)`, `.drop(board)` | leaderboards: a player's best is kept; `order` `"high"` (default) or `"low"`; `writer: "server"`: only the server writes the board (or every board a pattern names: `daily-*`, `*`); `drop`: the board gone, its place among the plan's boards free                                                                                                                                                                  |
-| `GF.loot.report({round, endedAt, winners})`, `GF.loot.status()`                                                                                                                                     | a result that pays prizes by place: xgames.fun's keeper signs it with the game's host key (set up by the owner in Studio); for amounts your server works out, your own key (below, "Paying a result")                                                                                                                                                                                                                |
-| `GF.info()`                                                                                                                                                                                         | `{ok, contract, gameId, slug}`                                                                                                                                                                                                                                                                                                                                                                                       |
-| `GF.files.put(path, body, {type, public, length})`, `.get(path)`, `.head(path)`, `.list({prefix, after})`, `.delete(path)`, `.usage()`                                                              | the game's project files (below, "Project files"): replays, levels, content packs; public ones on the files site                                                                                                                                                                                                                                                                                                     |
+| Call                                                                                                                                                                                                           | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GF.verifyPlayer(token)`                                                                                                                                                                                       | `{ok, sub, wallet, x, lvl, exp, banned}`: who the player is, from the sign-in token the page sends (no display name: show `x.handle` when they signed in with X, else a name the page sends, cleaned). `banned`: the creator's ban from the console (`{kind: 'ban' \| 'hide', until}`, or null; always null in `xcore dev`). A token made before a ban still verifies for its hour, so refuse `kind: 'ban'` yourself                                             |
+| `GF.saves.get(player, key = 'main')`, `.put(player, key, value)`, `.delete(player, key)`, `.list(player)`                                                                                                      | a player's saves: any JSON value, 64 KB each, 16 a player                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `GF.scores.submit(board, player, score, {name, order, writer})`, `.setup(board, {order, writer})`, `.top(board, {limit, offset})`, `.best(board, player)`, `.remove(board, player)`, `.drop(board)`, `.list()` | leaderboards: a player's best is kept; `order` `"high"` (default) or `"low"`; `writer: "server"`: only the server writes the board (or every board a pattern names: `daily-*`, `*`); `drop`: the board gone, its place among the plan's boards free; `list`: every board (`made`: `"server"`, or `"page"` with the `player` who made it; its `writer` and `entries`), every rule, and the plan's `limit` (`boards`, and `page`: how many of them pages may make) |
+| `GF.loot.report({round, endedAt, winners})`, `GF.loot.status()`                                                                                                                                                | a result that pays prizes by place: xgames.fun's keeper signs it with the game's host key (set up by the owner in Studio); for amounts your server works out, your own key (below, "Paying a result")                                                                                                                                                                                                                                                            |
+| `GF.info()`                                                                                                                                                                                                    | `{ok, contract, gameId, slug}`                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `GF.files.put(path, body, {type, public, length})`, `.get(path)`, `.head(path)`, `.list({prefix, after})`, `.delete(path)`, `.usage()`                                                                         | the game's project files (below, "Project files"): replays, levels, content packs; public ones on the files site                                                                                                                                                                                                                                                                                                                                                 |
 
 **Who the player is.** `sub` is the player's account, never their wallet: `x:<X id>` for a player signed in with X,
 or `g:<id>` for a Google account with no X, an id that is **different in every game** (so it never says who the
@@ -269,7 +286,10 @@ if (world.ok) state = new Uint8Array(await new Response(world.body).arrayBuffer(
   themselves; anything else (HTML, SVG, JavaScript, CSS, XML, PDF) is a download, `application/octet-stream`. The
   game's page may load pictures, sounds, fonts and `fetch` from it, never scripts or styles.
 - **From your machine:** `xcore files put <file> [path] [--public]`, `ls`, `get`, `rm`, `usage`; with `--live`, the
-  game's files on xgames.fun.
+  game's files on xgames.fun. xgames.fun keeps one copy of a file and no earlier one, so writing over a file it has
+  (`put --live` to a path that is there) or deleting one (`rm --live`) first prints what would be lost with a code, and
+  changes nothing: it goes on when run again with `--yes <code>`. A new path is put at once, and so is every change
+  to the files on this machine.
 - **Locally**, `xcore dev` keeps them in `.gamesfun/dev/files/` (never published) and serves the public ones on a port
   of their own (`project files: … http://127.0.0.1:8788`), another origin to the page, as live. (Here it is the same
   site, both being `127.0.0.1`; live, `xgamesusercontent.com` is another site too, so cookies and the like keep apart
@@ -456,25 +476,32 @@ xcore add vouchers <folder>      # needs the economy (xcore loot add) with a gra
 It writes `server/vouchers.js` (routed at `api/vouchers/`, with its Durable Object `GameVouchers`), copies loot's
 voucher code into `server/gf-loot/` (bundled with the server, never a public file), makes a **test key** for `xcore dev`
 with its seed as `VOUCHER_SEED` in `.dev.vars` (and, in a folder kept in git, `.dev.vars` into `.gitignore`), and says
-its address. The **live key** is made here and sent to xgames.fun only, never kept on your machine:
+its address. The **live key** is made here and sent to xgames.fun only, never kept on your machine. The steps, in the
+order that needs none of them twice:
 
-1. `xcore publish`, then `xcore secret set VOUCHER_SEED --new-key`: a new key made and sent to the server only. It
-   puts the key's address in the grants your server pays in `xsolana.json` (those that name a voucher key, and those
-   `PAY.check` names), makes it the economy's issuer where a grant counts people, and on mainnet takes the test key out;
-   it says each change.
-2. `xcore loot approve` puts that on chain. To claim vouchers signed under `xcore dev`, add the test key's address to
-   the grant too (devnet only: a copy of the folder holds the test key).
-3. Write `PAY.check` at the top of `server/vouchers.js`: what your server checks before a result pays. It gets the
+1. `xcore add vouchers <folder>`, as above.
+2. Write `PAY.check` at the top of `server/vouchers.js`: what your server checks before a result pays. It gets the
    page's JSON, the signed-in player and `env`, and answers `{grant, round, amount}` (grant: its key or id; round: the
    result's own id, any text, used once; amount: base units, or `'grant'` for the grant's own amount, always named so a
    forgotten amount never pays the most) or `{why}` to refuse. Until you write it, nothing is paid. Count a player's
    daily total in `PAY.paid` (it runs once a round, after its voucher is signed; again only if it threw), not in
-   `check`. Then give the grant its `trust` (what that check does: `decides`, `replays` or `bounds`) and run
-   `xcore review`.
-4. Who is paid: set `VOUCHERS.payOnly` to `'x'` or `'account'` for rewards worth farming (above, "What a payout rests
-   on"); the grant's `perDay` total caps the rest.
-5. `xcore loot approve` (the grant's change goes live), then `xcore publish`. `api/vouchers/key` answers the live
-   key's address once the secret is set; until then the server pays nothing.
+   `check`. Set `VOUCHERS.payOnly` to `'x'` or `'account'` for rewards worth farming (above, "What a payout rests on");
+   the grant's `perDay` total caps the rest. Then give the grant its `trust` (what that check does: `decides`,
+   `replays` or `bounds`) and run `xcore review`. It comes before the key because the key is put in the grants
+   `PAY.check` names. On devnet, run `xcore add vouchers` again here: it puts the test key in those grants too, so
+   vouchers signed under `xcore dev` are paid once step 5 has put it on chain (never on mainnet: a copy of the folder
+   holds the test key).
+3. `xcore publish`: the server goes up. A secret is set on a server xgames.fun already has, and until it has this one
+   the server pays nothing.
+4. `xcore secret set VOUCHER_SEED --new-key`: a new key made and sent to the server only. It puts the key's address in
+   the grants your server pays in `xsolana.json` (those that name a voucher key, and those `PAY.check` names), makes it
+   the economy's issuer where a grant counts people, and on mainnet takes the test key out; it says each change.
+   `api/vouchers/key` answers the live key's address from then on.
+5. `xcore loot approve` puts that on chain, signed by the key file that owns the economy.
+6. `xcore publish` again: the page and the server both read `xsolana.json`, and this sends it as it went live.
+
+A grant added later, or one `PAY.check` comes to name: `xcore add vouchers` again points it at the live key (it makes
+no new one), then `xcore loot approve` and `xcore publish`.
 
 ```js
 // the page: link the wallet once (it signs that it is this player's; a wallet sign-in needs none), then claim
@@ -662,12 +689,15 @@ xcore db restore 2026-11-08T12:00:00Z --live      # back in time, up to 30 days 
 
 `--live` goes through xgames.fun's owner routes with your sign-in (`xcore login`), and each call is kept in the
 game's audit log. Without `--write`, a query is only `SELECT`, `EXPLAIN`, `PRAGMA table_info` or `table_list`, here
-and live. `restore` says what it would go back to first, and goes on only with `--yes` or when you type `restore`.
-It prints the command that undoes it, `xcore db restore <the moment before it> --live`. That moment is this
-machine's clock, read just before the restore is asked for, because xgames.fun's restore takes a time, not a
-bookmark: `restored.previous` (the bookmark from before it) is printed too, but cannot be passed back. A clock that
-is off by more than the restore took to start puts the undo a little before or after the true moment; check it with
-the preview (`xcore db restore <time> --live`, without `--yes`) before you go on.
+and live. A change to the live database (`query --write --live`, `import --live`, `restore`) first prints what it
+would change with a code, and changes nothing: it goes on when run again with `--yes <code>`, or, at a terminal, when
+you type its word (`write`, `import`, `restore`). A code printed for another change is refused. `restore` says what
+it would go back to, and once done it prints the command that undoes it,
+`xcore db restore <the moment before it> --live`. That moment is this machine's clock, read just before the restore
+is asked for, because xgames.fun's restore takes a time, not a bookmark: `restored.previous` (the bookmark from
+before it) is printed too, but cannot be passed back. A clock that is off by more than the restore took to start puts
+the undo a little before or after the true moment; check it with the preview (`xcore db restore <time> --live`,
+without `--yes`) before you go on.
 **A game with an economy:** a restore puts back the database only. Loot balances, items and payouts on chain stay
 as they are, so a player can keep what they won while the database forgets it; export first. An export holds your
 players' data: keep it out of git and off shared drives.
@@ -695,7 +725,7 @@ with the test key in `.dev.vars`. The dev host answers only `localhost`, `127.0.
 site can't reach it. Durable Object storage is kept in `.gamesfun/dev-server/`, the game's database (a local D1, its
 migrations applied) in `.gamesfun/dev/d1/`, its project files in `.gamesfun/dev/files/` (the public ones on a port of
 their own), its secrets come from `.dev.vars`, and a change under `server/`, to `gamesfun.json` or to `.dev.vars`
-rebuilds and reloads it. Miniflare (with workerd, about 140 MB) is installed once on first use, into xcore's state
+rebuilds and reloads it. Miniflare (with workerd, about 180 MB) is installed once on first use, into xcore's state
 folder (`GAMESFUN_SERVER_DEPS=<folder>` uses one installed elsewhere). What is not the same as hosted: no CPU or request
 limits (its log says when the page's requests would pass Free's or Creator's rate, or a request takes longer than Free's
 CPU allows: lines starting `limits:`), and outbound `fetch` is not limited to `backend.json`'s origins.
@@ -711,7 +741,7 @@ xgames.fun says it takes server code. Otherwise it publishes the files alone and
 the bundle without publishing:
 
 ```
-my-vault: 278 files, 10.0 MB, nothing refused. Left out: .gamesfun/, .gitignore, gamesfun.json, server/.
+my-vault: 278 files, 10 MB, nothing refused. Left out: .gamesfun/, .gitignore, gamesfun.json, server/.
   server code: server/index.js bundled from 1 file (server/index.js) into one 4.2 KB file, sha256 98b594a47bc6…,
   Durable Objects Vault (env.VAULT); server/ and gamesfun.json are not public files
 ```
@@ -719,7 +749,7 @@ my-vault: 278 files, 10.0 MB, nothing refused. Left out: .gamesfun/, .gitignore,
 Hosted, the game's server answers at `https://<slug>-play.xgames.fun/api/…`. A blocked or over-limit server answers
 `{error, message}` with 451, 429, 404, 503 or 502 instead of the server's own answer.
 
-**A game that is unpublished, taken down or capped** (past its plan's money for the month: README "Its plan") has its
+**A game that is unpublished, taken down or capped** (past its plan's money for the month: [HOSTING.md](HOSTING.md#plans-xcore-plan)) has its
 server switched off: every `api/*` request answers `451 {"error": "stopped", "reason": "unpublished" | "taken-down" |
 "capped", "message"}`, its Durable Objects' alarms lapse and their sockets close. A room that is running stops within
 about five minutes. Its rooms' data and its secrets are kept, and the server comes back by itself when the game is
@@ -727,7 +757,7 @@ published again (within 30 days, to be sure of its data) or its cap lifts (the m
 credit); a version published while it is capped goes live with its pages, and its server waits. The page keeps
 loading meanwhile, so a game whose server can be off says so when `api/` answers 451.
 
-While the game's owner has it **paused for maintenance** (xgames.fun/console, the Live tab; README "Live"), xgames.fun
+While the game's owner has it **paused for maintenance** (xgames.fun/console, the Live tab; [CLIENT.md](CLIENT.md#live-settings-gflive)), xgames.fun
 answers its `api/*` itself with `503 {ok: false, code: 'maintenance', why, since}` and `retry-after: 60`, WebSocket
 upgrades included: the server's code does not run for a new request. What already runs keeps running (an open
 WebSocket, a Durable Object's alarm, the `env.GF` calls they make); a server that should stop those reads the game's

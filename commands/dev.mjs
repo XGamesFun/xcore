@@ -15,7 +15,7 @@ Play the game on this machine as xgames.fun will host it, with everything a publ
                                   with xgames.fun's limits on the plan it imitates (Free unless --plan)
   /loot/v1/rpc                    the economy's Solana devnet RPC (XSOLANA_RPC_URL in .env, else xgames.fun's relay)
 gamesfun.js (${CMD} add signin|database|multiplayer) uses all of it here, from any engine: open the page in two
-windows to play a room together. Running server/ needs Miniflare (workerd), installed once on first use (~140 MB).
+windows to play a room together. Running server/ needs Miniflare (workerd), installed once on first use (~180 MB).
 Saves, scores and Durable Object storage are kept in <dir>/.gamesfun/ (never published).
   --port <n>      the port (default the first free one from 8787)
   --plan <name>   the plan to imitate: free (the default), creator or scale: its boards, saves, reads and writes a
@@ -37,6 +37,27 @@ async function freePort(from, tries = 10) {
   return null;
 }
 
+/**
+ * A port the system would not let `xcore dev` listen on, in words: the port the person gave, the one that was refused
+ * (theirs, or the next, which the game's files take) and why. → an Error, or null when `e` is no such refusal
+ */
+export function listenRefusal(e, port) {
+  if (e?.syscall !== 'listen') return null;
+  if (e.code === 'EADDRINUSE') return new Error(`port ${port} is in use: pick another with --port <n>`, { cause: e });
+  const which =
+    e.port && e.port !== port
+      ? `port ${e.port}, the one after ${port}, which it takes for the game's files`
+      : `port ${port}`;
+  const why =
+    e.code === 'EACCES'
+      ? 'this system lets only an administrator use a port under 1024'
+      : `the system answered ${e.code ?? e.message}`;
+  return new Error(
+    `${CMD} dev cannot listen on ${which}: ${why}. Pick another with --port <n> (without --port it takes the first free one from 8787).`,
+    { cause: e },
+  );
+}
+
 export default {
   name: 'dev',
   summary: 'play the game here as xgames.fun hosts it: its server, sign-in, saves, rooms and economy RPC',
@@ -54,8 +75,11 @@ export default {
         usage,
       );
       let port = values.port === undefined ? 8787 : Number(values.port);
-      if (!Number.isInteger(port) || port < 0 || port > 65535)
-        throw new UsageError(`--port is a port number\n\n${usage}`);
+      // (the game's files take the next port, so the last one cannot be the page's)
+      if (!Number.isInteger(port) || port < 0 || port > 65534)
+        throw new UsageError(
+          `--port takes a port number (0–65534: the next one is taken for the game's files)\n\n${usage}`,
+        );
       // no --port: the first free one from 8787 (each game takes two, its page and its files), so a second game in dev
       // starts beside the first instead of failing
       if (values.port === undefined) port = (await freePort(port)) ?? port;
@@ -73,9 +97,7 @@ export default {
       try {
         dev = await startDev(dir, { port, plan, noBuild: values['no-build'] === true, log: say });
       } catch (e) {
-        if (e.code === 'EADDRINUSE')
-          throw new Error(`port ${port} is in use: pick another with --port <n>`, { cause: e });
-        throw e;
+        throw listenRefusal(e, port) ?? e;
       }
       if (values.json)
         printJson({

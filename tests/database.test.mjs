@@ -649,7 +649,9 @@ test('add database to a game with a server: the block, an example migration and 
   assert.match(r.steps.join('\n'), /import \{ db, withPlayer \} from '\.\/gf-db\.js'/);
   assert.deepEqual((await addDatabase(dir)).written, [], 'run again: already up to date');
   // the person's own migration: no example is written over or beside it
-  const mine = await fixture(await tempDir(), 'static');
+  const second = await tempDir();
+  t.after(second.cleanup);
+  const mine = await fixture(second, 'static');
   await mkdir(path.join(mine, 'server', 'migrations'), { recursive: true });
   await writeFile(path.join(mine, 'server', 'index.js'), SERVER);
   await writeFile(path.join(mine, 'server', 'migrations', '0001_mine.sql'), 'CREATE TABLE m (x);');
@@ -1035,7 +1037,7 @@ test('xcore db --live goes through the owner routes; a live change prints itself
   const xc = args => runAsync(['db', ...args], { env, cwd: dir });
   let r = await xc(['info', '--live']);
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /database on xgames\.fun \(g-g1\): 2\.0 KB of 100\.0 MB/);
+  assert.match(r.stdout, /database on xgames\.fun \(g-g1\): 2 KB of 100 MB/);
   assert.match(r.stdout, /migrations applied: 0001_init\.sql/);
   r = await xc(['query', 'SELECT * FROM players WHERE gold > ?', '--params', '[2]', '--live']);
   assert.equal(r.status, 0, r.stderr);
@@ -1131,7 +1133,7 @@ test('xcore db --live goes through the owner routes; a live change prints itself
     sha256: createHash('sha256').update('INSERT INTO players VALUES (1);').digest('hex'),
   });
   r = await xc(['import', path.join(tmp.dir, 'in.sql'), '--live']);
-  assert.match(r.stdout, /file {4}in\.sql \(0\.0 KB\)\n {2}sha256 {2}[0-9a-f]{64}/);
+  assert.match(r.stdout, /file {4}in\.sql \(31 bytes\)\n {2}sha256 {2}[0-9a-f]{64}/);
   assert.match(r.stdout, /Nothing was imported\. To go on/);
   assert.equal(seen.length, before);
   // the file changed after it was printed: its code no longer fits
@@ -1144,16 +1146,17 @@ test('xcore db --live goes through the owner routes; a live change prints itself
   r = await xc(['import', path.join(tmp.dir, 'in.sql'), '--live', '--yes', planned.code]);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(seen.at(-1)[2], { sql: 'INSERT INTO players VALUES (1);' });
-  // over 4.5 MB as sent: refused here, before it goes (Studio's host takes no more); a bare 413 is said in words
+  // over Studio's 4,500,000 bytes as sent: refused here, before it goes (its host takes no more), its size and the
+  // limit said on one scale; a bare 413 is said in words
   await writeFile(path.join(tmp.dir, 'big.sql'), `INSERT INTO players VALUES ('${'x'.repeat(4_600_000)}');`);
   r = await xc(['import', path.join(tmp.dir, 'big.sql'), '--live', '--yes', '00000000']);
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /this import is 4\.6 MB as sent.*at most 4\.5 MB: split it/);
+  assert.match(r.stderr, /this import is 4\.4 MB as sent.*at most 4\.3 MB: split it/);
   assert.equal(seen.at(-1)[2].sql, 'INSERT INTO players VALUES (1);', 'not sent');
   // without --yes, the size is said before the word is asked for: nobody types "import" for what cannot go
   r = await xc(['import', path.join(tmp.dir, 'big.sql'), '--live']);
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /this import is 4\.6 MB as sent/);
+  assert.match(r.stderr, /this import is 4\.4 MB as sent/);
   assert.doesNotMatch(r.stdout + r.stderr, /--yes|Type import/);
   await writeFile(path.join(tmp.dir, 'huge.sql'), "INSERT INTO players VALUES ('huge');");
   const huge = JSON.parse((await xc(['import', path.join(tmp.dir, 'huge.sql'), '--live', '--json'])).stdout).code;
