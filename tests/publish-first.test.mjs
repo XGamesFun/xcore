@@ -79,6 +79,28 @@ test('a first publish on a Creator account names the account; at the cap it stop
     ['creator', 'your Creator account (3 of 10 games now, 4 after this)'],
   );
 
+  // xgames.fun refuses the new game itself (its count moved since): 409 game-cap, said in the same words
+  g.state.refuse = {
+    at: 'begin',
+    status: 409,
+    body: {
+      error: 'Your Creator account runs up to 10 games, and all 10 are in use. Archive a game you no longer need.',
+      code: 'game-cap',
+    },
+  };
+  const theirs = await runAsync(['publish', dir, '--no-card', '--yes', planned.code], cli);
+  assert.equal(theirs.status, 1);
+  assert.match(
+    theirs.stderr,
+    /Your Creator account has all 10 of its games, so xgames.fun would refuse a new one\. Archive a game you no longer need on http:\/\/127\.0\.0\.1:\d+\/console \(unpublish it first\), then publish again, or write to xgames.fun for more\. No game was made\./,
+  );
+  const theirsJson = JSON.parse(
+    (await runAsync(['publish', dir, '--no-card', '--yes', planned.code, '--json'], cli)).stdout,
+  );
+  assert.deepEqual([theirsJson.ok, theirsJson.code], [false, 'game-cap']);
+  assert.match(theirsJson.next, / plan --all$/);
+  g.state.refuse = undefined;
+
   // at the cap: refused here, with the code too, and nothing is sent
   account = { ...account, gamesUsed: 10 };
   const sent = g.state.calls.length;

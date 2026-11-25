@@ -8,7 +8,7 @@ import { studioOrigin } from '../lib/publish/client.mjs';
 import { gate } from '../lib/publish/gate.mjs';
 import { buildFailure, pageRoots, runBuild } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
-import { confirmFirstPublish, firstPublish } from '../lib/publish/first.mjs';
+import { confirmFirstPublish, creatorCapWords, firstPublish } from '../lib/publish/first.mjs';
 import { reviewNudge } from '../lib/review.mjs';
 import { cardPrinted, drawable } from '../lib/card.mjs';
 import { plural, sizeText } from '../lib/util.mjs';
@@ -196,6 +196,17 @@ export function publishCommand({
           progress: values.json ? () => {} : l => console.error(l),
         }).catch(e => {
           // A new game needs room on the account (xgames.fun's words say so): name what makes some.
+          // A Creator account at its cap (xgames.fun's 409 game-cap): the words of the check before uploading.
+          if (e?.code === 'game-cap')
+            throw Object.assign(
+              new Error(
+                creatorCapWords(Number(/up to (\d+) games?/.exec(e.message)?.[1]) || 10, {
+                  origin,
+                  then: 'No game was made.',
+                }),
+              ),
+              { status: e.status, code: e.code, next: `${CMD} plan --all` },
+            );
           if (e?.code === 'no-free-slot')
             throw Object.assign(
               new Error(
