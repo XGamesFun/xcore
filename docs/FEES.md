@@ -64,9 +64,12 @@ your own to each.
   does not renew automatically. There are no slots to buy or move: every game you own, up to 10, is on Creator.
 - **When it lapses:** after a period ends there are 7 days' grace. Then every game drops to Free limits and keeps
   running; nothing is taken down. A new game waits until the account has fewer than 2 games, or is renewed.
-- **What counts as use:** the game's server requests, and every call the published page makes through xgames.fun's
-  shared Solana relay ($10 per million calls). A game with its own RPC (`xcore add rpc`) instead pays one server
-  request per call (about $0.30 per million) plus its RPC provider's own price. See
+- **What counts as use:** everything a game runs up is billed: its server, rooms, saves, database and files, and also
+  its page files and every call the published page makes through xgames.fun's shared Solana relay. Relay calls and
+  page files use up the included amount, counted at cost ($10 per million relay calls), and past it are charged from
+  usage credit at the unit prices below ($20 per million relay calls). They never count toward the cap that switches a
+  game's server off: only the game's own server, rooms and stored data do. A game with its own RPC (`xcore add rpc`)
+  instead pays one server request per call (about $0.30 per million at cost) plus its RPC provider's own price. See
   [SERVER.md](SERVER.md#the-economys-own-rpc).
 - **Over the limit:** a Free game past its $1, and a Creator account's games past their shared $10 without usage
   credit, are capped until the month ends: the server is switched off (every `api/*` request answers 451), the pages
@@ -82,31 +85,31 @@ your own to each.
 ### Unit prices
 
 Usage credit pays for use past what is included at these prices. Most are twice Cloudflare's list prices for the same
-resources. What is included is counted at half these prices. `xcore plan --verbose` prints the prices xgames.fun
-charges now; where the two differ, xgames.fun's are the ones that apply.
+resources. Use inside the included amount is counted at cost, which is half these prices. `xcore plan --verbose`
+prints the prices xgames.fun charges now, with the same names.
 
-| What                                          | Price                              |
-| --------------------------------------------- | ---------------------------------- |
-| Server requests                               | $0.60 per million                  |
-| Server CPU time                               | $0.04 per million CPU milliseconds |
-| Room requests (Durable Objects)               | $0.30 per million                  |
-| Room WebSocket messages received              | $0.015 per million                 |
-| Room active time                              | $3.20 per million seconds          |
-| Saves and scores: rows written                | $2.00 per million                  |
-| Saves and scores: rows read                   | $0.002 per million                 |
-| Saves and scores: stored                      | $0.40 per GB a month               |
-| Database (D1): rows written                   | $2.00 per million                  |
-| Database (D1): rows read                      | $0.002 per million                 |
-| Database (D1): stored                         | $1.50 per GB a month               |
-| Project files (R2): writes and lists          | $9.00 per million                  |
-| Project files (R2): reads                     | $0.72 per million                  |
-| Project files (R2): stored                    | $0.03 per GB a month               |
-| Page file requests                            | $0.60 per million                  |
-| The edge in front of a game's calls: requests | $0.60 per million                  |
-| The edge: CPU time                            | $0.04 per million CPU milliseconds |
-| The edge: KV reads                            | $1.00 per million                  |
-| The edge: R2 reads                            | $0.72 per million                  |
-| Solana relay calls                            | $20.00 per million                 |
+| What                                                | Price                                |
+| --------------------------------------------------- | ------------------------------------ |
+| Server requests                                     | $0.60 per million server requests    |
+| Server CPU time                                     | $0.04 per million CPU-ms             |
+| Room requests                                       | $0.30 per million room requests      |
+| Room messages received (WebSocket)                  | $0.015 per million room messages     |
+| Room awake time                                     | $3.20 per million room-seconds       |
+| Rooms and saves: rows read                          | $0.002 per million rows read         |
+| Rooms and saves: rows written                       | $2.00 per million rows written       |
+| Rooms and saves storage                             | $0.40 per GB-month                   |
+| Database rows read                                  | $0.002 per million rows read         |
+| Database rows written                               | $2.00 per million rows written       |
+| Database storage                                    | $1.50 per GB-month                   |
+| Project files: writes and lists                     | $9.00 per million operations         |
+| Project files: reads                                | $0.72 per million operations         |
+| Project files storage                               | $0.03 per GB-month                   |
+| Page file requests                                  | $0.60 per million page file requests |
+| Solana RPC relay calls                              | $20.00 per million relay calls       |
+| Edge requests in front of server and platform calls | $0.60 per million edge requests      |
+| Edge CPU time                                       | $0.04 per million CPU-ms             |
+| Edge key-value reads                                | $1.00 per million reads              |
+| Edge file reads                                     | $0.72 per million reads              |
 
 ## Coin launch
 
