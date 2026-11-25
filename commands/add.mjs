@@ -28,8 +28,8 @@ It prints what it wrote and the next steps in short; --verbose prints every note
                (RPCs, spawners, synchronizers) runs over it unchanged (GamesFun.join_room). Unity and web games get a
                room with send and events.
   rpc          Send the economy's Solana calls through the game's own devnet RPC (server/rpc.js at api/rpc; its URL
-               is a server secret: ${CMD} secret set XSOLANA_RPC_URL) instead of xgames.fun's shared relay, which
-               counts every call toward the game's plan.
+               is a server secret: ${CMD} secret set XSOLANA_RPC_URL) instead of xgames.fun's shared relay, whose
+               calls are billed ($10 a million at cost inside the included use, $20 past it from usage credit).
   vouchers     A voucher key for the game, so its server can pay results it has checked from a grant in the
                economy (server/vouchers.js at api/vouchers/; PAY.check decides, and a Durable Object pays each
                result once). It creates a test key (its seed goes in .dev.vars; set the live key with

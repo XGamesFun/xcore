@@ -106,8 +106,10 @@ The play host lets the page reach exactly those origins. [A backend](#a-backend)
 The page client in the game (`gf/loot/`, from `@xgamesfun/solana`) sends Solana calls to one of these:
 
 - the game's own RPC on the economy's cluster (`xcore add rpc`: the server's `api/rpc`);
-- otherwise, the play host's `/loot/v1/rpc`. This is xgames.fun's shared relay, and its calls count toward the game's
-  plan. On devnet it is the devnet relay. For an economy on mainnet, it answers only the game's signed-in players.
+- otherwise, the play host's `/loot/v1/rpc`. This is xgames.fun's shared relay. Its calls are billed: they use up the
+  included amount, counted at cost ($10 a million), and past it are charged from usage credit at $20 a million. They
+  never count toward the cap that switches a game's server off. On devnet it is the devnet relay. For an economy on
+  mainnet, it answers only the game's signed-in players.
 
 See [ECONOMY.md](ECONOMY.md).
 
