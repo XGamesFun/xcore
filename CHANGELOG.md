@@ -26,12 +26,17 @@ prints what it printed before.
   with its new `account` and every field it had before.
 - The first publish of a folder says where the new game goes: one of a Free account's 2 free slots, as before, or
   "your Creator account (3 of 10 games now, 4 after this)". An account that already has all its games is told so,
-  with what makes room, before anything is built or uploaded (exit code 1, `code: "game-cap"`). Confirming with
+  with what makes room, before anything is built or uploaded (exit code 1, `code: "game-cap"`). xgames.fun's own
+  refusal of a game over a Creator account's cap (409 `game-cap`) is said in the same words. Confirming with
   `--yes <code>` is unchanged.
 - A new game xgames.fun refuses (`no-free-slot`), and a domain refused on Free, name the Creator account (your
   console → Plans) instead of `xcore plan activate`.
 - Past what is included, usage credit is charged at published unit prices. [docs/FEES.md](docs/FEES.md) lists them,
-  where it used to say "twice what xgames.fun pays".
+  where it used to say "twice what xgames.fun pays". Use inside the included amount is counted at cost, half these
+  prices.
+- What the shared Solana relay costs is said as xgames.fun counts it, everywhere xcore says it: its calls use up the
+  included amount at cost ($10 a million) and past it are charged from usage credit ($20 a million), and they never
+  count toward the cap that switches a game's server off. `xcore publish` no longer says they use up Free's $1.
 - The documents ([README](README.md), [FEES.md](docs/FEES.md), [HOSTING.md](docs/HOSTING.md),
   [SERVER.md](docs/SERVER.md), [COMMANDS.md](docs/COMMANDS.md), the bring-your-own-game skill) describe Free and
   Creator accounts. The account limit of "100 games", never enforced, is now the real one: 2 games on Free, 10 on
