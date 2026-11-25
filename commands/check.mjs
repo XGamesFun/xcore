@@ -114,7 +114,9 @@ export default {
               ? `warning: no preview picture. Publish makes one from this check's screenshot, or make your own: ${CMD} card${shown(dir) === '.' ? '' : ` ${shown(dir)}`}`
               : cardPrinted(r.card),
           );
-        console.log(`\ncheck: ${r.pass ? 'PASS' : 'FAIL'}, ${checkCounts(r.checks)} · evidence ${shown(r.outDir)}`);
+        console.log(
+          `\ncheck: ${r.pass ? 'PASS' : 'FAIL'}, ${checkCounts(r.checks)} · evidence ${shown(r.outDir)}${values.out ? '' : ' (never published, kept out of git)'}`,
+        );
       }
       return r.pass ? 0 : 1;
     }, args),

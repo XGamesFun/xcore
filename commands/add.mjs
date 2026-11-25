@@ -53,6 +53,19 @@ export function unknownKind(what) {
   const names = Object.keys(KINDS);
   const list = `${names.slice(0, -1).join(', ')} or ${names.at(-1)}`;
   if (!what) return `Say what to add: ${list}.`;
+  // (what comes with one of them, asked for by its own name)
+  const WITH = {
+    leaderboard: 'signin',
+    leaderboards: 'signin',
+    scores: 'signin',
+    saves: 'signin',
+    login: 'signin',
+    auth: 'signin',
+    db: 'database',
+    rooms: 'multiplayer',
+  };
+  const comes = WITH[String(what).toLowerCase()];
+  if (comes) return `"${what}" comes with ${comes}: ${CMD} add ${comes}`;
   const near = names.find(n => n.startsWith(String(what).toLowerCase().slice(0, 3)));
   return `"${what}" is not something xcore can add. It adds ${list}.${near ? ` Did you mean "${near}"?` : ''}`;
 }
