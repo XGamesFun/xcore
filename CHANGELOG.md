@@ -42,6 +42,23 @@ prints what it printed before.
   Creator accounts. The account limit of "100 games", never enforced, is now the real one: 2 games on Free, 10 on
   Creator. A lapsed Creator account (after its 7 days' grace) drops every game to Free limits and takes nothing down.
 
+**Fixed**, from a usability run of 0.12.0 (a new developer's first hour):
+
+- `xcore loot …` piped into a reader that stops early (`| head`) ends quietly instead of crashing with EPIPE.
+- Paths in hints are the ones you typed: `xcore loot approve game/xsolana.json` says `(game/xsolana.json)` in its
+  header, and `xcore loot add game` says `dev game`, `loot check game/xsolana.json` and
+  `loot approve game/xsolana.json`, not `.` and a bare file name.
+- A root-path finding in a built game names the source line (`src/main.js:7 (built into dist/assets/index-….js)`), not
+  only the hashed bundle. The Vite fix says what to write when there is no `vite.config` yet.
+- `xcore check` writes `evidence/.gitignore` (`*`), as `.gamesfun/` has, and its last line says the evidence is never
+  published and kept out of git.
+- The first-session walk counts play that starts as the page loads (a score posted before any tap): "reaches play as the
+  game loads, with no tap", not "in 1 tap" after a Play again.
+- `xcore dev` sends `/` to `/game/` instead of answering 404.
+- `xcore add leaderboard` (or saves, scores, login, db, rooms) says what it comes with: `xcore add signin`.
+- `add signin` no longer says every call is listed at the top of the game's `gamesfun.js`, which is minified: it, and the
+  file's first line, link the readable source.
+
 ## 0.12.0 — 2026-11-24
 
 Clearer output and documents, a stricter review, and a confirmation before a first publish, from four outside

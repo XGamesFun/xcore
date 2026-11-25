@@ -185,11 +185,25 @@ export default {
     // said here as this package's, with the file as it was named
     const say = ownWords({ file, named: file ? path.basename(file) : null });
     const child = spawn(xsolana[0], [xsolana[1], ...rest], { stdio: ['inherit', 'pipe', 'pipe'], env, cwd });
-    const done = [relay(child.stdout, process.stdout, json ? t => t : say), relay(child.stderr, process.stderr, say)];
+    // a reader that stops early (`| head`) closes our output: stop the tools and end quietly, as a pipe expects
+    const gone = { yes: false };
+    const closed = err => {
+      if (err.code !== 'EPIPE') throw err;
+      gone.yes = true;
+      child.kill();
+    };
+    process.stdout.on('error', closed);
+    process.stderr.on('error', closed);
+    const done = [
+      relay(child.stdout, process.stdout, json ? t => t : say, gone),
+      relay(child.stderr, process.stderr, say, gone),
+    ];
     return new Promise(resolve =>
       child.on('close', async code => {
         await Promise.all(done);
-        resolve(code ?? 1);
+        process.stdout.off('error', closed);
+        process.stderr.off('error', closed);
+        resolve(gone.yes ? 0 : (code ?? 1));
       }),
     );
   },
@@ -255,25 +269,26 @@ export function ownWords({ file = null, named = null } = {}) {
       .replace(npx, (all, command) => (command === 'mcp' ? all : `xcore loot ${command}`))
       .replace(own, '$1xcore loot $2')
       .replace(tool, 'xcore loot $1');
-    if (asNamed) t = t.replace(asNamed, `$1 ${file}`);
+    if (asNamed) t = t.replace(asNamed, `$1 ${file}`).replaceAll(`(${named})`, `(${file})`);
     // its help's columns: the three letters `xcore loot` adds are taken from the gap after
     t = t.replace(/^( {2}xcore loot \S.*?\S)( {5,})/gm, (_, a, gap) => a + gap.slice(3));
     return t;
   };
 }
 
-/** Copies a child's stream to `out` a line at a time, through `say`. Resolves at its end. */
-function relay(stream, out, say) {
+/** Copies a child's stream to `out` a line at a time, through `say`, until the reader has gone (`gone.yes`).
+ *  Resolves at its end. */
+function relay(stream, out, say, gone = { yes: false }) {
   let rest = '';
   stream.setEncoding('utf8');
   stream.on('data', chunk => {
     const lines = (rest + chunk).split('\n');
     rest = lines.pop();
-    if (lines.length) out.write(say(lines.join('\n') + '\n'));
+    if (lines.length && !gone.yes) out.write(say(lines.join('\n') + '\n'));
   });
   return new Promise(resolve =>
     stream.on('end', () => {
-      if (rest) out.write(say(rest));
+      if (rest && !gone.yes) out.write(say(rest));
       resolve();
     }),
   );
