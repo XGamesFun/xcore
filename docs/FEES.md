@@ -60,8 +60,8 @@ your own to each.
 | Use included a month                               | $1 per game                                                        | $10 for the account, shared by its games                             |
 | Past what is included                              | capped until the month ends                                        | usage credit at the unit prices below; without it, capped            |
 
-- **Paying:** a Creator account is prepaid on xgames.fun (your console → Plans) in SOL or USDC, $15 per 30 days. It
-  does not renew automatically. There are no slots to buy or move: every game you own, up to 10, is on Creator.
+- **Paying:** a Creator account is prepaid on xgames.fun (your console → Plans) in SOL or USDC, $15 per 30 days, for
+  1 to 12 periods at a time. It does not renew automatically. There are no slots to buy or move: every game you own, up to 10, is on Creator.
 - **When it lapses:** after a period ends there are 7 days' grace. Then every game drops to Free limits and keeps
   running; nothing is taken down. A new game waits until the account has fewer than 2 games, or is renewed.
 - **What counts as use:** everything a game runs up is billed: its server, rooms, saves, database and files, and also

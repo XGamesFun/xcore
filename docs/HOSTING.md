@@ -190,7 +190,7 @@ A plan is bought for your **account**, and every game you own takes its plan fro
 - A new game is refused while the account has all its games. Archive a game you no longer need (on your console at
   xgames.fun/console; unpublish it first), or, on Free, buy a Creator account. `xcore publish` says so before it
   uploads anything.
-- An archived game no longer counts, unless its link is still live.
+- An archived game no longer counts, unless its link or its server is still live.
 
 The plan sets what the game's server, saves and scores may use:
 
@@ -218,7 +218,8 @@ A game's server gets a 429 with `scope` (`"player"` or `"game"`) and `plan` when
 
 ### Paying for a Creator account and usage
 
-- A Creator account costs $15 per 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans).
+- A Creator account costs $15 per 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans), for 1 to 12
+  periods at a time.
 - There is no automatic renewal. After the period ends there are 7 days' grace. Then every game drops to Free limits
   and keeps running; nothing is taken down. A new game waits until the account has fewer than 2 games, or is renewed.
 - A Creator account's games are capped together when they pass the $10 they share, since the included use is the

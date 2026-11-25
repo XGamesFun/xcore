@@ -14,8 +14,9 @@ it used this month.
 
 Accounts:
   Free       Every account starts here: up to 2 games, each on the Free plan with $1 of use a month.
-  Creator    $15 per 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans); it does not renew by
-             itself. Every game you own, up to 10, runs on the Creator plan, with $10 of use a month shared by them.
+  Creator    $15 per 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans), 1 to 12 periods at a
+             time; it does not renew by itself. Every game you own, up to 10, runs on the Creator plan, with $10 of
+             use a month shared by them.
              There are no slots to buy or move. After a period ends there are 7 days' grace; then every game drops
              to Free limits and keeps running (nothing is taken down).
 
