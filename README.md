@@ -107,8 +107,8 @@ about 0.0031 SOL including rent. Run `xcore loot cost` for your economy. A coin 
 
 - **Database.** `xcore db export --live` downloads SQL, including documents saved with `GamesFun.db`. Restore it with `xcore db import`.
 - **Project files.** List them with `xcore files list --live`, then download each with `xcore files get <path> --live`.
-- **Saves and leaderboards.** No bulk export yet. Your server can read saves for known players and fetch scores
-  in pages of 100. [Data access](docs/HOSTING.md#your-games-data-and-getting-it-out)
+- **Saves and leaderboards.** `xcore data export` downloads every save and every board's entries into one JSON file,
+  each player as the game's player id, never their X id or wallet. [Data access](docs/HOSTING.md#your-games-data-and-getting-it-out)
 
 ## What is not supported
 

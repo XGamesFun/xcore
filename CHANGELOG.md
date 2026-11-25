@@ -16,6 +16,9 @@ All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. V
   first; loading `gf/loot/` by hand is for a page without `gamesfun.js`.
 - **One `xcore loot add`.** `xcore dev` copies the page client into a game whose economy file came after `loot add`, as
   publish does, so the second run is no longer needed.
+- **`xcore data export`**: every player save and every leaderboard entry of a published game, from xgames.fun, into one
+  JSON file in `.gamesfun/exports/` (each player as the game's player id, never their X id or wallet; hidden players'
+  entries marked). Needs xgames.fun's `/data` route; an xgames.fun without it says so.
 
 ## 0.13.0 — 2026-11-25
 
