@@ -12,6 +12,7 @@ import {
   describeAccount,
   describeGame,
   gamePlan,
+  graceDaysLeft,
   PER_ACCOUNT,
   perAccountError,
   unitDollars,
@@ -246,14 +247,21 @@ test('the account in words: Creator with its games, period, shared use and credi
     describeAccount({ games: [], account: { ...CREATOR, gamesUsed: 10 } }),
     /every game the account may have is in use: a new game is refused until you archive one/,
   );
-  // in grace: what happens if it is not renewed
+  // in grace: what happens if it is not renewed, and the grace's days left (daysLeft is 0 then: graceUntil says)
+  const ended = Date.parse('2026-11-20T00:00:00Z');
+  const now = Date.parse('2026-11-25T12:00:00Z');
+  const inGrace = { ...CREATOR, inGrace: true, periodEnd: ended, daysLeft: 0, graceUntil: ended + 7 * 86_400_000 };
   assert.match(
-    describeAccount({
-      games: [],
-      account: { ...CREATOR, inGrace: true, periodEnd: Date.parse('2026-11-20T00:00:00Z'), daysLeft: 2 },
-    }),
+    describeAccount({ games: [], account: inGrace }, { now }),
     /^Account: Creator, 3 of 10 games; its period ended 2026-11-20 and it is in its 7 days' grace \(2 days left\): renew it, or every game drops to Free limits \(nothing is taken down\)/,
   );
+  // an xgames.fun that sends no graceUntil: the period's end and 7 days
+  const { graceUntil: _g, ...noGrace } = inGrace;
+  assert.match(describeAccount({ games: [], account: noGrace }, { now }), /7 days' grace \(2 days left\)/);
+  assert.equal(graceDaysLeft(noGrace, ended + 7 * 86_400_000 - 1), 1);
+  assert.equal(graceDaysLeft(noGrace, ended + 8 * 86_400_000), 0);
+  assert.equal(graceDaysLeft({ graceUntil: null, periodEnd: null }), null);
+  assert.equal(graceDaysLeft({ ...inGrace, graceUntil: ended + 86_400_000 }, ended + 1), 1, 'graceUntil wins');
 
   // --verbose: the unit prices xgames.fun published, to the fraction of a cent they need
   const verbose = describeAccount({ games: [], account: CREATOR }, { verbose: true });
