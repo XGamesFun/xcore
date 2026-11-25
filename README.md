@@ -157,7 +157,9 @@ the full plan table, and notes for frameworks and engines.
 ## Costs
 
 xcore is free and open source. Hosting is free in your 2 free slots. A paid slot costs $15 per game per 30 days. An
-economy's players pay loot's per-action fee (0.0005 SOL on mainnet), and a coin launch costs about 0.03 SOL.
+economy's players pay loot's per-action fee (0.0005 SOL on mainnet); an item minted as an NFT (a Metaplex Core asset)
+costs about 0.0031 SOL more, paid from the purchase, as `xcore loot cost` reports; and a coin launch costs about
+0.03 SOL.
 [docs/FEES.md](docs/FEES.md) lists every cost in one table: hosting, the paid plan and usage credit, coin launches,
 loot's fees, randomness, and Metaplex's fee on new NFTs.
 

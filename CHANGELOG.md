@@ -40,6 +40,18 @@ changelog has the rest.
   server keeps.** A PAY.check that paid on `body.score` and also read `env.GF.saves.get(…)` passed; it is now the
   high finding `payout-input` (FAIL, exit code 1), as is a check that pays on a save alone. A check whose payout state
   the server keeps decides is judged as before.
+- **`xcore review` counts state only when it decides, and follows state back to who wrote it.** A read whose answer
+  no condition and no answer uses (`await db(env).first('SELECT 1')`), or a query with no table, is no state: the
+  check is read as deciding on the request or the sign-in, and a declared `"decides"` or `"replays"` it does not do is a
+  high `payout-trust` finding (it was a match). A table or KV namespace the payout reads that a route of the game's
+  own writes from a request (`INSERT … VALUES (?, ?)` with `b.startedAt` from `request.json()`, `env.RUNS.put(b.runId,
+…)`) is player input: the high finding `payout-stored-input`; a write the review can't place in a function is
+  INCONCLUSIVE. A round new on every request (`crypto.randomUUID()`, `Date.now()`, `Math.random()`) is a high finding
+  when no per-person or per-wallet limit bounds it (medium when one does). An amount the request names is high (it
+  was medium). An alias of what the check is handed (`const req = ctx`) is followed.
+- **An economy the review could not read is never a PASS.** A spec its own review did not run on makes the verdict
+  INCONCLUSIVE, and a spec the economy check refuses is high findings, one line each in its own words (it was printed
+  as a cut JSON blob).
 - **Subcommands are named one way in every group.** `list` and `remove` are the names (`files ls` and `rm`, and
   `secret delete`, still work as aliases), and the game's folder is the last word or `--dir <folder>` in `secret`,
   `db`, `embed`, `domain`, `plan` and `coin` (`files` takes `--dir` only). A word that is no subcommand is a usage
@@ -98,6 +110,8 @@ changelog has the rest.
   `sendBeacon`) even at a host it otherwise ignores as noise (`fetch('https://api.example.com/score')`).
 - The full-screen hint gives the direct fix (`element.requestFullscreen()` from a click) before the client's.
 - CHANGELOG.md is in the package.
+- FEES.md: Metaplex Core's 0.0015 SOL creation fee goes to Metaplex's fee collector (it said the account kept it); the
+  README's costs name the ~0.0031 SOL an item minted as an NFT costs.
 
 - Sign-in is X or Google, as the client does it; a Solana wallet linked to the account comes with the sign-in. The
   README and `xcore add --help` said "X first, or a wallet".

@@ -155,7 +155,9 @@ export default {
               : `${a.name}: the ${SKILL} skill ${action === 'replaced' ? 'replaced' : 'copied'} at ${dir}.`,
         );
       }
-      for (const line of r.solana.lines) console.log(line);
+      // (the economy tools' own dry run ends with the line this command ends with too: said once, below)
+      for (const line of r.solana.lines)
+        if (!/^Nothing was changed: this was a dry run\.?$/.test(line.trim())) console.log(line);
       if (r.agents.some(a => a.found))
         console.log(
           `\n${r.dryRun ? `Nothing was changed: this was a dry run. Without --dry-run, it would connect ${scope === 'project' ? `${process.cwd()} only` : 'every project of this user'}.` : scope === 'project' ? `Connected for ${process.cwd()} only (${CMD} connect --scope user for every project).` : 'Connected for every project of this user.'} These lines may go in a project's AGENTS.md or CLAUDE.md (${CMD} connect never writes them):\n\n${r.snippet}`,

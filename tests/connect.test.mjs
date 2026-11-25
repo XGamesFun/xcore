@@ -63,7 +63,7 @@ test('connect --scope user: the skill copied for each agent found, the solana ki
   // the MCP server's command, as it is registered (not said as `xcore loot mcp`)
   assert.ok(
     r.solana.lines.some(l =>
-      /^claude mcp add --transport stdio --scope user xsolana -- (npx|cmd) .*@xgamesfun\/solana@[\d.]+ xsolana mcp$/.test(
+      /^(would run: )?claude mcp add --transport stdio --scope user xsolana -- (npx|cmd) .*@xgamesfun\/solana@[\d.]+ xsolana mcp$/.test(
         l,
       ),
     ),

@@ -226,12 +226,13 @@ the rest of the review continues.
 
   Its findings:
 
-  | Finding          | Meaning                                                                         |
-  | ---------------- | ------------------------------------------------------------------------------- |
-  | `payout-input`   | The request decides something a cheater should not control.                     |
-  | `payout-ceiling` | Unbounded (high), or bounded only by a total that every player shares (medium). |
-  | `payout-signer`  | Nothing signs it, or what it signs cannot be claimed.                           |
-  | `payout-trust`   | The declared trust is missing, unknown, or not what the code does.              |
+  | Finding               | Meaning                                                                                                                            |
+  | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+  | `payout-input`        | The request decides something a cheater should not control: what it pays, the amount, the wallet, or a round new on every request. |
+  | `payout-stored-input` | What the payout reads (a table, a KV namespace) is written by a route of the game's own from a request.                            |
+  | `payout-ceiling`      | Unbounded (high), or bounded only by a total that every player shares (medium).                                                    |
+  | `payout-signer`       | Nothing signs it, or what it signs cannot be claimed.                                                                              |
+  | `payout-trust`        | The declared trust is missing, unknown, or not what the code does.                                                                 |
 
 - **Key custody.** For each key (the test key in `.dev.vars`, the live key on xgames.fun, any key or seed in the page's
   files), every place its bytes are (tracked by git, not ignored, in a served folder, in the page's files, named by a

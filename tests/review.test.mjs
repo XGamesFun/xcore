@@ -230,7 +230,10 @@ test('PAY.check in the ledger: the template pays nothing (payout-signer); the re
     one(r, 'payout-input').message,
     /^"found-whale": the page's request decides it: .*Its record: signed by the server's own key .* decided by the request alone \(its body\)/,
   );
-  assert.match(one(r, 'payout-trust').message, /declares trust "bounds", but its check reads only the request/);
+  assert.match(
+    one(r, 'payout-trust').message,
+    /declares trust "bounds", but nothing the server keeps reaches its decision \(it reads only the request/,
+  );
   assert.equal(one(r, 'payout-input').route, 'grant:found-whale');
   assert.equal(r.tradeoffs[0].observed, 'request');
   assert.match(r.tradeoffs[0].cheater, /^every claim, at once, by a script that sends the request/);
@@ -275,10 +278,10 @@ test('PAY.check in the ledger: the template pays nothing (payout-signer); the re
   assert.deepEqual(ids(r), ['high payout-input']);
   assert.deepEqual(cases(r, 'payout-input'), ['request-names-wallet']);
   assert.equal(r.ledger[0].recipient, 'request');
-  // and the amount the page says (state decides whether, the page how much): medium
+  // and the amount the page says (state decides whether, the page how much): high, since a script names the most the grant pays
   await writeFile(vouchers, written.replace("amount: 'grant' };", 'amount: body.amount };'));
   r = await review(dir);
-  assert.deepEqual(ids(r), ['medium payout-input']);
+  assert.deepEqual(ids(r), ['high payout-input']);
   assert.deepEqual(cases(r, 'payout-input'), ['request-amount']);
   await writeFile(
     vouchers,
@@ -636,10 +639,16 @@ export const VOUCHERS = { payOnly: 'any' /* 'x' later */ };`;
     }),
     true,
   );
-  // a check that asks a backend of its own is not flagged
+  // a check that asks a backend of its own is not flagged, when the answer decides; asked and ignored, it decides nothing
+  assert.equal(
+    paysFromRequest({
+      body: "{ const ok = await fetch('https://b.example/verify'); if (!ok.ok) return { why: 'no' }; return { grant: 'g' }; }",
+    }),
+    false,
+  );
   assert.equal(
     paysFromRequest({ body: "{ const ok = await fetch('https://b.example/verify'); return { grant: 'g' }; }" }),
-    false,
+    true,
   );
   assert.equal(withoutComments("a // b\n'c // d'").replace(/ +/g, ' '), "a \n'c // d'");
 });
@@ -1423,7 +1432,12 @@ test('review asks which key is the issuer when a grant that counts people names 
 test('review: a setting read from env is no state; storage through env is', () => {
   const check = body => paysFromRequest({ body });
   assert.equal(check("return body.score > Number(env.MIN_SCORE) ? { grant: 'clear' } : { why: 'low' };"), true);
-  assert.equal(check("const r = await env.DB.prepare('x').first();\n return { grant: 'clear' };"), false);
+  // read and used: state; read and never used, it decides nothing (the request decides)
+  assert.equal(
+    check("const r = await env.DB.prepare('x').first();\n if (!r) return { why: 'no' };\n return { grant: 'clear' };"),
+    false,
+  );
+  assert.equal(check("const r = await env.DB.prepare('x').first();\n return { grant: 'clear' };"), true);
   assert.equal(check("return seen(env) && { grant: 'clear' };"), false);
 });
 
@@ -1668,6 +1682,152 @@ test("a save or the page's documents read beside the body: player input, a high 
   const kept = await review(dir);
   assert.ok(!ids(kept).includes('high payout-input'), ids(kept).join());
   assert.equal(kept.ledger[0].source, 'env');
+});
+
+// The final outside review's variants: state read and never used (H), state another route stores from a request (D,
+// through D1; M, through KV), and an alias of what the check is handed (B). Each is a high finding, never a PASS.
+const GF_DB = async dir =>
+  writeFile(
+    path.join(dir, 'server', 'gf-db.js'),
+    (await readFile(path.join(ROOT, 'lib', 'client', 'server', 'gf-db.js'), 'utf8')).replace('__BINDING__', 'DB'),
+  );
+const DB = "import { db } from './gf-db.js';";
+const RUN_CHECK = check(
+  "const run = await db(env).first('SELECT player, started_at FROM runs WHERE id = ?', String(body.runId));\n    if (!run || run.player !== player.sub) return { why: 'Not a run this server started for you.' };\n    if (Date.now() - run.started_at < 60_000) return { why: 'Faster than the game allows.' };\n    return { grant: 'found-whale', round: body.runId, amount: 'grant' };",
+);
+const START = values =>
+  `import { db, withPlayer } from './gf-db.js';\nexport async function start(request, env) {\n  const b = await request.json();\n  const sub = await withPlayer(request, env);\n  await db(env).first('INSERT INTO runs (id, player, started_at) VALUES (?, ?, ?)', ${values});\n  return Response.json({ ok: true });\n}\n`;
+/** The bounded sample with its grant's trust and limits as given. */
+async function grantAs(dir, change) {
+  const file = path.join(dir, 'xsolana.json');
+  const spec = JSON.parse(await readFile(file, 'utf8'));
+  change(spec.grants[0]);
+  await writeFile(file, JSON.stringify(spec, null, 2));
+}
+
+test('H: a state read nothing uses, a round new on every request, a "decides" it does not: high, never a PASS', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded', 'h');
+  await GF_DB(dir);
+  await grantAs(dir, g => {
+    g.trust = 'decides';
+    g.limits = { perDay: 100 };
+  });
+  await writeFile(
+    path.join(dir, 'server', 'vouchers.js'),
+    await vouchersWith(
+      check(
+        "await db(env).first('SELECT 1 AS one');\n    return { grant: 'found-whale', round: crypto.randomUUID(), amount: 'grant' };",
+      ),
+      DB,
+    ),
+  );
+  let r = await review(dir);
+  assert.equal(r.verdict, 'FAIL');
+  assert.deepEqual(
+    [r.ledger[0].source, r.ledger[0].trust.observed, r.ledger[0].trust.matches],
+    ['request', 'request', false],
+  );
+  assert.match(r.ledger[0].seen, /nothing it reads decides the payout/);
+  assert.ok(cases(r, 'payout-input').includes('round-fresh'));
+  assert.equal(one(r, 'payout-trust').severity, 'high', 'a "decides" that nothing decides');
+  assert.equal(one(r, 'payout-input').severity, 'high', 'a fresh round with nothing per player');
+  // a constant query that a condition does use decides nothing either
+  await writeFile(
+    path.join(dir, 'server', 'vouchers.js'),
+    await vouchersWith(
+      check(
+        "const ok = await db(env).first('SELECT 1 AS one');\n    if (!ok) return { why: 'no' };\n    return { grant: 'found-whale', round: `${player.sub}:${Date.now()}`, amount: 'grant' };",
+      ),
+      DB,
+    ),
+  );
+  r = await review(dir);
+  assert.equal(r.verdict, 'FAIL');
+  assert.equal(r.ledger[0].source, 'request');
+  assert.ok(cases(r, 'payout-input').includes('round-fresh'));
+});
+
+test('D and M: state another route stores from the request is player input; one the server works out is state', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  // D: the docs' own check, and a route that stores what the page sent (D1)
+  const d = await sample(tmp, 'bounded', 'd');
+  await GF_DB(d);
+  await writeFile(path.join(d, 'server', 'vouchers.js'), await vouchersWith(RUN_CHECK, DB));
+  await writeFile(path.join(d, 'server', 'start.js'), START('b.runId, b.player, b.startedAt'));
+  let r = await review(d);
+  assert.equal(r.verdict, 'FAIL');
+  assert.match(
+    one(r, 'payout-stored-input').message,
+    /reads the table runs, and server\/start\.js:5 writes it with what a request sent \(b\)/,
+  );
+  assert.equal(one(r, 'payout-stored-input').severity, 'high');
+  // the same route storing only what the server works out: the docs' example holds
+  await writeFile(path.join(d, 'server', 'start.js'), START('crypto.randomUUID(), sub, Date.now()'));
+  r = await review(d);
+  assert.ok(!ids(r).includes('high payout-stored-input'), ids(r).join());
+  assert.equal(r.ledger[0].source, 'env');
+  // M: the same through KV
+  const m = await sample(tmp, 'bounded', 'm');
+  await writeFile(
+    path.join(m, 'server', 'vouchers.js'),
+    await vouchersWith(
+      check(
+        "const run = await env.RUNS.get(String(body.runId), 'json');\n    if (!run || run.player !== player.sub) return { why: 'no' };\n    return { grant: 'found-whale', round: body.runId, amount: 'grant' };",
+      ),
+    ),
+  );
+  await writeFile(
+    path.join(m, 'server', 'start.js'),
+    "export async function start(request, env) {\n  const b = await request.json();\n  await env.RUNS.put(b.runId, JSON.stringify(b));\n  return new Response('ok');\n}\n",
+  );
+  r = await review(m);
+  assert.equal(r.verdict, 'FAIL');
+  assert.match(one(r, 'payout-stored-input').message, /reads env\.RUNS, and server\/start\.js:3 writes it/);
+});
+
+test('B: an alias of what the check is handed is followed, and an amount the request names is high', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded', 'b');
+  await writeFile(
+    path.join(dir, 'server', 'vouchers.js'),
+    await vouchersWith(
+      "export const PAY = {\n  async check(ctx) {\n    const req = ctx;\n    const amt = req.body.amount;\n    return { grant: 'found-whale', round: req.body.runId, amount: amt };\n  },\n};",
+    ),
+  );
+  const r = await review(dir);
+  assert.equal(r.verdict, 'FAIL');
+  assert.deepEqual([r.ledger[0].source, r.ledger[0].decides, r.ledger[0].amount], ['request', 'body', 'request']);
+  assert.ok(!r.unread.some(u => /hands env/.test(u.why)), 'nothing is handed to code it did not read');
+  assert.equal(one(r, 'payout-input').severity, 'high');
+});
+
+test('the economy part: a spec its review refuses is high findings in words, never a JSON blob; a review that did not run is INCONCLUSIVE', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded', 'refused');
+  await grantAs(dir, g => {
+    g.trust = 'banana';
+  });
+  const r = await review(dir);
+  assert.equal(r.verdict, 'FAIL');
+  const refused = r.findings.filter(f => f.source === 'economy' && f.id === 'E-SCHEMA');
+  assert.equal(refused.length, 1);
+  assert.equal(refused[0].severity, 'high');
+  assert.match(refused[0].message, /trust must be one of/);
+  const c = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
+  assert.match(c.stdout, /^ {2}high {3}E-SCHEMA \(economy\.grants\[0\]\.trust\): /m);
+  assert.doesNotMatch(c.stdout, /\{"ok":false/);
+  // the economy tools not here: what pays was not all read, so no PASS
+  const none = await sample(tmp, 'bounded', 'none');
+  const r2 = await reviewGame(none, {
+    env: { ...process.env, GAMESFUN_SOLANA: path.join(tmp.dir, 'no-such-package') },
+  });
+  assert.equal(r2.verdict, 'INCONCLUSIVE');
+  assert.ok(r2.unread.some(u => u.what === 'xsolana.json' && u.payout));
 });
 
 test('one unsafe payout, however its check is written: paid on the request alone, a high finding', async t => {
@@ -2018,7 +2178,7 @@ test('one check that pays two grants: the amount and the wallet of each are read
   );
   assert.deepEqual(
     r.findings.filter(f => f.id === 'payout-input').map(f => [f.route, f.severity, f.cases]),
-    [['grant:shells', 'medium', ['request-amount']]],
+    [['grant:shells', 'high', ['request-amount']]],
   );
   // a grant no answer names is paid by nothing here: said of that grant, not read off another's
   await edit(path.join(dir, 'server', 'vouchers.js'), t => t.replace("grant: 'shells'", "grant: 'pearls'"));

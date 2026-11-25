@@ -105,6 +105,7 @@ or the project's key for a roll it asks for.
 
 ### New NFTs (Metaplex)
 
-A collectible NFT that loot creates is a Metaplex Core asset. Its account costs rent plus **Metaplex Core's creation
-fee of 0.0015 SOL**, which the account keeps: about 0.0031 SOL per collectible in all. It is paid from the SOL the
-order holds, or by whoever gives the collectible.
+A collectible NFT that loot creates is a Metaplex Core asset. Minting it costs the asset account's rent plus **Metaplex
+Core's creation fee of 0.0015 SOL**, which Metaplex collects (it goes to Metaplex's fee collector, not to you or to
+loot): about 0.0031 SOL per collectible in all. It is paid from the SOL the order holds, or by whoever gives the
+collectible. `xcore loot cost` reports it for an economy.
