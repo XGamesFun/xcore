@@ -462,7 +462,7 @@ test('signin for a web game: gamesfun.js beside the page and loaded first; again
   assert.ok(copy.length < source.length / 2, `${copy.length} of ${source.length}`);
   assert.match(
     copy,
-    /^\/\*! gamesfun\.js \d+\.\d+\.\d+, minified by xcore; readable source: @xgamesfun\/xcore lib\/client\/gamesfun\.js \(MIT\) \*\/\n/,
+    /^\/\*! gamesfun\.js \d+\.\d+\.\d+, minified by xcore; readable source, every call listed at its top: https:\/\/github\.com\/XGamesFun\/xcore\/blob\/main\/lib\/client\/gamesfun\.js \(MIT\) \*\/\n/,
   );
   assert.match(copy, /globalThis\.GamesFun/, 'it sets the same global');
   assert.match(
