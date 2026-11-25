@@ -26,21 +26,21 @@ test('plain static files are their own published folder', async t => {
   assert.match(r.warn.map(w => w.what).join('\n'), /it has no way to go full screen/);
   assert.match(
     reportLines(r).join('\n'),
-    /plain static files[\s\S]*Next: (npx -y @xgamesfun\/xcore|xcore|npx xcore|node bin\/xcore\.mjs) check/,
+    /plain static files[\s\S]*Next:\n {2}1\. (npx (-y )?@xgamesfun\/xcore(@[\d.]+)?|xcore|node bin\/xcore\.mjs) check/,
   );
   // the next commands name the folder, unless they run in it
   const next = shown => reportLines(r, { shown }).at(-1);
   assert.match(
     next(() => 'my-game'),
-    / check my-game \(.* publish my-game\.$/,
+    / check my-game {3}run the page[\s\S]* publish my-game$/,
   );
   assert.match(
     next(() => 'my game'),
-    / check "my game" \(/,
+    / check "my game" {3}run the page/,
   );
   assert.match(
     next(() => '.'),
-    / check \(.* publish\.$/,
+    / check {3}run the page[\s\S]* publish$/,
   );
 });
 
@@ -155,7 +155,7 @@ test('a Node server that hands out a static folder: the folder is the page, the 
     socket.what,
     /^public\/index\.html:\d+ loads \/socket\.io\/socket\.io\.js, which your Socket\.IO server serves/,
   );
-  assert.match(socket.fix, /copy the client/);
+  assert.match(socket.fix, /^Copy node_modules\/socket\.io-client\/dist\/socket\.io\.min\.js into the game/);
   // the command a fix names carries the game's folder: run from elsewhere, backend.json still lands in the game
   const folder = typedPath(shown(dir));
   for (const f of [socket.fix, r.warn.find(w => /is not published/.test(w.what)).fix])
@@ -297,7 +297,7 @@ test('a page that calls its own api/ with no server/ is a fix, naming the progra
   );
   assert.match(
     r.fix.find(f => /calls api\//.test(f.what)).fix,
-    /server\/[\s\S]*backend use custom[\s\S]*WebAssembly[\s\S]*Ask the person/,
+    /server\/[\s\S]*backend use custom[\s\S]*WebAssembly[\s\S]*large change/,
   );
   assert.match(fix, /web\/api\.js:4 loads \/assets\/hero\.png from the root, in a script/);
   assert.match(fix, /web\/index\.html:\d+ has an import map entry \/vendor\/three\.module\.js from the root/);
@@ -354,7 +354,10 @@ test('a page written as name.html and linked without .html is a fix; linked with
   const fixes = r.fix.map(f => f.what).join('\n');
   assert.match(fixes, /play\.html is a page of its own, and index\.html:\d+ links to it without \.html/);
   assert.doesNotMatch(fixes, /about\.html/);
-  assert.match(r.fix.find(f => /play\.html/.test(f.what)).fix, /trailingSlash = 'always'/);
+  assert.match(
+    r.fix.find(f => /play\.html/.test(f.what)).fix,
+    /^Build each page as a folder .*Or link to play\.html\./,
+  );
 });
 
 test('a router that reads the path, in the source, is worth a look with the hash-router fix', async t => {
@@ -402,7 +405,7 @@ test("workers from the root, SharedArrayBuffer, no tab icon; xcore's own .gamesf
     /sim\.js:2 uses SharedArrayBuffer or Atomics\.wait: an xgames\.fun page is not cross-origin isolated/,
   );
   assert.match(warns, /index\.html names no tab icon/);
-  assert.doesNotMatch(warns, /hidden files never go up: \.gamesfun/);
+  assert.doesNotMatch(warns, /hidden files are not uploaded: \.gamesfun/);
   assert.equal(run(['adopt', dir]).status, 1, 'a fix is left');
 });
 
@@ -500,7 +503,7 @@ test('Nuxt pages route by path unless nuxt.config turns on hashMode', async t =>
   );
   const w = (await adopt(dir, { out: '.' })).warn.find(x => /routes by path/.test(x.what));
   assert.match(w?.what ?? '', /nuxt\.config routes by path \(Nuxt pages, without hashMode\)/);
-  assert.match(w.fix, /Nuxt router: \{ options: \{ hashMode: true \} \}/);
+  assert.match(w.fix, /^Use hash routing: router: \{ options: \{ hashMode: true \} \} in nuxt\.config\./);
   await writeFile(
     path.join(dir, 'nuxt.config.ts'),
     'export default defineNuxtConfig({ ssr: false, router: { options: { hashMode: true } } })\n',
@@ -554,7 +557,18 @@ test('one setting, one line: the long root-path advice once, a tab icon from the
   assert.ok(!('icon' in icons[0]), 'no working fields in the report');
   const roots = r.fix.filter(f => / loads \/\S+ from the root$/.test(f.what));
   assert.equal(roots.length, 3);
-  assert.equal(roots.filter(f => /Vite: base/.test(f.fix)).length, 1, 'the list of settings is given once');
+  assert.equal(roots.filter(f => /^Use a relative path/.test(f.fix)).length, 1, 'the fix is given once');
+  // short, with the path it names, and only the setting of the framework adopt found (none here: plain HTML)
+  assert.match(roots[0].fix, /Write \.\/a0\.js, not \/a0\.js\.$/);
+  assert.doesNotMatch(roots[0].fix, /Vite|Next|Astro|Nuxt|Parcel/);
+  for (const f of [...r.fix, ...r.warn]) assert.ok(f.fix.length <= 200, `${f.fix.length}: ${f.fix}`);
+  const { rootPathFix } = await import('../lib/publish/adopt/page-scan.mjs');
+  assert.match(rootPathFix('Vite'), /In vite\.config, set base: '\.\/'\.$/);
+  assert.doesNotMatch(rootPathFix('Vite'), /next\.config|astro|nuxt/i);
+  assert.match(
+    rootPathFix('Gatsby'),
+    /Make Gatsby's build write relative paths\. Settings by framework: docs\/HOSTING\.md/,
+  );
   assert.match(r.fix.at(-1).what, /^3 more paths from the root$/);
 });
 
@@ -646,7 +660,7 @@ test('engine exports that cannot start on xgames.fun are fixes: a Unity build co
     );
     const g = await adopt(godot);
     assert.equal(
-      g.fix.some(f => /Godot export built with Thread Support/.test(f.what) && /Thread Support off/.test(f.fix)),
+      g.fix.some(f => /Godot export with Thread Support on/.test(f.what) && /Thread Support off/.test(f.fix)),
       expectFix,
       `${threads}: ${JSON.stringify(g.fix)}`,
     );
@@ -760,4 +774,27 @@ test('a gamesfun.json that is not valid JSON is refused by name, by every comman
     run(['check', 'bare'], { cwd: tmp.dir }).stderr,
     /not a page this checks \(no gamesfun\.json → page: run .* adopt first\)/,
   );
+});
+
+test('a literal address the code calls is found, even at a host that is mostly noise (example.com); one in a comment is not', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  await writeFile(
+    path.join(dir, 'calls.js'),
+    [
+      "fetch('https://api.example.com/score', { method: 'POST' });",
+      'const ws = new WebSocket("wss://rt.example.org/room");',
+      "const x = new XMLHttpRequest(); x.open('GET', 'https://data.example.net/levels');",
+      "const es = new EventSource('https://feed.example.com/live');",
+      '// the docs: https://example.com/guide',
+    ].join('\n'),
+  );
+  const r = await adopt(dir);
+  assert.deepEqual(r.origins.found.map(o => o.origin).sort(), [
+    'https://api.example.com',
+    'https://data.example.net',
+    'https://feed.example.com',
+    'wss://rt.example.org',
+  ]);
 });

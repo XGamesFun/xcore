@@ -6,10 +6,11 @@ description: Bring a web game someone already made (plain HTML/JS, or a Vite, Ne
 # Bring your own game
 
 The person already has a game. Make it fit xgames.fun's hosting with the smallest change to _their_ files; remaking it
-would throw away their work. Every command here is `@xgamesfun/xcore`: run it as `npx -y @xgamesfun/xcore <command>`,
+would throw away their work. Every command here is `@xgamesfun/xcore`: run it as `npx -y @xgamesfun/xcore@0.12.0 <command>`,
 or `xcore <command>` once installed with `npm i -g @xgamesfun/xcore` (a bare `npx xcore` finds another package on npm).
 Each command prints its findings with their fix and the command that comes next, and `<command> --help` gives its
-options and limits: they are the reference, so this file holds the method and the order, not the details.
+options and limits: they are the reference, so this file holds the method and the order, not the details. `xcore add`
+and `xcore loot add` print short next steps: add `--verbose` (or `--json`) to read every note before wiring it in.
 
 The order: **adopt → fix → check → (players, data, a server) → (economy) → (review, when it pays) → preview picture →
 publish when they ask → (review --live).**
@@ -33,14 +34,16 @@ token, a flow a player taps through, or can't be undone:
 They hold at every step, so no step needs a rule of its own.
 
 - **Consent where it can't be undone.** Some commands print exactly what they would do with a code, send nothing, and
-  act only when run again with `--yes <code>`: `loot approve` (an economy going live), `coin launch`, a change to the
+  act only when run again with `--yes <code>`: `loot approve` (an economy going live), `loot handover` (a new owner key), `coin launch`, a change to the
   live database (`db query --write --live`, `db import --live`, `db restore --live`), replacing or deleting a secret
-  the live server has (`secret set` over an existing name, `secret delete`), and writing over or deleting a project
-  file xgames.fun has (`files put --live` over an existing path, `files rm --live`). They move money, hand over keys,
-  lose a key or a file for good or change players' data, and none can be taken back. Show the person the printout, and
-  run it with the code only after they have read it and said yes; a code fits only the printout it came with.
-  Everything else is reversible and runs when the person asked for that change: publish (a new version, or a private
-  draft when checks fail), a domain, an embed (it applies in about a minute), `plan activate` and `deactivate` (a slot
+  the live server has (`secret set` over an existing name, `secret remove`), and writing over or deleting a project
+  file xgames.fun has (`files put --live` over an existing path, `files remove --live`), and the first `publish` of a folder
+  (a new game on the account this computer is signed in to, in one of its slots). They move money, hand over keys,
+  lose a key or a file for good, change players' data or take a slot, and none can be taken back by a command. Show the
+  person the printout (for a first publish: the account, the game's name and the slot), and run it with the code only
+  after they have read it and said yes; a code fits only the printout it came with. Everything else is reversible and
+  runs when the person asked for that change: publishing a folder already linked to its game (a new version, or a
+  private draft when checks fail), a domain, an embed (it applies in about a minute), `plan activate` and `deactivate` (a slot
   moves, no money does). A step that costs the creator a click is fine. A player's path is different: a tap added for a
   narrow threat costs real players, so that guard goes on the server.
 - **Custody.** Every key has one intended holder: the owner's key file on their machine, the live voucher key on
@@ -56,7 +59,7 @@ They hold at every step, so no step needs a rule of its own.
 
 **Say in your own words**, keeping every number, everything a command prints for the person. Three kinds of fact go
 **as written**, because a paraphrase can overclaim: what a cheater gets and the key-leak ceiling (review), and the legal
-flags. Pass on each "Ask the person" question before building on its answer. Say only what you know: an economy is not
+flags. Ask the person each of review's "Questions to decide" before building on its answer. Say only what you know: an economy is not
 legal, safe, an investment or ready for real money because you say so.
 
 ## 1. Adopt and fix
@@ -79,8 +82,9 @@ offer a button: [references/sign-in-saves-rooms.md](references/sign-in-saves-roo
 ## 2. Check
 
 `xcore check <folder>` serves the game as xgames.fun does and runs it in Chrome, including inside the play page's
-sandboxed frame. Open the screenshots in `evidence/verify-N/` and look at them. Read its "First session" walk (a
-first-time player on a phone: taps, sign-in, wallet, waits) and pass its lines to the person; when the walk can't
+sandboxed frame. Open the screenshots in `evidence/verify-N/` and look at them. Run it with `--verbose` to read the
+"First session" walk (a first-time player on a phone: taps, sign-in, wallet, waits) and pass its "In short" lines to
+the person; when the walk can't
 reach the first reward, declare the path in `gamesfun.json` (`"journey": [{"tap": "<css selector>"} | {"wait": ms}]`)
 and check again.
 
@@ -119,14 +123,20 @@ with a key file on the person's machine. Follow that skill; this one adds where 
 ## 5. Review (a game whose server pays results)
 
 Before publishing a game that pays results, read it as a cheater would: `xcore review <folder>` writes
-`evidence/review-N/review.md` and `review.json` and exits 1 on a high finding (`xcore loot review` is the economy's
-part alone).
+`evidence/review-N/review.md` and `review.json`; its verdict is PASS (exit 0), FAIL (1, a high finding) or
+INCONCLUSIVE (3, a payout it could not read through: never treat that as a pass). `xcore loot review` is the economy's
+part alone.
 
 - Fix every high finding and run it again. Mediums are the person's to decide with you: say each one plainly.
 - Declare each voucher grant's `trust` as what `PAY.check` really does
   ([references/server-and-payouts.md](references/server-and-payouts.md), "Review: trust levels").
-- review.md opens with "Tell the person, as written" (what a cheater gets, the key-leak ceiling: say these as written)
-  and "Ask the person" (ask before building on the answers). A bounded result is capped, not safe.
+- The command prints a short summary. Read review.md (or run it with `--verbose`, or `--json`) for every finding,
+  question and trade-off.
+- review.md opens with "Questions to decide" (`? ` lines, `ask` in review.json: ask the person each one before
+  building on the answer) and "What this build allows" (`> ` lines, `tell` in review.json: what a cheater gets, the
+  key-leak ceiling). Tell the person every "What this build allows" line as written, in your answer and not only in
+  notes, and show them the trade-offs section at its end so they choose the level. A bounded result is capped, not
+  safe.
 - Confirm each draft in its "Design and code" (`offchain`, `serverLimit`) with the person, add the confirmed ones to
   `xsolana.json`, and run `xcore loot check` again: a loop through the server shows only once it is declared.
 
@@ -139,14 +149,17 @@ A shared link shows a square card built from `assets/card.jpg` (best a 960×960 
 picture of the game as it plays (`--tap`, `--wait <seconds>`, `--path <page?query>` for a game that needs them;
 `--from <picture>` for key art they have). Then **open the picture and look at it**: a loading screen, a blank page or a
 menu makes a poor card. Keep the subject clear of the top third (the title) and the bottom left (the button).
-`xcore publish` stops without a picture xgames.fun can draw (code `card`; `next` names the fix); go without one
-(`--no-card`, or `"card": false` in `gamesfun.json`) only when the person says so.
+With no picture, `xcore publish` makes one from the check's screenshot and says so: open it and look, as for any card.
+It stops when there is no picture and no screenshot, or one xgames.fun can't draw (code `card`; `next` names the fix);
+go without one (`--no-card`, or `"card": false` in `gamesfun.json`) only when the person says so.
 
 ## 7. Publish (only when they ask)
 
 `xcore publish <folder> --check` shows what goes up and what would refuse it, offline. `xcore publish <folder>` builds,
 runs the page check on exactly those files and uploads them with the `server/` bundle; a failed check makes a private
-draft only. `xcore login` asks the person to tick the games this computer may work on; a command refused with
+draft only. The first publish of a folder prints the account it would publish under, the game's name and the slot it
+takes, with a code, and publishes nothing: show the person those three lines, and add `--yes <code>` only after they
+say yes (they may want another account: `xcore login`, or a paid slot first). `xcore login` asks the person to tick the games this computer may work on; a command refused with
 `not-granted` means they run `xcore login` again and tick that game. Tell them the link, what you changed in their
 files, what the checks proved, and what nothing checked (their gameplay, their backend's own behaviour).
 

@@ -164,7 +164,7 @@ test('gamesfun loot approve opens nothing unless told how it is signed; a key fi
   );
   // No way to sign named: the two ways, in this package's words, and nothing started.
   const bare = run(['loot', 'approve', 'public/xsolana.json'], { cwd: game });
-  assert.equal(bare.status, 1);
+  assert.equal(bare.status, 2, 'a usage mistake (@xgamesfun/solana 0.29.12 and later)');
   assert.match(bare.stderr, /say how going live is signed/);
   assert.match(bare.stderr, /--keypair <keyfile>/);
   assert.match(bare.stderr, /xcore loot keygen <file>/);
@@ -387,4 +387,16 @@ try { p.solanaApp({ spec: { network: 'mainnet', live: { project: '11111111111111
     page,
     /walletStandardSigner\(\s*w,\s*account,\s*m\.wallets\.chainOf \? m\.wallets\.chainOf\(lootCluster\(\)\)/,
   );
+});
+
+test("xcore loot --help lists every command of the installed tools, and <command> --help is that command's own", () => {
+  const list = run(['loot', '--help']);
+  assert.equal(list.status, 0);
+  for (const c of ['check', 'approve', 'handover', 'keygen', 'token', 'client'])
+    assert.match(list.stdout, new RegExp(`^ {2}xcore loot ${c}\\b`, 'm'), c);
+  assert.doesNotMatch(list.stdout, /^Usage: xsolana /m);
+  const one = run(['loot', 'handover', '--help']);
+  assert.equal(one.status, 0);
+  assert.match(one.stdout, /^Usage: xcore loot handover \[file\] --keypair <owner keyfile> --to <new owner keyfile>/);
+  assert.match(run(['loot', 'add', '--help']).stdout, /^Usage: xcore loot add/);
 });

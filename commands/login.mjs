@@ -8,18 +8,27 @@ import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore login [--code] [--status] [--json]
 
-Sign in to xgames.fun so you can publish your games (${CMD} publish). Your browser opens xgames.fun: sign in
-there, tick the games this computer may work on (or your whole account) and approve. xcore says which it got; a game
-you publish as new from here is added to them, and for another, run ${CMD} login again and tick it. xcore never sees
-your password; it keeps a publish token for 30 days in ${storeName()} (never in a game or in this folder).
-${CMD} logout ends it.
-  --code     no browser on this machine (SSH, a container): open the printed link anywhere and paste the code it shows
-  --status   who this computer is signed in as, which games it reaches, and where the token is kept
-GAMESFUN_STUDIO=<origin> signs in to another xgames.fun (a local Studio while developing).`;
+Sign this computer in to xgames.fun so you can publish games (${CMD} publish).
+
+Your browser opens xgames.fun. Sign in there, choose the games this computer may work on (or your whole account),
+and approve. xcore reports which games it was given. A game you publish as new from this computer is added to them;
+to work on another existing game, run ${CMD} login again and select it.
+
+xcore never sees your password. It keeps a publish token for 30 days in ${storeName()}, never in a game or in this
+folder. ${CMD} logout ends the session.
+
+Options:
+  --code     for a machine with no browser (SSH, a container): open the printed link on any device and paste the code
+             it shows
+  --status   show who this computer is signed in as, which games it can reach, and where the token is kept
+  --json     print the result as JSON
+
+Environment:
+  GAMESFUN_STUDIO=<origin>  sign in to another xgames.fun (a local Studio during development)`;
 
 export default {
   name: 'login',
-  summary: 'sign in to xgames.fun so you can publish your games',
+  summary: 'sign this computer in to xgames.fun so you can publish',
   usage,
   run: args =>
     guard(async () => {

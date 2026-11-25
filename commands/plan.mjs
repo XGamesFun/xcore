@@ -1,5 +1,5 @@
 // `xcore plan`: a game's backend plan on xgames.fun (../lib/publish/plans.mjs).
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, tooMany, folderArg, verbOrFolder } from '../lib/cli.mjs';
 import { resolveGame } from '../lib/games.mjs';
 import { accountPlan, describeAccount, describeGame, gamePlan, setActive } from '../lib/publish/plans.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -9,33 +9,50 @@ const usage = `Usage: xcore plan [dir] [--json]
        xcore plan activate [dir] [--json]
        xcore plan deactivate [dir] [--json]
 
-What a game's backend may use on xgames.fun (its server, saves and scores), and what it used this month.
-  Free       every game, by default: a small server (50 ms of CPU a request, 600 requests a minute) and $1 of use a
-             month; past that the game is capped until the month ends: its server is switched off (every api/
-             request answers 451), its pages keep loading, and saves and scores slow down
-  Creator    a game in one of your paid slots: 200 ms a request, 6,000 requests a minute, 1 GB of saves, and
-             $10 of use a month per paid slot, shared by your Creator games
-  Scale      granted by xgames.fun for a game that needs more
-Every plan lets sites of yours embed the game (Free 3, Creator 10, Scale 25: ${CMD} embed); Creator and Scale serve
-it on domains of your own (1 and 5: ${CMD} domain).
-Every game sits in a slot. Everyone gets 2 free slots, whose games run on Free; any more games need a paid slot,
-$15 for 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans; no automatic renewal), whose game runs on
-Creator. A paid slot moves between your games at any time without changing the bill. Usage credit, bought the same way,
-lets Creator games go past what their slots include (at twice what xgames.fun pays) instead of being capped.
-  activate     move this folder's game to a paid slot (its free slot opens for another game)
-  deactivate   move it back to a free slot (one must be open; its paid slot opens for another game)
-  --all        your free and paid slots and every game's plan`;
+The game's folder is the last word or --dir <folder> (default: the current directory).
+
+Show what a game's backend may use on xgames.fun (its server, saves and scores), and what it used this month.
+
+Plans:
+  Free       The default for every game. A small server (50 ms of CPU per request, 600 requests a minute) and $1 of
+             use a month. Past that, the game is capped until the month ends: its server is switched off (every
+             api/ request answers 451), its pages keep loading, and saves and scores slow down.
+  Creator    A game in one of your paid slots. 200 ms per request, 6,000 requests a minute, 1 GB of saves, and $10
+             of use a month per paid slot, shared by your Creator games.
+  Scale      Granted by xgames.fun to a game that needs more.
+
+Every plan lets your own sites embed the game (Free 3, Creator 10, Scale 25: ${CMD} embed). Creator and Scale also
+serve it on your own domains (1 and 5: ${CMD} domain).
+
+Slots and prices:
+  - Every game uses a slot. Everyone gets 2 free slots; games in them run on Free.
+  - Each further game needs a paid slot: $15 for 30 days, prepaid in SOL or USDC on xgames.fun (your console →
+    Plans). It does not renew automatically. A game in a paid slot runs on Creator.
+  - You can move a paid slot between your games at any time; the bill does not change.
+  - Usage credit, bought the same way, lets Creator games go past what their slots include instead of being capped.
+    It is charged at twice what xgames.fun pays.
+  - Every cost in one table: docs/FEES.md.
+
+Commands:
+  activate     move this folder's game to a paid slot (its free slot becomes available for another game)
+  deactivate   move it back to a free slot (one must be available; its paid slot becomes available for another game)
+
+Options:
+  --all        list your free and paid slots and every game's plan
+  --json       print the result as JSON`;
 
 export default {
   name: 'plan',
-  summary: "a game's backend plan on xgames.fun (Free, Creator, Scale): its limits, this month's use, game slots",
+  summary: "show a game's plan, limits and this month's use; move it between slots",
   usage,
   run: args =>
     guard(async () => {
-      const { values, positionals } = parse(args, { all: { type: 'boolean' } }, usage);
-      const [first, second] = positionals;
-      const verb = first === 'activate' || first === 'deactivate' ? first : null;
-      if (positionals.length > (verb ? 2 : 1)) throw new UsageError(usage);
+      const { values, positionals } = parse(args, { all: { type: 'boolean' }, dir: { type: 'string' } }, usage);
+      const { verb, rest } = verbOrFolder(positionals, ['activate', 'deactivate'], null, usage);
+      if (rest.length > 1) throw new UsageError(`${tooMany(rest.slice(1))}\n\n${usage}`);
+      const [first, second] = verb
+        ? [verb, folderArg(values.dir, rest[0], usage)]
+        : [folderArg(values.dir, rest[0], usage)];
       const out = values.json ? printJson : null;
       const plain = e => {
         if (e?.status === 404)

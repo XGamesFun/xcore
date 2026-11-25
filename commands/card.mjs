@@ -2,7 +2,7 @@
 // picture of the game as it plays, or of a picture the person has, written as assets/card.jpg where publish takes it.
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, tooMany } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { sizeText } from '../lib/util.mjs';
 import {
@@ -22,30 +22,38 @@ import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore card [dir] [--wait <seconds>] [--tap] [--path <path-and-query>] [--from <picture>] [--force] [--no-build] [--json]
 
-Make the game's preview picture: what a link to it shows when it is shared (a post on X, a chat). xgames.fun draws a
-${CARD_SIZE}×${CARD_SIZE} card for the link with this picture behind it, "XGames.fun" and the game's title drawn large across its
-top band and a "Tap to play" button at its bottom left; without a picture the card is a plain gradient with the
-title. Publish asks for one (${CMD} publish --no-card goes without).
-It writes ${CARD_FILE} (${CARD_SIZE}×${CARD_SIZE}, a JPEG of at most ${CARD_MAX_BYTES.toLocaleString('en-US')} bytes) into the files that go up:
-the game's folder, or for a game you brought with a build, the folder its build copies as it is (gamesfun.json
-page.static, such as public/), so the build carries it into what is published; a build with no such folder is told
-where the picture has to live. It never replaces a picture that is there (card.jpg, or a card.png xgames.fun can
-draw) without --force.
-By default it serves the game as the page check does, opens it in Chrome at ${CARD_SIZE}×${CARD_SIZE}, waits, and takes a picture.
-A page that does not answer, or answers with an error, makes no picture; one that throws or logs errors makes one
-and says so, and the command fails unless --force.
-  --wait <seconds>  how long to wait after the page loads (default 4)
-  --tap             tap the middle of the page once first (a game that starts on a tap)
-  --path <path>     open another page of the game, with its query (level.html?demo=1)
-  --from <picture>  make it from a picture you have (key art, a screenshot; at most ${FROM_MAX_BYTES / 1024 / 1024} MB): scaled to cover
-                    the square and cropped to its middle. --from ${CARD_FILE} --force re-crops the one there.
-  --force           replace the picture that is there; keep one taken while the page had errors
-  --no-build        a game with a build: take the picture of what is built already
-Then open the picture and look at it: ${CARD_CLEAR}.`;
+Make the game's preview picture: what a link to the game shows when it is shared (in a post on X, or in a chat).
+
+xgames.fun draws a ${CARD_SIZE}×${CARD_SIZE} card for the link: this picture in the background, "XGames.fun" and the
+game's title in large type across the top, and a "Tap to play" button at the bottom left. Without a picture, the card
+is a plain gradient with the title. Publish asks for a picture (${CMD} publish --no-card publishes without one).
+
+Output: ${CARD_FILE} (${CARD_SIZE}×${CARD_SIZE}, a JPEG of at most ${CARD_MAX_BYTES.toLocaleString('en-US')} bytes), written where the published files are:
+  - in the game's folder; or
+  - for an adopted game with a build, in the folder the build copies unchanged (gamesfun.json page.static, such as
+    public/), so the build includes it. If the build has no such folder, card says where the picture must go.
+It never replaces an existing picture (card.jpg, or a card.png xgames.fun can draw) unless you pass --force.
+
+By default it serves the game as the page check does, opens it in Chrome at ${CARD_SIZE}×${CARD_SIZE}, waits, and
+takes a screenshot. If the page does not respond, or responds with an error, no picture is made. If the page throws or
+logs errors, the picture is made and the errors are reported, and the command fails unless you pass --force.
+
+Options:
+  --wait <seconds>  how long to wait after the page loads (default: 4)
+  --tap             tap the middle of the page once first (for a game that starts on a tap)
+  --path <path>     open another page of the game, with its query string (level.html?demo=1)
+  --from <picture>  make it from a picture you have (key art, a screenshot; at most ${FROM_MAX_BYTES / 1024 / 1024} MB),
+                    scaled to cover the square and cropped to its middle. --from ${CARD_FILE} --force re-crops the
+                    existing picture.
+  --force           replace an existing picture; keep a picture taken while the page had errors
+  --no-build        for a game with a build: take the picture of what is already built
+  --json            print the result as JSON
+
+Afterwards, open the picture and look at it: ${CARD_CLEAR}.`;
 
 export default {
   name: 'card',
-  summary: "make the game's preview picture: what a shared link to it shows (assets/card.jpg)",
+  summary: "make the game's preview picture for shared links (assets/card.jpg)",
   usage,
   run: args =>
     guard(async () => {
@@ -61,7 +69,7 @@ export default {
         },
         usage,
       );
-      if (positionals.length > 1) throw new UsageError(usage);
+      if (positionals.length > 1) throw new UsageError(`${tooMany(positionals.slice(1))}\n\n${usage}`);
       const wait = values.wait === undefined ? 4 : Number(values.wait);
       if (!Number.isFinite(wait) || wait < 0 || wait > 120)
         throw new UsageError(`--wait takes a number of seconds (0–120)\n\n${usage}`);

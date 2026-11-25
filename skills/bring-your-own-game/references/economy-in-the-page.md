@@ -6,8 +6,8 @@ itself (what it is made of, its checks, going live with a key file) is the xsola
 ## The page client
 
 `xcore loot add <folder>` says where `xsolana.json` goes (the `static` folder of a build project). Once the economy is
-saved there, run it again: it copies the page client into `gf/loot/` beside it. That folder is a copy that publish
-brings up to date, so edits there are lost.
+saved there, run it again: it puts the bundled page client into `gf/loot/` beside it. That folder is a managed copy
+that `loot add` and publish bring up to date, so edits there are lost.
 
 - A web page wires it as xcore's docs/CLIENT.md, "A web page, by hand", shows: a run-time import with a page-relative URL,
   `solanaApp` with `rpcUrl: PAGE_RPC`.

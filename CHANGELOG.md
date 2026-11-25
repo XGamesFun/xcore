@@ -2,6 +2,121 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.12.0 — 2026-11-24
+
+Clearer output and documents, a stricter review, and a confirmation before a first publish, from four outside
+reviews. No price or limit changed. **Breaking** marks a change that can stop a script, an import or a flow that
+worked with 0.11.0.
+
+**Ships with `@xgamesfun/solana` 0.29.12** (`xcore loot …`): its usage mistakes exit with code 2, `xsolana connect`
+sets up the current project by default, and its named commands print for a person (`--json` is unchanged). Its
+changelog has the rest.
+
+**Breaking**
+
+- **`xcore review` has a third verdict, INCONCLUSIVE, with exit code 3** (`ok: false`, `verdict` in `--json`). A payout
+  the review could not read through used to PASS with "1 part not read": env handed to code it did not follow, a
+  keeper report whose winners its callers decide, or a PAY.check that reads what it was handed by a computed key
+  (`ctx['bo' + 'dy']`, `ctx[k]`, `{ [k]: req } = ctx`, `Reflect.get(ctx, k)`). A computed key is never taken as state
+  the server keeps. A high finding is still FAIL (exit code 1); PASS is 0. Each payout entry in `unread` has
+  `payout: true`.
+- **The first publish of a folder asks first.** It creates a game on the account this computer is signed in to and
+  takes one of its slots, so it prints the account, the game's name and the slot, and publishes nothing. At a
+  terminal, type `publish` to go on; otherwise run it again with `--yes <code>` (`--json`: `planned: true`, with
+  `code` and `next`). Publishing a folder already linked to its game is not asked, nor is a GitHub Actions job's OIDC
+  publish.
+- **One public entry point.** `exports` was every module (`./*`, `./publish/*`, `./server/*`, `./commands/*`). It is
+  now `@xgamesfun/xcore` (`adopt`, `check`, `publishCheck`, `publishStatus`, `PLAN_LIMITS`, with types in
+  `types/index.d.ts`; [docs/API.md](docs/API.md)) and `@xgamesfun/xcore/package.json`. Any other subpath fails with
+  `ERR_PACKAGE_PATH_NOT_EXPORTED`.
+- **`xcore connect` sets up the current project only.** It used to copy the skill into every project (the user's
+  skills folders). By default the skills now go in the project's `.claude/skills/` and `.agents/skills/`, and Claude
+  Code registers the tools for that project. `--scope user` does what it did before.
+- **Default output is shorter.** `check`, `review`, `dev`, `add` and `loot add` print a verdict, one line per finding
+  and at most three next steps; `--verbose` prints the rest, as before. A script that read their text should read
+  `--json`, which is unchanged and complete. Measured on sample games: `review` 35 lines to 13, `check` 25 to 8, `dev`
+  8 to 4.
+- **`xcore review` takes a player's saves and the page's `GamesFun.db` documents as player input, never as state the
+  server keeps.** A PAY.check that paid on `body.score` and also read `env.GF.saves.get(…)` passed; it is now the
+  high finding `payout-input` (FAIL, exit code 1), as is a check that pays on a save alone. A check whose payout state
+  the server keeps decides is judged as before.
+- **`xcore review` counts state only when it decides, and follows state back to who wrote it.** A read whose answer
+  no condition and no answer uses (`await db(env).first('SELECT 1')`), or a query with no table, is no state: the
+  check is read as deciding on the request or the sign-in, and a declared `"decides"` or `"replays"` it does not do is a
+  high `payout-trust` finding (it was a match). A table or KV namespace the payout reads that a route of the game's
+  own writes from a request (`INSERT … VALUES (?, ?)` with `b.startedAt` from `request.json()`, `env.RUNS.put(b.runId,
+…)`) is player input: the high finding `payout-stored-input`; a write the review can't place in a function is
+  INCONCLUSIVE. A round new on every request (`crypto.randomUUID()`, `Date.now()`, `Math.random()`) is a high finding
+  when no per-person or per-wallet limit bounds it (medium when one does). An amount the request names is high (it
+  was medium). An alias of what the check is handed (`const req = ctx`) is followed.
+- **An economy the review could not read is never a PASS.** A spec its own review did not run on makes the verdict
+  INCONCLUSIVE, and a spec the economy check refuses is high findings, one line each in its own words (it was printed
+  as a cut JSON blob).
+- **Subcommands are named one way in every group.** `list` and `remove` are the names (`files ls` and `rm`, and
+  `secret delete`, still work as aliases), and the game's folder is the last word or `--dir <folder>` in `secret`,
+  `db`, `embed`, `domain`, `plan` and `coin` (`files` takes `--dir` only). A word that is no subcommand is a usage
+  mistake that names the subcommands, never "no such folder" (`xcore embed lst` said "lst: no such folder").
+- **Usage mistakes say what was wrong and exit with code 2**, followed by the command's usage lines (not its whole
+  help). `xcore backend <word>` that is not a command, and a `--url` that is no address, exited with 1 and now exit
+  with 2.
+
+**Added**
+
+- `xcore loot --help` lists every command of the installed `@xgamesfun/solana` (read from it, so `handover` is
+  there), and `xcore loot <command> --help` is that command's own help.
+
+- [docs/FEES.md](docs/FEES.md): every cost in one table (hosting, the $15 paid slot and what it includes, usage
+  credit, coin launches, loot's fees, randomness, Metaplex), and docs/HOSTING.md's "Your game's data, and getting it
+  out" (player saves and leaderboards are not in `xcore db export`).
+- Publish makes a missing preview picture from the page check's newest screenshot (`evidence/verify-N/desktop.png`,
+  960×960, a JPEG under 1,500,000 bytes), and says so in one line with how to replace it. It still stops when there is
+  no screenshot, or for a picture xgames.fun cannot draw.
+- `--verbose` on `add`, `loot add`, `check`, `review` and `dev`; `--scope project|user` on `connect`.
+- A Names table in the README (xgames.fun, gamesfun, xcore, `@xgamesfun/solana`, xsolana, solana-kit, loot, Studio).
+
+**Changed**
+
+- The economy's page client in `gf/loot/` is bundled and minified: 7 files, about 0.5 MB, in place of 66 files and
+  1.3 MB. `play/index.js`, `chain/rpc.js` and `wallets.js` keep their paths, so pages import them as before. Running
+  `xcore loot add` again refreshes it; publish does too.
+- The `gamesfun.js` copied into a game is minified (132 KB to 47 KB; 17 KB gzipped), with a banner naming its version
+  and the readable source the package keeps. A copy from 0.11.0 is the same code unminified and still counts as
+  current.
+- `.dev.vars` goes into the folder's `.gitignore` as soon as `add vouchers` or `add rpc` uses it, even in a folder
+  that is not in git yet, said in one line.
+- adopt and check findings are one line and a short fix. A path from the root names only the setting for the framework
+  adopt detected (every framework's: docs/HOSTING.md, "Paths from the root"). A `.env` is listed once. check's summary
+  reads "3 passed, 1 skipped", and the upload count names the two records xcore adds.
+- Printed commands are ones that run this package: `npx -y @xgamesfun/xcore@<version>` (through npx or a project
+  install; never the unscoped `npx xcore`, another package), `xcore` installed globally. The README's npx examples
+  name the version too.
+- Output is written to the person reading it: review.md's lists are "Questions to decide" and "What this build allows",
+  its last section is "What a cheater gets, and the trade-offs", and it is titled "Payout and key review". check's walk
+  ends with "In short". `review.json`'s `ask` and `tell` are unchanged. Directions for coding agents are in the skill.
+- No message tells you to install `@xgamesfun/kit`, which is not on npm; a kit command says the game-making kit is
+  not released yet.
+- The page's database API is named `GamesFun.db` everywhere; `gf` in examples is the same object.
+- Every `--help` has a usage line, a one-line description, options and limits; the README and docs/ are rewritten in
+  plain English with every fact kept. `xcore review` is described as a pattern-based check, not a security audit.
+
+**Fixed**
+
+- `xcore connect --dry-run` starts no agent's program (it ran `claude --version` and `claude mcp get`, which can write
+  `~/.claude.json`) and says each step as what it would do (`"action": "would-copy"`).
+- The key file owns an economy until it hands it over with `xcore loot handover` (0.29.12); docs/ECONOMY.md,
+  docs/DISCLAIMER.md and `xcore loot` said it owned it permanently. For real money, the docs name a browser wallet
+  that keeps its key on a hardware device as the safer owner, as `@xgamesfun/solana`'s README does.
+- `xcore adopt` finds a literal address the code calls (`fetch`, `XMLHttpRequest.open`, `WebSocket`, `EventSource`,
+  `sendBeacon`) even at a host it otherwise ignores as noise (`fetch('https://api.example.com/score')`).
+- The full-screen hint gives the direct fix (`element.requestFullscreen()` from a click) before the client's.
+- CHANGELOG.md is in the package.
+- FEES.md: Metaplex Core's 0.0015 SOL creation fee goes to Metaplex's fee collector (it said the account kept it); the
+  README's costs name the ~0.0031 SOL an item minted as an NFT costs.
+
+- Sign-in is X or Google, as the client does it; a Solana wallet linked to the account comes with the sign-in. The
+  README and `xcore add --help` said "X first, or a wallet".
+- HOSTING.md's engine export limit is 100 MiB, as the code holds it.
+
 ## 0.11.0 — 2026-11-23
 
 Fixes from a read of the whole package: places where a command passed, or went ahead, on something it could not read,

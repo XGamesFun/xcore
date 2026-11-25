@@ -1,5 +1,5 @@
 // `xcore embed`: the sites of your own that may show the published game in a frame (../lib/publish/site.mjs).
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, tooMany, folderArg, verbOrFolder } from '../lib/cli.mjs';
 import { resolveGame } from '../lib/games.mjs';
 import { changeEmbed, describeSite, embedSnippet, gameSite, playUrl } from '../lib/publish/site.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
@@ -9,29 +9,36 @@ const usage = `Usage: xcore embed [list] [dir] [--json]
        xcore embed add <site> [dir] [--json]
        xcore embed remove <site> [dir] [--json]
 
-The sites of your own that may show the published game in a frame (an <iframe> in your page), besides xgames.fun
-and posts on X. A site is its origin: https://mygame.com (http://localhost:<port> while you build it). It applies
-within about a minute, with no publish. Free allows 3 sites, Creator 10, Scale 25.
-  list            the sites, and where the game plays
-  add <site>      allow one, and print the <iframe> to put in its page
-  remove <site>   take one off
-Framed on your site, the game signs players in by itself (a small xgames.fun window, or a code), as it does in a post
-on X: your page can't sign them in for it.`;
+The game's folder is the last word or --dir <folder> (default: the current directory). ls also means list, and rm or delete also mean remove.
+
+Allow your own sites to show the published game in a frame (an <iframe> in your page), in addition to xgames.fun
+and posts on X.
+
+A site is given as its origin: https://mygame.com (or http://localhost:<port> during development). Changes take
+effect within about a minute, without a publish.
+
+Sites per plan: Free 3, Creator 10, Scale 25.
+
+Commands:
+  list            list the sites, and where the game plays
+  add <site>      allow a site, and print the <iframe> to put in its page
+  remove <site>   remove a site
+
+When framed on your site, the game signs players in itself (with a small xgames.fun window, or a code), as it does in
+a post on X. Your page cannot sign players in for it.`;
 
 export default {
   name: 'embed',
-  summary: 'let a site of your own show the published game in a frame (an <iframe>): add, list, remove',
+  summary: 'allow your own sites to show the published game in an <iframe>',
   usage,
   run: args =>
     guard(async () => {
-      const { values, positionals } = parse(args, {}, usage);
-      const verbs = ['list', 'add', 'remove'];
-      const verb = verbs.includes(positionals[0]) ? positionals[0] : 'list';
-      const rest = verbs.includes(positionals[0]) ? positionals.slice(1) : positionals;
+      const { values, positionals } = parse(args, { dir: { type: 'string' } }, usage);
+      const { verb, rest } = verbOrFolder(positionals, ['list', 'add', 'remove'], 'list', usage);
       const needs = verb !== 'list';
       if (needs && !rest[0]) throw new UsageError(`${verb} needs a site, like https://mygame.com\n\n${usage}`);
-      if (rest.length > (needs ? 2 : 1)) throw new UsageError(usage);
-      const dir = await resolveGame(needs ? rest[1] : rest[0]);
+      if (rest.length > (needs ? 2 : 1)) throw new UsageError(`${tooMany(rest.slice(needs ? 2 : 1))}\n\n${usage}`);
+      const dir = await resolveGame(folderArg(values.dir, needs ? rest[1] : rest[0], usage));
       const out = values.json ? printJson : null;
       const origin = studioOrigin();
       if (verb === 'list') {

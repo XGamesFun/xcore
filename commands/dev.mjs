@@ -6,22 +6,29 @@ import { madeByKit } from '../lib/publish/index.mjs';
 import { CMD } from '../lib/command.mjs';
 import { PLAN_NAMES } from '../lib/dev/plans.mjs';
 
-const usage = `Usage: xcore dev [dir] [--port <n>] [--plan <name>] [--no-build] [--open] [--json]
+const usage = `Usage: xcore dev [dir] [--port <n>] [--plan <name>] [--no-build] [--open] [--verbose] [--json]
 
-Play the game on this machine as xgames.fun will host it, with everything a published game has behind it:
+Run the game on this machine as xgames.fun hosts it, with the same services a published game has:
   http://127.0.0.1:<port>/game/   the published files, with the play host's headers
   /game/api/*                     the game's own server/ (Durable Objects, WebSockets, env.GF), reloaded on change
-  /platform/v1/*                  sign-in (a local player), saves and leaderboards, the same store env.GF uses,
-                                  with xgames.fun's limits on the plan it imitates (Free unless --plan)
+  /platform/v1/*                  sign-in (as a local player), saves and leaderboards: the same store env.GF uses,
+                                  with xgames.fun's limits for the plan it imitates (Free unless --plan)
   /loot/v1/rpc                    the economy's Solana devnet RPC (XSOLANA_RPC_URL in .env, else xgames.fun's relay)
-gamesfun.js (${CMD} add signin|database|multiplayer) uses all of it here, from any engine: open the page in two
-windows to play a room together. Running server/ needs Miniflare (workerd), installed once on first use (~180 MB).
-Saves, scores and Durable Object storage are kept in <dir>/.gamesfun/ (never published).
-  --port <n>      the port (default the first free one from 8787)
-  --plan <name>   the plan to imitate: free (the default), creator or scale: its boards, saves, reads and writes a
-                  minute and file sizes, as xgames.fun holds a game on that plan (${CMD} plan shows a game's own)
-  --no-build      serve what is built already; do not run gamesfun.json page.build first
+
+gamesfun.js (${CMD} add signin|database|multiplayer) uses all of these locally, from any engine. To play a room
+together, open the page in two windows.
+
+Running server/ needs Miniflare (workerd), which is installed on first use (about 180 MB). Saves, scores and Durable
+Object storage are kept in <dir>/.gamesfun/, which is never published.
+
+Options:
+  --port <n>      the port (default: the first free port from 8787)
+  --plan <name>   the plan to imitate: free (the default), creator or scale. It sets the boards, saves, reads and
+                  writes per minute, and file sizes that xgames.fun allows on that plan (${CMD} plan shows a
+                  game's own plan)
+  --no-build      serve what is already built; do not run gamesfun.json page.build first
   --open          open the page in your browser
+  --verbose       also print where saves are kept, the economy's RPC, and what the stand-in does not imitate
   --json          print where it runs as JSON, then keep running`;
 
 /** The first port from `from` (step 2: the page's, and the next for its files) free on 127.0.0.1, or null. */
@@ -60,7 +67,7 @@ export function listenRefusal(e, port) {
 
 export default {
   name: 'dev',
-  summary: 'play the game here as xgames.fun hosts it: its server, sign-in, saves, rooms and economy RPC',
+  summary: 'run the game locally as xgames.fun hosts it, with its server, sign-in and rooms',
   usage,
   run: args =>
     guard(async () => {
@@ -71,6 +78,7 @@ export default {
           plan: { type: 'string' },
           'no-build': { type: 'boolean' },
           open: { type: 'boolean' },
+          verbose: { type: 'boolean' },
         },
         usage,
       );
@@ -89,13 +97,19 @@ export default {
       const dir = await resolveGame(positionals[0]);
       if (madeByKit(dir))
         throw new Error(
-          `${shown(dir)} was made with the kit: its dev server is the kit's (${CMD} dev, with @xgamesfun/kit).`,
+          `${shown(dir)} was made with the game-making kit. Its dev server is the kit's own, which runs only where the kit is installed. The kit is not released yet.`,
         );
       const say = values.json ? m => console.error(m) : m => console.log(m);
       const { startDev } = await import('../lib/dev/index.mjs');
       let dev;
       try {
-        dev = await startDev(dir, { port, plan, noBuild: values['no-build'] === true, log: say });
+        dev = await startDev(dir, {
+          port,
+          plan,
+          noBuild: values['no-build'] === true,
+          verbose: values.verbose === true,
+          log: say,
+        });
       } catch (e) {
         throw listenRefusal(e, port) ?? e;
       }
@@ -109,14 +123,14 @@ export default {
           plan: dev.plan,
         });
       else {
-        say(`\n${shown(dir)} on this machine: ${dev.url}`);
-        say(`  server: ${dev.server ? (dev.server.running ? 'running' : 'not running (above)') : 'none (no server/)'}`);
+        say(`\n${shown(dir)} is running at ${dev.url}  (Ctrl+C stops it)`);
         say(
-          `  sign-in, saves, scores: a local player, with the ${dev.store.plan.name} plan's limits; kept in ${shown(dev.store.file)}`,
+          `  server: ${dev.server ? (dev.server.running ? 'running' : 'not running (above)') : 'none (no server/)'} · sign-in: a local player · public project files: ${dev.files}/`,
         );
-        say(`  project files (env.GF.files, xcore files): public ones at ${dev.files}/, an origin of their own`);
-        say(`  economy RPC: ${dev.rpc}`);
-        say('Ctrl+C stops it.');
+        if (values.verbose) {
+          say(`  saves and scores: kept in ${shown(dev.store.file)}, with the ${dev.store.plan.name} plan's limits`);
+          say(`  economy RPC: ${dev.rpc}`);
+        }
       }
       if (values.open) {
         const { openUrl } = await import('../lib/open.mjs');

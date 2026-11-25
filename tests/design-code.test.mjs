@@ -102,7 +102,7 @@ test('a claim multiplied by a boost a code lookup gives, with no offchain: code-
   );
   const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
   assert.match(md, /## Design and code/);
-  assert.match(md, /\*\*Drafted from code: confirm each with the person before adding\.\*\*/);
+  assert.match(md, /\*\*Drafted from code: confirm each before adding\.\*\*/);
   const json = JSON.parse(/```json\n([\s\S]*?)\n```/.exec(md.slice(md.indexOf('## Design and code')))[1]);
   assert.deepEqual(json.offchain, [f.draft]);
   const saved = JSON.parse(await readFile(path.join(r.outDir, 'review.json'), 'utf8'));
@@ -110,7 +110,7 @@ test('a claim multiplied by a boost a code lookup gives, with no offchain: code-
   // the real spec is never touched
   assert.equal(JSON.parse(await readFile(path.join(dir, 'xsolana.json'), 'utf8')).offchain, undefined);
   // the command's one line
-  const cli = run(['review', dir], { env: { GAMESFUN_SOLANA: '' } });
+  const cli = run(['review', dir, '--verbose'], { env: { GAMESFUN_SOLANA: '' } });
   assert.match(
     cli.stdout,
     /^design and code: 1 conversion in server\/ \(1 undeclared\), 0 declared offchain \(0 unbuilt\)/m,

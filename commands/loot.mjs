@@ -5,12 +5,12 @@
 // to the person's own RPC or to the tools' own default, never to the shared relay (see `rpcFor`). `add` is this package's
 // own: the page client into a game where its page is served (a brought game: the folder its build copies as it is;
 // ../lib/loot-add.mjs).
-import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
-import { ECONOMY_FILE, NO_SOLANA, solanaCommand, solanaHas } from '../lib/economy.mjs';
+import { ECONOMY_FILE, NO_SOLANA, solanaCommand, solanaHas, solanaRoot } from '../lib/economy.mjs';
 import { addLoot } from '../lib/loot-add.mjs';
 import { economyCluster, solanaRpc } from '../lib/solana-rpc.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -18,43 +18,42 @@ import { NO_REVIEW } from '../lib/review.mjs';
 
 const usage = `Usage: xcore loot <command> [options]
 
-A game's economy on loot, one shared Solana program (devnet by default; mainnet, real money and not independently
-audited, when its xsolana.json says "network": "mainnet"), with @xgamesfun/solana's tools.
-  xcore loot connect               add its tools (xsolana_*) and its xsolana-economy skill to Claude Code and Codex
-  xcore loot add [game]            where the game's economy (${ECONOMY_FILE}) and its page client (gf/loot/) go, and the
-                                   copy once the economy is there (a brought game: the folder its build copies as it is)
-  xcore loot check|simulate|cost|explain [file]   refusals and warnings; where the money goes; what it costs; in words
-  xcore loot review [file]         what a cheater gets from each route that pays, and the trade-offs in words (xcore
-                                   review adds the game's server and, with --live, the published game)
-  xcore loot token <mint>          a coin made elsewhere, read from the chain: its entry for the economy's "tokens",
-                                   with what its mint's own keys can do (mint more, freeze, a fee on transfers)
-  xcore loot keygen <file>         a key file for the game's economy, outside any repository (~/.config/xsolana/<game>.json):
-                                   it prints the key's address to send SOL to (devnet's, or real SOL on mainnet), never the key. The key is the
-                                   project's owner for good: whoever can read the file controls it, and nothing
-                                   restores a lost one
-  xcore loot approve [file] --keypair <keyfile>
-                                   in a game's folder: everything putting its economy live would send, signed by that
-                                   key file. It sends nothing until it is run again with the code it prints
-                                   (--yes <code>), once the person whose game it is has read that and said yes
-  xcore loot approve [file] --browser
-                                   the same on a page on this computer, signed in a browser wallet: only when asked
-                                   for, and run by the person themselves (it serves until the page says it is live)
-  xcore loot help                  everything else xsolana does (its help says \`xsolana <command>\`: run each as
-                                   \`xcore loot <command>\`)
-A tool's command (guide, examples, check … status, token) takes --json: the kit's whole answer, passed on as it
-gives it. ${CMD} connect adds these tools and xcore's own skill in one go.
-The file is ${ECONOMY_FILE} (loot.json in a game made before it was named so). Its RPC is XSOLANA_RPC_URL (in .env),
-else xgames.fun's shared devnet RPC. Published, the page uses the shared relay, which counts every call toward the game's
-plan, unless the game brings its own RPC: ${CMD} add rpc (docs/SERVER.md, "The economy's own RPC"). Going live
-(approve) sends through XSOLANA_RPC_URL when it is set, else through Solana's public devnet RPC: the shared relay
-passes only loot's own transactions, and a setup also makes mints and token accounts. Where the public RPC refuses
-you, set XSOLANA_RPC_URL to a devnet RPC of your own.`;
+Build and run a game's economy on loot, one shared Solana program, with @xgamesfun/solana's tools (xsolana). The
+economy runs on devnet by default. It runs on mainnet (real money; loot is not independently audited) only when its
+xsolana.json says "network": "mainnet". Fees: see docs/FEES.md.
 
-const ADD_USAGE = `Usage: xcore loot add [game] [--json]
+xcore's own:
+  xcore loot add [game]   say where the game's economy (${ECONOMY_FILE}) and its page client (gf/loot/) go, and copy
+                          the client once the economy exists (for an adopted game: into the folder its build copies
+                          unchanged)
 
-Where the game's economy (${ECONOMY_FILE}) goes, and once it is there, its page client copied beside it (gf/loot/, a
-copy: never edit it; publish brings it up to date). A brought game with a build keeps both in the folder its build
-copies as it is (gamesfun.json page.static), so every build carries them. It prints the next steps.`;
+Every other command is the economy tools' own, run here as xcore loot <command> (the list below comes from the installed
+@xgamesfun/solana; xcore loot <command> --help shows one command's help). Going live (approve) and handing a project to
+a new owner (handover) print what they would send with a code and send nothing until you run them again with
+--yes <code>, after the game's owner has read the printout and agreed. For real money, signing with a browser wallet
+(approve --browser), which can keep its key on a hardware device, is the safer choice: see docs/ECONOMY.md, "Going
+live". Every tool command accepts --json and passes on the tools' full answer unchanged. ${CMD} connect adds these
+tools and xcore's own skill in one step.
+
+The economy file is ${ECONOMY_FILE} (loot.json in games made before the rename).
+
+RPC:
+  - Locally, the tools use XSOLANA_RPC_URL (from .env), else xgames.fun's shared devnet RPC.
+  - Once published, the page uses xgames.fun's shared relay, which counts every call toward the game's plan, unless
+    the game has its own RPC: ${CMD} add rpc (docs/SERVER.md, "The economy's own RPC").
+  - Going live (approve) sends through XSOLANA_RPC_URL when it is set, else through Solana's public devnet RPC. The
+    shared relay only passes loot's own transactions, and a setup also creates mints and token accounts. If the
+    public RPC refuses your requests, set XSOLANA_RPC_URL to a devnet RPC of your own.`;
+
+const ADD_USAGE = `Usage: xcore loot add [game] [--verbose] [--json]
+
+Show where the game's economy file (${ECONOMY_FILE}) goes. Once the file exists, copy the economy's page client next
+to it (gf/loot/: the client bundled and minified, play/index.js and chain/rpc.js, with wallets.js). It is a managed
+copy: do not edit it. Run loot add again to refresh it after @xgamesfun/solana changes; publish does too.
+
+For an adopted game with a build, both go in the folder the build copies unchanged (gamesfun.json page.static), so
+every build includes them. It prints the next steps in short; --verbose prints every note, and --json has both
+(next and steps).`;
 
 /** xsolana's commands that read an economy file ([file], default xsolana.json). */
 const ON_FILE = new Set(['check', 'simulate', 'cost', 'explain', 'review', 'publish', 'status', 'approve']);
@@ -106,33 +105,44 @@ export function rpcFor(command, env = process.env, rpc = solanaRpc(env)) {
 
 export default {
   name: 'loot',
-  summary:
-    'a Solana economy on loot (@xgamesfun/solana): connect its tools, add its page client, check it, put it live',
+  summary: "build and run a Solana economy on loot (@xgamesfun/solana's tools)",
   usage,
-  helpFor: args => (args[0] === 'add' ? ADD_USAGE : usage),
+  helpFor: args => lootHelp(args),
   run: async args => {
     if (args[0] === '--help' || args[0] === '-h') {
-      console.log(usage);
+      console.log(lootHelp([]));
       return 0;
     }
     // no subcommand (--json alone names none): a usage mistake, said as every command says one
     if (args.every(a => a === '--json'))
       return guard(() => {
-        throw new UsageError(usage);
+        throw new UsageError(
+          `Name a command: add, connect, check, simulate, cost, explain, review, token, keygen, approve or help.\n\n${usage}`,
+        );
       }, args);
     if (args[0] === 'add')
       return guard(async () => {
-        const { values, positionals } = parse(args.slice(1), {}, ADD_USAGE);
+        const { values, positionals } = parse(args.slice(1), { verbose: { type: 'boolean' } }, ADD_USAGE);
         const dir = await resolveGame(positionals[0]);
         const r = await addLoot(dir);
         if (values.json)
-          return printJson({ game: shown(dir), home: shown(r.home), economy: r.economy, page: r.page, steps: r.steps });
+          return printJson({
+            game: shown(dir),
+            home: shown(r.home),
+            economy: r.economy,
+            page: r.page,
+            next: r.next,
+            steps: r.steps,
+          });
         console.log(
           r.economy
             ? `${shown(dir)}: its economy is ${shown(r.economy)}; ${r.page?.changed ? `copied ${r.page.package} ${r.page.version}'s page client (${r.page.files} files)` : "loot's page client is current"} in ${shown(path.join(r.home, 'gf', 'loot'))}.`
             : `${shown(dir)} has no economy yet: its ${ECONOMY_FILE} goes in ${shown(r.home) === '.' ? 'this folder' : `${shown(r.home)}/`}.`,
         );
-        for (const s of r.steps) console.log(`  - ${s}`);
+        const steps = values.verbose ? r.steps : r.next;
+        console.log(['', 'Next:', ...steps.map((s, i) => `  ${i + 1}. ${s}`)].join('\n'));
+        if (!values.verbose && r.steps.length > r.next.length)
+          console.log(`\nDetails (${r.steps.length} notes): ${CMD} loot add ${shown(dir)} --verbose`);
         return 0;
       }, args);
     // --json goes to the kit as it is, and its answer comes back untouched: the kit's JSON is the contract
@@ -183,9 +193,43 @@ export default {
   },
 };
 
-/** xsolana's commands a person runs as `xcore loot <command>`. */
-const COMMANDS =
-  'guide|examples|check|simulate|cost|explain|review|publish|keygen|approve|status|token|connect|mcp|tool|version|help';
+/** xsolana's commands a person runs as `xcore loot <command>`: the ones its own help lists (read from the installed
+ *  package's bin, where each is a key of its COMMANDS table), else these. */
+const KNOWN =
+  'guide|examples|check|simulate|cost|explain|review|publish|keygen|approve|handover|status|token|client|connect|mcp|tool|version|help';
+let commands = null;
+export function toolCommands(env = process.env) {
+  if (commands) return commands;
+  const found = new Set(KNOWN.split('|'));
+  const root = solanaRoot(env);
+  try {
+    const bin = readFileSync(path.join(root, 'bin', 'xsolana.mjs'), 'utf8');
+    for (const m of bin.matchAll(/^ {2}([a-z][a-z-]*): \{\s*\n\s+group:/gm)) found.add(m[1]);
+  } catch {
+    /* no package here: the known list */
+  }
+  return (commands = [...found]);
+}
+/** The tools' own text for `args` (`help`, `<command> --help`), said as xcore's, or null when they are not here. */
+function toolsText(args) {
+  const xsolana = solanaCommand();
+  if (!xsolana) return null;
+  const r = spawnSync(xsolana[0], [xsolana[1], ...args], { encoding: 'utf8' });
+  return r.status === 0 && r.stdout ? ownWords()(r.stdout).trimEnd() : null;
+}
+/** `xcore loot --help` and `xcore loot <command> --help`: ours for add; the tools' own for theirs; else ours with the
+ *  tools' list of commands under it. */
+export function lootHelp(args) {
+  if (args[0] === 'add') return ADD_USAGE;
+  if (args[0] && toolCommands().includes(args[0])) return toolsText([args[0], '--help']) ?? `${NO_SOLANA}\n\n${usage}`;
+  // (its own first lines name it xsolana; the commands below them are said as xcore's)
+  const list = toolsText(['help'])
+    ?.split('\n')
+    .filter(l => !/^(xsolana: |Usage: xsolana )/.test(l))
+    .join('\n')
+    .trim();
+  return list ? `${usage}\n\nThe economy tools' commands:\n\n${list}` : `${usage}\n\n${NO_SOLANA}`;
+}
 /** Its tools an agent calls (xsolana_check …) that are also a command here. */
 const TOOLS = 'guide|examples|check|simulate|cost|explain|review|publish|status|token';
 
@@ -196,6 +240,7 @@ const TOOLS = 'guide|examples|check|simulate|cost|explain|review|publish|status|
  * said as it is: it is the command the agent runs, so a dry run shows exactly what is registered.
  */
 export function ownWords({ file = null, named = null } = {}) {
+  const COMMANDS = toolCommands().join('|');
   const npx = new RegExp(String.raw`npx -y (?:--package=)?@xgamesfun/solana@[\w.-]+(?: xsolana)? (${COMMANDS})\b`, 'g');
   const own = new RegExp(String.raw`(^|[\s\`'"(])(?<!@xgamesfun/solana@[\w.-]+ )xsolana (${COMMANDS})\b`, 'gm');
   const tool = new RegExp(String.raw`\bxsolana_(${TOOLS})\b`, 'g');

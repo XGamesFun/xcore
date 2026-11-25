@@ -8,41 +8,66 @@ import { studioOrigin } from '../lib/publish/client.mjs';
 import { gate } from '../lib/publish/gate.mjs';
 import { buildFailure, pageRoots, runBuild } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
+import { confirmFirstPublish, firstPublish } from '../lib/publish/first.mjs';
 import { reviewNudge } from '../lib/review.mjs';
 import { cardPrinted, drawable } from '../lib/card.mjs';
 import { plural, sizeText } from '../lib/util.mjs';
+import { uploadWords } from '../lib/publish/tree.mjs';
 
-const usage = `Usage: xcore publish [dir] [--draft] [--new] [--title <name>] [--no-card] [--status] [--check [--verify [--port <n>]]] [--json]
+const usage = `Usage: xcore publish [dir] [--draft] [--new] [--title <name>] [--no-card] [--yes <code>] [--status] [--check [--verify [--port <n>]]] [--json]
 
-Put a game on xgames.fun at a link anyone can play: xgames.fun hosts it, you need no server. Sign in first
-(${CMD} login). The game's checks gate it: they must pass on the files you publish (they run now unless nothing
-changed since they last passed; a game you brought: the page check, a game the kit made: its six gates). A game whose
-checks fail goes up as a private draft only, and you are told which checks failed. Files that look like keys, .env
-files and links refuse it; evidence/, hidden files and the makers' notes at the top (README.md, NOTES.md, LAUNCH.md…)
-are left out. Only files xgames.fun does not have yet are uploaded. The link is unlisted: only people you give it to
-find it. Publishing the same folder again makes a new version at the same link. A game with its own server code
-(server/, a gf-server-v1 Worker) sends it bundled as one file, when xgames.fun takes server code; server/ is never a
-public file.
-In a GitHub Actions job with permissions id-token: write, the job's own OIDC token signs it in place of a login.
-A brought game (${CMD} adopt) is built first when it has a build; its published folder (gamesfun.json page.out)
-goes up, with its server/ bundle when it has one.
-Its preview picture: a link to the game, shared on X or in a chat, shows a square card with the game's picture behind
-its title. The picture is assets/card.jpg (or assets/card.png) in the published files: a JPEG or PNG named for what it
-is, at most 1,500,000 bytes, best square at 960×960. Publish stops before anything goes up when there is none or
-xgames.fun cannot draw it (too big, not a JPEG or PNG, named for the other one, cut short, a kind of JPEG it does not
-draw): make one with ${CMD} card [dir], or publish without one with --no-card (or "card": false in gamesfun.json). A
-picture it can draw but that is small (under 600 px a side: blurry) or far from square (cropped to its middle) goes up
-with a warning and its fix. A link shared before can keep its old card for a while (X and chat apps cache it).
-  --draft        a private version in your xgames.fun Studio, no public link
-  --new          publish as a new game (a new link), not an update of this folder's game
-  --title <name> the game's name on xgames.fun (default: its title)
-  --no-card      publish without a preview picture: its link shows a plain card (a gradient with the title)
-  --status       this folder's link and the account it is published from; publishes nothing
-  --check        the offline checks only (files, secrets, backend origins, the server bundle); publishes nothing
-  --verify       with --check: also run the publish gate's checks on these files and remember a pass, so the
-                 publish after it does not run them again (the GitHub Action's check step)
-  --port <n>     with --verify: the port its page check serves on (default: any free one)
-GAMESFUN_STUDIO=<origin> publishes to another xgames.fun (a local Studio while developing).`;
+Publish a game to xgames.fun at a link anyone can play. xgames.fun hosts it; you do not need a server.
+
+Sign in first with ${CMD} login. In a GitHub Actions job with "permissions: id-token: write", the job's OIDC token
+is used instead of a login.
+
+The first publish of a folder creates a new game on the account this computer is signed in to, and takes one of
+its game slots. It first prints the account, the game's name and the slot, and changes nothing. At a terminal, type
+"publish" to go on; otherwise run the same command again with --yes <code>, using the code it prints. Publishing a
+folder that is already linked to a game updates that game without asking.
+
+What happens:
+  - A game you adopted (${CMD} adopt) is built first if it has a build. Its published folder (gamesfun.json
+    page.out) is uploaded, with its server/ bundle if it has one.
+  - The page check (${CMD} check) must pass on the files being published. It runs again unless nothing changed
+    since it last passed.
+  - If the checks fail, the game is uploaded only as a private draft, and you are told which checks failed.
+  - Files that look like keys, .env files and symbolic links stop the publish. evidence/, hidden files and notes at
+    the top level (README.md, NOTES.md, LAUNCH.md and similar) are left out.
+  - Only files xgames.fun does not already have are uploaded.
+  - Server code (server/, a gf-server-v1 Worker) is sent as one bundled file, where xgames.fun accepts server code.
+    server/ is never served as public files.
+  - The link is unlisted: only people you give it to can find it. Publishing the same folder again makes a new
+    version at the same link.
+
+Preview picture:
+  A link to the game shared on X or in a chat shows a square card with the game's picture behind its title. The
+  picture is assets/card.jpg (or assets/card.png) in the published files: a JPEG or PNG with the matching extension,
+  at most 1,500,000 bytes, ideally 960×960.
+  - With no picture, publish makes one from the newest ${CMD} check screenshot (evidence/verify-N/), says so, and goes
+    on. Replace it with ${CMD} card [dir] --force.
+  - Publish stops before uploading anything if there is no picture and no screenshot, or xgames.fun cannot draw the
+    picture (too big, not a JPEG or PNG, the wrong extension, truncated, or a JPEG variant it does not support). Make
+    one with ${CMD} card [dir], or publish without one with --no-card (or "card": false in gamesfun.json).
+  - A picture that is small (under 600 px a side: blurry) or far from square (cropped to its middle) is uploaded
+    with a warning and its fix.
+  - X and chat apps cache cards, so a link shared earlier can show the old card for a while.
+
+Options:
+  --draft        publish a private version in your xgames.fun Studio, with no public link
+  --new          publish as a new game (a new link), not as an update of this folder's game
+  --title <name> the game's name on xgames.fun (default: its page title)
+  --yes <code>   confirm the first publish of a folder (a new game, and a slot), with the code that was printed
+  --no-card      publish without a preview picture: the link shows a plain card (a gradient with the title)
+  --status       show this folder's link and the account it is published from; publishes nothing
+  --check        run only the offline checks (files, secrets, backend origins, the server bundle); publishes nothing
+  --verify       with --check: also run the publish checks on these files and remember a pass, so the next publish
+                 does not run them again (the GitHub Action's check step)
+  --port <n>     with --verify: the port the page check serves on (default: any free port)
+  --json         print the result as JSON
+
+Environment:
+  GAMESFUN_STUDIO=<origin>  publish to another xgames.fun (a local Studio during development)`;
 
 /**
  * The publish command. check, label, prepare, rpcFile: as publishGame takes them (the kit's six gates, its name, its
@@ -63,7 +88,7 @@ export function publishCommand({
   const own = { check, label, ...(prepare ? { prepare } : {}), ...(rpcFile ? { rpcFile } : {}) };
   return {
     name: 'publish',
-    summary: 'put a game on xgames.fun at a link anyone can play (unlisted)',
+    summary: 'publish the game to xgames.fun at an unlisted link anyone can play',
     usage,
     run: args =>
       guard(async () => {
@@ -78,6 +103,7 @@ export function publishCommand({
             verify: { type: 'boolean' },
             port: { type: 'string' },
             'no-card': { type: 'boolean' },
+            yes: { type: 'string' },
           },
           usage,
         );
@@ -151,6 +177,12 @@ export function publishCommand({
           if (!values.json && out.verify) console.log(verifyLine(out.verify, shown(dir)));
           return out.ok ? 0 : 1;
         }
+        // the first publish of a folder makes a game on the signed-in account and takes a slot: confirmed first
+        const first = await firstPublish(dir, { origin, newGame: values.new, title: values.title ?? null });
+        if (first) {
+          const go = await confirmFirstPublish(first, { args, values });
+          if (go !== true) return go;
+        }
         const r = await publishGame(dir, {
           ...own,
           origin,
@@ -217,8 +249,7 @@ function statusLine(where, origin, s) {
 function checkLines(where, out, p) {
   const talks = p.backend.length ? ` It may talk to: ${p.backend.join(', ')}.` : '';
   const lines = [
-    `${where}: ${plural(out.files, 'file')}${out.added?.length ? ` (with the ${plural(out.added.length, 'record')} xgames.fun keeps: ${out.added.join(', ')})` : ''}, ${sizeText(out.bytes)}, nothing refused.${talks} ` +
-      `Left out: ${out.skipped.join(', ') || 'nothing'}.`,
+    `${where}: ${uploadWords(out)}; nothing refused.${talks} ` + `Left out: ${out.skipped.join(', ') || 'nothing'}.`,
   ];
   const sv = out.server;
   if (sv?.has && sv.ok) {
@@ -248,7 +279,7 @@ function verifyLine(v, where) {
   const evidence = v.run && !v.reused ? ` Evidence: ${where}/evidence/${v.run}/.` : '';
   if (v.pass) {
     const reused = v.reused ? ', these exact files passed before' : '';
-    return `checks: PASS (${v.passed}/${v.ran}${reused}); publish will not run them again for these files.${evidence}`;
+    return `checks: PASS (${v.passed} of ${v.ran} passed${reused}); publish will not run them again for these files.${evidence}`;
   }
   const why = failedNames(v.failed) || (v.changedDuring ? 'the files changed while it ran' : 'the checks did not run');
   return `the checks did not pass: ${why}. A publish now saves a private draft.${evidence}`;

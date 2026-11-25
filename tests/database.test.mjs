@@ -797,7 +797,7 @@ test('a game the stock server served keeps gf.db when it gets a server of its ow
   const index = await readFile(path.join(dir, 'server', 'index.js'), 'utf8');
   assert.match(index, /import \{ handleDocs \} from '\.\/gf-docs\.js';/);
   assert.ok(index.indexOf('handleDocs(request, env)') < index.indexOf('handleRooms(request, env)'), 'routed first');
-  assert.match(r.steps.join('\n'), /server\/gf-docs\.js answers gf\.db there from the same documents/);
+  assert.match(r.steps.join('\n'), /server\/gf-docs\.js answers GamesFun\.db there from the same documents/);
   const docs = await readFile(path.join(dir, 'server', 'gf-docs.js'), 'utf8');
   assert.match(docs, /export function createData\(/, "database.js's documents code is in it");
   assert.doesNotMatch(docs, /__DOCS_CORE__|DurableObject|---- the documents' code/);
@@ -834,7 +834,7 @@ test('a server of its own with database.collections and no api/db/ route: said, 
   await writeFile(path.join(dir, 'server', 'index.js'), SERVER);
   const b = await bundleServer(dir);
   assert.equal(b.docsUnrouted, true);
-  assert.match(b.warnings.join('\n'), /does not route api\/db\/: every gf\.db call answers 404/);
+  assert.match(b.warnings.join('\n'), /does not route api\/db\/: every GamesFun\.db call answers 404/);
   g.state.me = { server: { contracts: ['gf-server-v1'], features: ['d1'] } };
   await assert.rejects(
     publishGame(dir, { origin: g.origin, env, check: passing }),

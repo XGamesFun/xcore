@@ -3,7 +3,7 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, notOneOf, verbNamed } from '../lib/cli.mjs';
 import { named, resolveGame } from '../lib/games.mjs';
 import {
   filesGet,
@@ -19,29 +19,43 @@ import { consented } from '../lib/consent.mjs';
 import { CMD, typedPath } from '../lib/command.mjs';
 import { sha256 } from '../lib/util.mjs';
 
-const usage = `Usage: xcore files ls [prefix/] [--dir <game>] [--live] [--json]
+const usage = `Usage: xcore files list [prefix/] [--dir <game>] [--live] [--json]
        xcore files put <file> [path] [--public] [--type <mime>] [--dir <game>] [--live [--yes <code>]] [--json]
        xcore files get <path> [--out <file>] [--force] [--dir <game>] [--live] [--json]
-       xcore files rm <path> [--dir <game>] [--live [--yes <code>]] [--json]
+       xcore files remove <path> [--dir <game>] [--live [--yes <code>]] [--json]
        xcore files usage [--dir <game>] [--live] [--json]
 
-The game's project files: files you or the game's server write, never players (replays, generated levels, content
-packs, a large saved world). The server reads and writes them with env.GF.files (docs/SERVER.md, "Project files").
-Without --live, the ones on this machine that ${CMD} dev gives the server (kept in .gamesfun/dev/files/, never
-published); with --live, the game's files on xgames.fun (each call kept in the game's audit log).
-  ls [prefix/]       the files, or those in one folder ("replays/")
-  put <file> [path]  a file from this machine, at [path] (default: its name). --public serves it at
-                     https://<slug>.xgamesusercontent.com/<path>, another site (here: the files origin xcore dev
-                     prints); without it only the game's server reads it. Up to 25 MB a file
-  get <path>         a file's bytes, into --out <file> (default: its name here; --force writes over one)
-  rm <path>          delete one
-  usage              the bytes kept, against the game's cap (Free: 100 MB)
-A path is letters, digits, . _ and -, with / between folders: levels/forest-3.json.
---dir <game> names the game's folder (default: the one you are in).
-A new path is put at once. Writing over a file xgames.fun has already (put --live), or deleting one (rm --live), can't
-be undone: xgames.fun keeps one copy of a file and no earlier one. It first prints what it replaces or deletes with a
-code, and changes nothing; it goes on when run again with --yes <code>. A code printed for another change is refused.
-With --json, the printout is {planned: true, code, plan, next}. The files on this machine change at once.`;
+--dir <folder> names the game's folder (default: the current directory). ls also means list, and rm or delete also mean remove.
+
+Manage the game's project files: files written by you or by the game's server, never by players (replays, generated
+levels, content packs, a large saved world). The server reads and writes them with env.GF.files (docs/SERVER.md,
+"Project files").
+
+Without --live, the commands use the local files that ${CMD} dev gives the server (stored in .gamesfun/dev/files/,
+never published). With --live, they use the game's files on xgames.fun, and each call is recorded in the game's
+audit log.
+
+Commands:
+  list [prefix/]     list the files, or those in one folder ("replays/")
+  put <file> [path]  upload a file from this machine to [path] (default: its file name). Up to 25 MB per file.
+                     --public serves it at https://<slug>.xgamesusercontent.com/<path>, a separate site (locally: the
+                     files origin ${CMD} dev prints); without --public, only the game's server can read it.
+                     --type <mime> sets its content type
+  get <path>         download a file to --out <file> (default: its name, in the current folder; --force overwrites)
+  remove <path>      delete a file
+  usage              show the bytes stored, against the game's cap (Free: 100 MB)
+
+Options:
+  --dir <game>       the game's folder (default: the current directory)
+
+A path uses letters, digits, ".", "_" and "-", with "/" between folders: levels/forest-3.json.
+
+Confirming live changes:
+  A new path is uploaded immediately. Overwriting a file xgames.fun already has (put --live) or deleting one
+  (remove --live) cannot be undone: xgames.fun keeps one copy of each file and no earlier versions. So these first print
+  what would be replaced or deleted, with a code, and change nothing. Run the command again with --yes <code> to
+  apply it. A code printed for a different change is refused. With --json, the printout is
+  {planned: true, code, plan, next}. Local files change immediately.`;
 
 /** A file xgames.fun has, in the words of a printout: "1.2 MB, public, image/png". */
 const facts = f =>
@@ -49,7 +63,7 @@ const facts = f =>
 
 export default {
   name: 'files',
-  summary: "the game's project files (env.GF.files): ls, put, get, rm, usage; here, or --live on xgames.fun",
+  summary: "manage the game's project files (env.GF.files), locally or on xgames.fun",
   usage,
   run: args =>
     guard(async () => {
@@ -66,16 +80,18 @@ export default {
         },
         usage,
       );
-      const [verb, a, b] = positionals;
-      if (!['ls', 'put', 'get', 'rm', 'usage'].includes(verb)) throw new UsageError(usage);
-      if (['put', 'get', 'rm'].includes(verb) && !a)
+      const [word, a, b] = positionals;
+      const verbs = ['list', 'put', 'get', 'remove', 'usage'];
+      const verb = verbNamed(word, verbs);
+      if (!verb) throw new UsageError(`${notOneOf(word, verbs)}\n\n${usage}`);
+      if (['put', 'get', 'remove'].includes(verb) && !a)
         throw new UsageError(`${verb} needs ${verb === 'put' ? 'a file' : 'a path'}\n\n${usage}`);
       const dir = await resolveGame(values.dir);
       const live = !!values.live;
       const where = live ? 'on xgames.fun' : 'on this machine';
       const json = values.json ? printJson : null;
 
-      if (verb === 'ls') {
+      if (verb === 'list') {
         const r = await filesList(dir, { live, prefix: a ?? '' });
         if (json) return json(r);
         if (!r.items.length) console.log(`${named(dir)} has no project files ${where}${a ? ` in ${a}` : ''}.`);
@@ -144,7 +160,7 @@ export default {
         console.log(`Got ${r.path} from ${where} (${mb(r.bytes)}, ${r.type}) into ${out}.`);
         return 0;
       }
-      if (verb === 'rm') {
+      if (verb === 'remove') {
         if (live) {
           const there = await liveFile(dir, a);
           if (!there.file) {

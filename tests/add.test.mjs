@@ -18,6 +18,7 @@ import {
   addRpc,
   addSignin,
   addVouchers,
+  clientSource,
   engineOf,
   keepImports,
   withAutoload,
@@ -130,7 +131,7 @@ test("the database: a document by id alone, from 0.1.0 pages: the player's own i
   await data.put('levels', 'abc123', { name: 'Moon' }, {}, 'p1');
   const r = await data.get('levels', 'abc123', {}, 'p2');
   assert.deepEqual([r.ok, r.status, r.code], [false, 400, 'owner']);
-  assert.match(r.why, /gf\.db\.get\('levels', 'abc123', \{owner\}\)/);
+  assert.match(r.why, /GamesFun\.db\.get\('levels', 'abc123', \{owner\}\)/);
   assert.equal((await data.get('levels', 'abc123', { owner: 'p1' }, 'p2')).item.value.name, 'Moon');
   // a collection only its owners read never says that another player's document exists
   await data.put('notes', 'n1', 'secret', {}, 'p1');
@@ -454,10 +455,16 @@ test('signin for a web game: gamesfun.js beside the page and loaded first; again
   assert.equal(engineOf(dir), 'page');
   const r = await addSignin(dir);
   assert.equal(r.engine, 'page');
-  assert.equal(
-    await readFile(path.join(dir, 'gamesfun.js'), 'utf8'),
-    await readFile(path.join(ROOT, 'lib/client/gamesfun.js'), 'utf8'),
+  // the copy is the package's readable gamesfun.js, minified, with its version in a banner
+  const copy = await readFile(path.join(dir, 'gamesfun.js'), 'utf8');
+  assert.equal(copy, clientSource());
+  const source = await readFile(path.join(ROOT, 'lib/client/gamesfun.js'), 'utf8');
+  assert.ok(copy.length < source.length / 2, `${copy.length} of ${source.length}`);
+  assert.match(
+    copy,
+    /^\/\*! gamesfun\.js \d+\.\d+\.\d+, minified by xcore; readable source: @xgamesfun\/xcore lib\/client\/gamesfun\.js \(MIT\) \*\/\n/,
   );
+  assert.match(copy, /globalThis\.GamesFun/, 'it sets the same global');
   assert.match(
     await readFile(path.join(dir, 'index.html'), 'utf8'),
     /<head[^>]*>\s*<script src="\.\/gamesfun\.js"><\/script>/,
@@ -485,7 +492,7 @@ test('signin before adopt in a Vite project: gamesfun.js goes in public/, which 
 test('signin for a Godot project: the autoload carries the client; for a Unity project, the WebGL plugin does', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
-  const client = await readFile(path.join(ROOT, 'lib/client/gamesfun.js'), 'utf8');
+  const client = clientSource();
   const godot = path.join(tmp.dir, 'godot');
   await mkdir(godot);
   await writeFile(path.join(godot, 'project.godot'), 'config_version=5\n\n[application]\n\nconfig/name="Moth"\n');
@@ -537,7 +544,7 @@ test("each add says its own steps once: the sign-in's come with whichever add pu
   }
   // the database or the rooms first: the sign-in comes with them, so its steps do too, after the command's own
   for (const [add, own] of [
-    [addDatabase, /^From the game: await gf\.db\.add/],
+    [addDatabase, /^From the game: await GamesFun\.db\.add/],
     [addMultiplayer, /GamesFun\.rooms\.join\(code\)/],
   ]) {
     const tmp2 = await tempDir();
@@ -748,6 +755,15 @@ test('a client copy from an older xcore is named, and add signin brings it up to
   await addSignin(web);
   await writeFile(path.join(web, 'gamesfun.js'), '// an older copy');
   assert.deepEqual(await staleClient(web), ['gamesfun.js']);
+  // the same gamesfun.js, not minified (as xcore before 0.12.0 copied it): current, not stale
+  await writeFile(path.join(web, 'gamesfun.js'), await readFile(path.join(ROOT, 'lib/client/gamesfun.js'), 'utf8'));
+  assert.deepEqual(await staleClient(web), []);
+  const unminified = (await readFile(path.join(ROOT, 'lib/client/godot/gamesfun.gd'), 'utf8')).replace(
+    '__GAMESFUN_SOURCE_B64__',
+    Buffer.from(await readFile(path.join(ROOT, 'lib/client/gamesfun.js'), 'utf8')).toString('base64'),
+  );
+  await writeFile(gd, unminified);
+  assert.deepEqual(await staleClient(godot), []);
 });
 
 test('a Godot project with no Web export gets a single-threaded Web preset, once', async t => {
@@ -1001,6 +1017,9 @@ test('add vouchers: refused without an economy; the server, the signer copy, the
   const bare = await fixture(other, 'static');
   await assert.rejects(addVouchers(bare), /has no economy yet/);
   const { dir, r } = await voucherGame(tmp);
+  // the seed is a secret: .dev.vars goes in .gitignore at once, even in a folder that is not in git yet
+  assert.equal(await readFile(path.join(dir, '.gitignore'), 'utf8'), '.dev.vars\n');
+  assert.ok(r.written.includes('wrote .gitignore (.dev.vars holds secrets: keep it out of git)'), r.written.join('\n'));
   await writeFile(path.join(dir, '.gitignore'), 'node_modules\n');
   assert.match(
     await readFile(path.join(dir, 'server', 'vouchers.js'), 'utf8'),

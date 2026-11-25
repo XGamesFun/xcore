@@ -11,7 +11,7 @@ import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { guard, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, nearest, printJson, UsageError } from '../lib/cli.mjs';
 import { CMD } from '../lib/command.mjs';
 import { readJson } from '../lib/util.mjs';
 import { madeByKit } from '../lib/games.mjs';
@@ -39,15 +39,20 @@ export function findKit({ cwd = process.cwd(), env = process.env, here = HERE } 
 // the flags of check, publish, dev and backend that take a value: their value is never the game's folder
 // (tests/states-cli.test.mjs holds this list to the flags those commands' usage names)
 const VALUE_FLAGS = Object.fromEntries(
-  ['out', 'port', 'plan', 'title', 'url', 'origin'].map(f => [f, { type: 'string', multiple: true }]),
+  ['out', 'port', 'plan', 'title', 'url', 'origin', 'yes'].map(f => [f, { type: 'string', multiple: true }]),
 );
+
+/** The kit's `backend` subcommands (its builder/commands/backend.mjs). */
+const KIT_BACKEND = new Set(['agents', 'check', 'connect', 'disconnect', 'password', 'status', 'use']);
 
 /** Does this command, with these arguments, belong to the kit even though this package has a command by its name?
  *  (`connect`: the kit's own connect where there is a kit, this package's where there is none.) */
 export function kitsTurn(name, args) {
   if (name === 'connect') return true;
   const { positionals } = parseArgs({ args, options: VALUE_FLAGS, strict: false, allowPositionals: true });
-  if (name === 'backend') return !(positionals[0] === 'use' && positionals[1] === 'custom');
+  // the kit's backend commands (connect, use supabase, check …); any other word is a usage mistake of ours
+  if (name === 'backend')
+    return KIT_BACKEND.has(positionals[0]) && !(positionals[0] === 'use' && positionals[1] === 'custom');
   if (name === 'publish' || name === 'check' || name === 'dev') {
     const dir = path.resolve(positionals[0] ?? '.');
     return madeByKit(dir);
@@ -77,8 +82,9 @@ function runKit(kit, args) {
   });
 }
 
-const NO_KIT = `That is the kit's (@xgamesfun/kit): it makes games, the studio page, verify and the build loop. It is not
-installed here: run xcore inside a folder that has the kit, or set GAMESFUN_KIT=<folder> to use it from anywhere.`;
+const NO_KIT = `That command belongs to the game-making kit (making a game from an idea, the studio page, verify and the
+build loop). The kit is not released yet, so the command is not available here. With a copy of the kit, run xcore
+inside its folder, or set GAMESFUN_KIT=<folder>.`;
 
 /** The kit's own commands (@xgamesfun/kit's builder/commands, less those this package has): only these are said to be
  *  the kit's when there is no kit. */
@@ -103,47 +109,35 @@ export const KIT_COMMANDS = new Set([
   'voice-room',
 ]);
 
-/** Edit distance (insertions, deletions, substitutions and swaps of two letters side by side). */
-function distance(a, b) {
-  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
-  for (let j = 1; j <= b.length; j++) d[0][j] = j;
-  for (let i = 1; i <= a.length; i++)
-    for (let j = 1; j <= b.length; j++) {
-      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
-        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
-    }
-  return d[a.length][b.length];
-}
-
-/** The command a mistyped name most likely meant: the nearest of `names` within a couple of letters, or null. */
-export function nearest(name, names) {
-  const word = name.toLowerCase();
-  let best = null;
-  for (const n of names) {
-    const dist = distance(word, n);
-    if (dist <= Math.max(1, Math.floor(n.length / 3)) && (!best || dist < best.dist)) best = { n, dist };
-  }
-  return best?.n ?? null;
-}
+/** (the nearest name: ../lib/cli.mjs, which every command's subcommands use too) */
+export { nearest };
 
 /** What an unknown command is told: the kit's (only for one of its commands), else the nearest of ours. */
 export function unknownCommand(name, commands) {
-  if (KIT_COMMANDS.has(name)) return `"${name}" is the kit's command. ${NO_KIT}`;
+  if (KIT_COMMANDS.has(name)) return `"${name}" is a command of the game-making kit. ${NO_KIT}`;
   const near = nearest(name, [...commands.keys(), 'help']);
   return `"${name}" is not an xcore command.${near ? ` Did you mean "${near}"? ${CMD} ${near} --help says what it does.` : ''}`;
 }
 
 function help(commands, kit) {
-  const lines = ['Usage: xcore <command> [options]', '', 'xgames.fun:'];
+  const lines = [
+    'Usage: xcore <command> [options]',
+    ...(CMD === 'xcore' ? [] : [`       (here: ${CMD} <command> [options])`]),
+    '',
+    'Host a web game you already made on xgames.fun, with a backend and an optional Solana economy.',
+    '',
+    'Commands:',
+  ];
   for (const c of commands.values()) lines.push(`  ${c.name.padEnd(10)} ${c.summary}`);
   lines.push(
     '',
-    kit
-      ? `With the kit (${kit}): create, verify, slots, build and the rest; ${CMD} help there lists them.`
-      : "Making a game from an idea, the studio page and verify are the kit's (@xgamesfun/kit).",
-    '',
-    `Run \`xcore <command> --help\` for a command's options. Already have a game? ${CMD} adopt <folder>.`,
+    ...(kit
+      ? [
+          `The game-making kit is installed (${kit}): create, verify, slots, build and its other commands run there. \`${CMD} help\` lists them.`,
+          '',
+        ]
+      : []),
+    `Run \`${CMD} <command> --help\` for a command's options. To start with a game you have: ${CMD} adopt <folder>`,
   );
   return lines.join('\n');
 }

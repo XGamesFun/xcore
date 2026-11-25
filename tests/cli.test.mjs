@@ -25,25 +25,27 @@ test('help lists its own commands; a kit command with no kit says how to get the
   }
   const connect = run(['backend', 'connect', 'supabase'], { cwd: away.dir });
   assert.equal(connect.status, 1);
-  assert.match(connect.stderr, /@xgamesfun\/kit[\s\S]*Usage: xcore backend use custom/);
+  assert.match(connect.stderr, /game-making kit[\s\S]*not released yet[\s\S]*Usage: xcore backend use custom/);
   const create = run(['create', 'x'], { cwd: away.dir });
   assert.equal(create.status, 1);
-  assert.match(create.stderr, /"create" is the kit's command[\s\S]*@xgamesfun\/kit/);
+  assert.match(create.stderr, /"create" is a command of the game-making kit[\s\S]*not released yet/);
   // a typo is told the nearest command of ours, and is not blamed on the kit
   const typo = run(['pubish', '.'], { cwd: away.dir });
   assert.equal(typo.status, 2);
   assert.match(typo.stderr, /"pubish" is not an xcore command\. Did you mean "publish"\?/);
-  assert.doesNotMatch(typo.stderr, /not released/);
+  assert.doesNotMatch(typo.stderr, /is a command of the game-making kit|not available here/);
+  // nothing it prints names a package npm does not have
+  for (const r of [connect, create]) assert.doesNotMatch(r.stderr, /@xgamesfun\/kit/);
   const unknown = run(['frobnicate'], { cwd: away.dir });
   assert.match(unknown.stderr, /"frobnicate" is not an xcore command\.\n/);
-  assert.doesNotMatch(unknown.stderr, /Did you mean|not released/);
+  assert.doesNotMatch(unknown.stderr, /Did you mean|is a command of the game-making kit|not available here/);
   // --json: the same failures as JSON on stdout, with a code
   const asJson = args => JSON.parse(run([...args, '--json'], { cwd: away.dir }).stdout);
   assert.deepEqual(
     [asJson(['create', 'x']).ok, asJson(['create', 'x']).code, asJson(['pubish']).code],
     [false, 'no-kit', 'unknown-command'],
   );
-  assert.match(asJson(['create', 'x']).error, /^"create" is the kit's command\. .*@xgamesfun\/kit/);
+  assert.match(asJson(['create', 'x']).error, /^"create" is a command of the game-making kit\. .*not released yet/);
   assert.equal(
     run(['--version'], { cwd: away.dir }).stdout.trim(),
     JSON.parse(await (await import('node:fs/promises')).readFile(new URL('../package.json', import.meta.url), 'utf8'))
@@ -58,10 +60,15 @@ test('a usage mistake is answered one way by every command: its words on stderr,
     [[], /^Usage: xcore <command> \[options\]/], // no command
     [['--frob'], /^No command before --frob: xcore <command> \[options\]\.\n\nUsage: xcore <command>/],
     [['frobnicate'], /^"frobnicate" is not an xcore command\./], // no such command
-    [['add'], /^Usage: xcore add /], // no subcommand
-    [['loot'], /^Usage: xcore loot /],
-    [['db'], /^Usage: xcore db /],
-    [['add', 'bogus'], /^Usage: xcore add /], // no such subcommand
+    [['add'], /^Say what to add: signin, [\s\S]*\n\nUsage: xcore add /], // no subcommand: what was wrong, then usage
+    [['loot'], /^Name a command: add, [\s\S]*\n\nUsage: xcore loot /],
+    [['db'], /^Name a subcommand: info, [\s\S]*\n\nUsage: xcore db /],
+    [['embed', 'ls-sites'], /^Unknown subcommand "ls-sites": use list, add or remove\./], // never "no such folder"
+    [['secret', 'lst'], /^Unknown subcommand "lst": use set, list or remove\. Did you mean "list"\?/],
+    [
+      ['add', 'bogus'],
+      /^"bogus" is not something xcore can add\. [\s\S]*\n\nUsage: xcore add [\s\S]*Run `xcore add --help` for the options\.\n$/,
+    ], // no such subcommand
     [['adopt', '.', '--frob'], /^Unknown option '--frob'/], // no such flag
     [['dev', '.', '--port', 'eighty'], /^--port takes a port number/], // a value that is none
   ]) {
@@ -138,10 +145,10 @@ test('with a kit: its commands, publish and check of a game it made, and its bac
 test("the command it tells people to run is one that finds this package (`xcore` on npm is someone else's)", async () => {
   const { commandOf } = await import('../lib/command.mjs');
   const at = root => commandOf({ root, env: {} });
-  assert.equal(
+  assert.match(
     at('/home/a/.npm/_npx/1a2b/node_modules/@xgamesfun/xcore'),
-    'npx -y @xgamesfun/xcore',
-    'run through npx',
+    /^npx -y @xgamesfun\/xcore@(\d+\.\d+\.\d+|latest)$/,
+    'run through npx: pinned to the version that runs (latest when its package.json is not there to read)',
   );
   assert.equal(at('/usr/local/lib/node_modules/@xgamesfun/xcore'), 'xcore', 'installed globally');
   assert.equal(
@@ -149,7 +156,18 @@ test("the command it tells people to run is one that finds this package (`xcore`
     'xcore',
     'installed globally on Windows',
   );
-  assert.equal(at('/home/a/my-game/node_modules/@xgamesfun/xcore'), 'npx xcore', 'installed in the project');
+  assert.match(
+    at('/home/a/my-game/node_modules/@xgamesfun/xcore'),
+    /^npx -y @xgamesfun\/xcore@(\d+\.\d+\.\d+|latest)$/,
+    'installed in the project: pinned, as the README is',
+  );
+  // the version is the installed package's own, read at run time
+  const away = await tempDir();
+  const installed = path.join(away.dir, 'my-game', 'node_modules', '@xgamesfun', 'xcore');
+  await mkdir(installed, { recursive: true });
+  await writeFile(path.join(installed, 'package.json'), JSON.stringify({ name: '@xgamesfun/xcore', version: '9.8.7' }));
+  assert.equal(at(installed), 'npx -y @xgamesfun/xcore@9.8.7');
+  await away.cleanup();
   assert.equal(
     commandOf({ root: '/home/a/xcore', env: {}, cwd: '/home/a/xcore' }),
     'node bin/xcore.mjs',
@@ -166,4 +184,9 @@ test("the command it tells people to run is one that finds this package (`xcore`
     'its checkout, from far away',
   );
   assert.equal(commandOf({ root: '/x', env: { XCORE_COMMAND: 'xc' } }), 'xc');
+  for (const root of [
+    '/home/a/my-game/node_modules/@xgamesfun/xcore',
+    '/home/a/.npm/_npx/1a2b/node_modules/@xgamesfun/xcore',
+  ])
+    assert.doesNotMatch(at(root), /^npx (-y )?xcore\b/, 'never the unscoped package');
 });
