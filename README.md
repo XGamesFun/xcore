@@ -65,9 +65,9 @@ account.
    with sign-in, saves, leaderboards, its server and its rooms. Press Ctrl+C to stop it.
 5. **Publish it** (needs an xgames.fun account). `xcore card .` makes its preview picture, `xcore login` signs this
    computer in, and `xcore publish .` checks the game and publishes it at an unlisted link anyone can play. The first
-   publish of a folder creates a new game on the signed-in account and takes one of its slots, so it first shows the
-   account, the game's name and the slot, and asks you to confirm. A game that fails its check is uploaded only as a
-   private draft.
+   publish of a folder creates a new game on the signed-in account (2 games on Free, 10 on a Creator account), so it
+   first shows the account, the game's name and where it goes, and asks you to confirm. A game that fails its check
+   is uploaded only as a private draft.
 
 [docs/COMMANDS.md](docs/COMMANDS.md) describes what each step reads, writes and prints.
 
@@ -142,26 +142,28 @@ Exit codes: 0 success, 1 failure, 2 usage mistake, and 3 for an INCONCLUSIVE `xc
 - Always refused: `.env` files, symbolic links, key and certificate files, wallet keypairs, and anything in a text file
   that looks like a secret.
 
-| Limit           |                                                                                                 |
-| --------------- | ----------------------------------------------------------------------------------------------- |
-| One game        | 3,000 files, 100 MiB                                                                            |
-| One account     | 30 publishes and 1 GB of new files a day; 100 games                                             |
-| A server bundle | 5 MB                                                                                            |
-| Free            | 2 free slots for everyone; 50 ms of CPU per request, 600 requests a minute; $1 of use a month   |
-| Creator         | a paid slot, $15 per 30 days; 200 ms, 6,000 requests a minute; $10 of use a month per paid slot |
+| Limit           |                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------ |
+| One game        | 3,000 files, 100 MiB                                                                                         |
+| One account     | 30 publishes and 1 GB of new files a day; 2 games on Free, 10 on a Creator account                           |
+| A server bundle | 5 MB                                                                                                         |
+| Free            | every account: up to 2 games; 50 ms of CPU per request, 600 requests a minute; $1 of use a month a game      |
+| Creator         | $15 per 30 days for the account: up to 10 games; 200 ms, 6,000 requests a minute; $10 of use a month, shared |
 
 When a game uses more than its plan includes, it is capped until the month ends: its server is switched off, and its
-pages keep loading. A Creator game with usage credit is not capped. [docs/HOSTING.md](docs/HOSTING.md) has every rule,
-the full plan table, and notes for frameworks and engines.
+pages keep loading. A Creator account's games share their included use, so they are capped together; with usage
+credit, they are not capped. [docs/HOSTING.md](docs/HOSTING.md) has every rule, the full plan table, and notes for
+frameworks and engines.
 
 ## Costs
 
-xcore is free and open source. Hosting is free in your 2 free slots. A paid slot costs $15 per game per 30 days. An
+xcore is free and open source. Hosting is free for 2 games. A Creator account costs $15 per 30 days and runs every
+game you own, up to 10, at Creator limits; past its $10 of included use, usage credit pays published unit prices. An
 economy's players pay loot's per-action fee (0.0005 SOL on mainnet); an item minted as an NFT (a Metaplex Core asset)
 costs about 0.0031 SOL more, paid from the purchase, as `xcore loot cost` reports; and a coin launch costs about
 0.03 SOL.
-[docs/FEES.md](docs/FEES.md) lists every cost in one table: hosting, the paid plan and usage credit, coin launches,
-loot's fees, randomness, and Metaplex's fee on new NFTs.
+[docs/FEES.md](docs/FEES.md) lists every cost in one table: hosting, the Creator account, usage credit and its unit
+prices, coin launches, loot's fees, randomness, and Metaplex's fee on new NFTs.
 
 ## Your data
 
@@ -227,10 +229,10 @@ underneath.
 read the [disclaimer](docs/DISCLAIMER.md) before using real money.
 
 **How do I host a Vite, Next.js, Godot or Unity web game with a backend, for free?** `xcore adopt`, `xcore check` and
-`xcore publish` put its static build on xgames.fun at a link anyone can play. Everyone gets 2 free slots. A game in a
-free slot can have its own server (a Worker in `server/`), 10 MB of saves and 8 leaderboards, within the Free plan's
-limits ([plans](docs/HOSTING.md#plans-xcore-plan)). Pages rendered per request, and servers in Node, Python or Go, do
-not run there ([what is not supported](docs/HOSTING.md#what-is-not-supported-and-why)).
+`xcore publish` put its static build on xgames.fun at a link anyone can play. Every account can have 2 games for free.
+A game on a Free account can have its own server (a Worker in `server/`), 10 MB of saves and 8 leaderboards, within
+the Free plan's limits ([plans](docs/HOSTING.md#plans-xcore-plan)). Pages rendered per request, and servers in Node,
+Python or Go, do not run there ([what is not supported](docs/HOSTING.md#what-is-not-supported-and-why)).
 
 **How do I add multiplayer to a browser game without running a server?** `xcore add multiplayer ./my-game` adds
 sign-in and rooms run by the game, deployed with it. A web game joins a room with `GamesFun.rooms.join(code)`, and
