@@ -24,10 +24,10 @@ Playwright's Chromium once.
 
 ```bash
 npm i -g @xgamesfun/xcore      # install, then run: xcore <command>
-npx -y @xgamesfun/xcore@0.12.0 adopt  # or run it without installing
+npx -y @xgamesfun/xcore@0.13.0 adopt  # or run it without installing
 ```
 
-The unscoped `xcore` package on npm is a different package. Always run this one as `npx -y @xgamesfun/xcore@0.12.0 …`, or
+The unscoped `xcore` package on npm is a different package. Always run this one as `npx -y @xgamesfun/xcore@0.13.0 …`, or
 install it. The npx examples name the version this README describes, so a copied command runs the release documented
 here; `npm i -g` installs the latest. The examples below use `xcore`.
 
@@ -256,7 +256,7 @@ xgames.fun's launchpad, on devnet to rehearse or on mainnet. See
 **Can I get my game's data out?** The database and project files, yes: `xcore db export --live` and
 `xcore files get <path> --live`. Player saves and leaderboards have no bulk export yet. See [Your data](#your-data).
 
-**Is `xcore` on npm this package?** No. This one is `@xgamesfun/xcore`: run it as `npx -y @xgamesfun/xcore@0.12.0`, or install
+**Is `xcore` on npm this package?** No. This one is `@xgamesfun/xcore`: run it as `npx -y @xgamesfun/xcore@0.13.0`, or install
 it with `npm i -g @xgamesfun/xcore`.
 
 ## Documentation

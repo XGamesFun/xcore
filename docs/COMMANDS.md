@@ -4,7 +4,7 @@
 reference for flags, so they are not repeated here. This document covers what the help has no room for: what each
 command reads and writes, the steps it takes, and what it prints for scripts.
 
-Run a command without installing it, as `npx -y @xgamesfun/xcore@0.12.0 <command>`. Or install it once with
+Run a command without installing it, as `npx -y @xgamesfun/xcore@0.13.0 <command>`. Or install it once with
 `npm i -g @xgamesfun/xcore` and run `xcore <command>`.
 
 The unscoped `xcore` package on npm is a different package. Always use `@xgamesfun/xcore`.
@@ -423,7 +423,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
-      - run: npx -y @xgamesfun/xcore@0.12.0 publish ./my-game
+      - run: npx -y @xgamesfun/xcore@0.13.0 publish ./my-game
 ```
 
 Commit the game's preview picture (`assets/card.jpg`, made once with `xcore card`). A publish without one stops, in a

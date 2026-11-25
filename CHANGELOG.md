@@ -2,7 +2,7 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.13.0 — 2026-11-25
 
 Plans are per account. xgames.fun's paid plan is now a Creator account, $15 per 30 days prepaid in SOL or USDC: every
 game you own, up to 10, runs at Creator limits, with $10 of use a month shared by them. There are no slots to buy or
