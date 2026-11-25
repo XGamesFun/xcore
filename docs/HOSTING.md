@@ -11,7 +11,8 @@ Contents:
 - [The rules](#the-rules): the page, where it is served, the play page's frame, a server, a backend, Solana, what the
   page may load, the host's paths, which files are uploaded, what is always refused
 - [Limits](#limits)
-- [Plans: `xcore plan`](#plans-xcore-plan): slots, the plan table, what happens when a game is capped
+- [Plans: `xcore plan`](#plans-xcore-plan): Free and Creator accounts, the plan table, what happens when a game is
+  capped
 - [A backend](#a-backend): one you run, a hosted service, or a server xgames.fun runs
 - [Frameworks and engines](#frameworks-and-engines): several pages, Nuxt, React Router, monorepos, Godot, Unity,
   Unreal, a Node server
@@ -105,8 +106,10 @@ The play host lets the page reach exactly those origins. [A backend](#a-backend)
 The page client in the game (`gf/loot/`, from `@xgamesfun/solana`) sends Solana calls to one of these:
 
 - the game's own RPC on the economy's cluster (`xcore add rpc`: the server's `api/rpc`);
-- otherwise, the play host's `/loot/v1/rpc`. This is xgames.fun's shared relay, and its calls count toward the game's
-  plan. On devnet it is the devnet relay. For an economy on mainnet, it answers only the game's signed-in players.
+- otherwise, the play host's `/loot/v1/rpc`. This is xgames.fun's shared relay. Its calls are billed: they use up the
+  included amount, counted at cost ($10 a million), and past it are charged from usage credit at $20 a million. They
+  never count toward the cap that switches a game's server off. On devnet it is the devnet relay. For an economy on
+  mainnet, it answers only the game's signed-in players.
 
 See [ECONOMY.md](ECONOMY.md).
 
@@ -170,35 +173,37 @@ config's `apiKey`.
 
 ## Limits
 
-| What                             | Limit                                                                                                        |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| One game                         | 3,000 files, 100 MiB (104,857,600 bytes); a single file may use all of it                                    |
-| One account                      | 30 publishes and 1 GB of new files a day; 100 games. Publish reads your account's own limits from xgames.fun |
-| The server bundle                | 5 MB                                                                                                         |
-| The game's server, saves, scores | set by its plan ([below](#plans-xcore-plan), `xcore plan`)                                                   |
+| What                             | Limit                                                                                                                             |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| One game                         | 3,000 files, 100 MiB (104,857,600 bytes); a single file may use all of it                                                         |
+| One account                      | 30 publishes and 1 GB of new files a day; 2 games on Free, 10 on Creator. Publish reads your account's own limits from xgames.fun |
+| The server bundle                | 5 MB                                                                                                                              |
+| The game's server, saves, scores | set by its plan ([below](#plans-xcore-plan), `xcore plan`)                                                                        |
 
 ## Plans: `xcore plan`
 
-Every game sits in a **slot**:
+A plan is bought for your **account**, and every game you own takes its plan from it:
 
-- Everyone gets **2 free slots**. Games in them run on the Free plan.
-- Each game beyond those needs a **paid slot** ($15 for 30 days). A game in a paid slot runs on Creator.
-- A new game is refused while both free slots are taken. Either archive a game you no longer need (on your console at
-  xgames.fun/console; unpublish it first), or move one to a paid slot.
-- An archived game frees its slot, unless its link is still live.
+- A **Free** account (everyone's to start with) has up to **2 games**, each on the Free plan with $1 of use a month.
+- A **Creator** account ($15 per 30 days) has up to **10 games**, all on the Creator plan, with **$10 of use a month
+  shared** by them. There are no slots to buy or move: a game you publish is on Creator from the start.
+- A new game is refused while the account has all its games. Archive a game you no longer need (on your console at
+  xgames.fun/console; unpublish it first), or, on Free, buy a Creator account. `xcore publish` says so before it
+  uploads anything.
+- An archived game no longer counts, unless its link or its server is still live.
 
 The plan sets what the game's server, saves and scores may use:
 
-|                      | Free                                                               | Creator                                              | Scale                   |
-| -------------------- | ------------------------------------------------------------------ | ---------------------------------------------------- | ----------------------- |
-| For                  | a game in one of your 2 free slots                                 | a game in one of your paid slots (per game, a month) | granted by xgames.fun   |
-| Server               | 50 ms of CPU a request; 600 requests a minute, 120 from one player | 200 ms; 6,000 a minute, 600 from one player          | 1,000 ms; 30,000, 1,200 |
-| Saves and scores     | 10 MB of saves; 8 boards of 10,000 entries                         | 1 GB; 16 boards of 1,000,000                         | 10 GB; 16 of 1,000,000  |
-| Use included a month | $1                                                                 | $10 a slot, shared by your Creator games             | as granted              |
-| Sites that embed it  | 3 (`xcore embed`)                                                  | 10                                                   | 25                      |
-| Domains of your own  | none                                                               | 1 (`xcore domain`)                                   | 5                       |
+|                      | Free                                                               | Creator                                     | Scale                   |
+| -------------------- | ------------------------------------------------------------------ | ------------------------------------------- | ----------------------- |
+| For                  | the games of a Free account (up to 2)                              | the games of a Creator account (up to 10)   | granted by xgames.fun   |
+| Server               | 50 ms of CPU a request; 600 requests a minute, 120 from one player | 200 ms; 6,000 a minute, 600 from one player | 1,000 ms; 30,000, 1,200 |
+| Saves and scores     | 10 MB of saves; 8 boards of 10,000 entries                         | 1 GB; 16 boards of 1,000,000                | 10 GB; 16 of 1,000,000  |
+| Use included a month | $1 a game                                                          | $10 for the account, shared by its games    | as granted              |
+| Sites that embed it  | 3 (`xcore embed`)                                                  | 10                                          | 25                      |
+| Domains of your own  | none                                                               | 1 (`xcore domain`)                          | 5                       |
 
-All costs, including the paid plan and usage credit, are listed in [FEES.md](FEES.md).
+All costs, including the Creator account, usage credit and its unit prices, are listed in [FEES.md](FEES.md).
 
 ### When a game is capped
 
@@ -206,24 +211,27 @@ Past what is included, a game is **capped** until the month ends: **its server i
 answers 451 with `reason: "capped"`, and a room that is running stops within about five minutes), and saves and scores
 slow down (60 save writes, 30 score submits and 60 reads a minute). Its pages keep loading and nothing is lost. The
 server comes back on by itself when the cap lifts ([SERVER.md](SERVER.md#publishing-it), "Publishing it"). The server of
-an unpublished or taken-down game is switched off the same way.
+an unpublished or taken-down game is switched off the same way. A Creator account's games share their included use,
+so they are capped together, and come back on together.
 
 A game's server gets a 429 with `scope` (`"player"` or `"game"`) and `plan` when it goes past a rate limit.
 
-### Paying for slots and usage
+### Paying for a Creator account and usage
 
-- Paid slots cost $15 for 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans).
-- There is no automatic renewal. After the period ends there are 7 days' grace. When a paid slot ends, its game goes
-  back to a free slot and nothing is taken down.
-- Usage credit, bought the same way, lets Creator games go past what their slots include, at twice what xgames.fun
-  pays, instead of being capped.
-- A paid slot can move between your games at any time without changing the bill: `xcore plan deactivate <one>`, then
-  `xcore plan activate <another>`.
+- A Creator account costs $15 per 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans), for 1 to 12
+  periods at a time.
+- There is no automatic renewal. After the period ends there are 7 days' grace. Then every game drops to Free limits
+  and keeps running; nothing is taken down. A new game waits until the account has fewer than 2 games, or is renewed.
+- A Creator account's games are capped together when they pass the $10 they share, since the included use is the
+  account's.
+- Usage credit, bought the same way, lets them go past what is included instead of being capped, at published unit
+  prices ([FEES.md](FEES.md#unit-prices); `xcore plan --verbose` prints xgames.fun's).
 
 ### Seeing a plan
 
-- `xcore plan [folder]` shows a game's plan, its limits and this month's use.
-- `xcore plan --all` shows your free and paid slots and every game.
+- `xcore plan [folder]` shows your account (its plan, games, included use and period), then the game's plan, its
+  limits and this month's use.
+- `xcore plan --all` shows your account and every game; `--verbose` adds the unit prices.
 - `xcore dev` imitates a plan's limits on your machine: see
   [COMMANDS.md](COMMANDS.md#the-plans-limits-refused-as-published).
 

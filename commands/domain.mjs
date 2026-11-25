@@ -32,12 +32,19 @@ link.`;
 
 const plainly = e => {
   // xgames.fun's own words already say what to do; add the command only when they don't
-  if (e?.code === 'plan')
+  // (an older xgames.fun's words name `xcore plan activate`, which is gone: that part is left out)
+  if (e?.code === 'plan') {
+    const words = e.message.replace(/:?\s*[^.:]*plan activate[^.]*\.?\s*$/, '.').replace(/\.\.$/, '.');
+    const account =
+      'a Creator account runs every game you own (up to 10) at Creator limits. Buy or renew it in your console → Plans.';
     throw new Error(
-      /plan activate/.test(e.message)
-        ? e.message
-        : `${e.message} Custom domains come with Creator (1) and Scale (5): put the game in a slot with ${CMD} plan activate.`,
+      /console → Plans/.test(words)
+        ? words
+        : words !== e.message
+          ? `${words} ${account[0].toUpperCase()}${account.slice(1)}`
+          : `${words} Custom domains come with Creator (1) and Scale (5): ${account}`,
     );
+  }
   if (e?.code === 'domains-off')
     throw new Error(`${e.message} (custom domains need xgames.fun's operator to set them up first.)`);
   throw e;

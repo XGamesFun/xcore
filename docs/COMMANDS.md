@@ -4,7 +4,7 @@
 reference for flags, so they are not repeated here. This document covers what the help has no room for: what each
 command reads and writes, the steps it takes, and what it prints for scripts.
 
-Run a command without installing it, as `npx -y @xgamesfun/xcore@0.12.0 <command>`. Or install it once with
+Run a command without installing it, as `npx -y @xgamesfun/xcore@0.13.0 <command>`. Or install it once with
 `npm i -g @xgamesfun/xcore` and run `xcore <command>`.
 
 The unscoped `xcore` package on npm is a different package. Always use `@xgamesfun/xcore`.
@@ -53,7 +53,7 @@ Commands with subcommands (`files`, `secret`, `db`, `embed`, `domain`, `plan`, `
 | `xcore login`              | signs this computer in to xgames.fun, so you can publish                                                        | [login and logout](#login-and-logout)                                                     |
 | `xcore logout`             | signs this computer out of xgames.fun (revokes its publish token)                                               | [login and logout](#login-and-logout)                                                     |
 | `xcore publish <folder>`   | publishes the game at a link anyone can play (unlisted)                                                         | [publish](#publish)                                                                       |
-| `xcore plan`               | a game's plan (Free, Creator, Scale): its limits, this month's use, game slots                                  | [HOSTING.md](HOSTING.md#plans-xcore-plan)                                                 |
+| `xcore plan`               | your account (Free or Creator) and a game's plan: its limits, this month's use, the unit prices (`--verbose`)   | [HOSTING.md](HOSTING.md#plans-xcore-plan)                                                 |
 | `xcore coin`               | a coin that trades, for a published game                                                                        | [ECONOMY.md](ECONOMY.md#a-coin-that-trades-xcore-coin)                                    |
 | `xcore embed`              | lets a site of your own show the published game in a frame                                                      | [HOSTING.md](HOSTING.md#your-own-site-and-your-own-domain-xcore-embed-xcore-domain)       |
 | `xcore domain`             | serves the published game on a domain of your own                                                               | [HOSTING.md](HOSTING.md#your-own-site-and-your-own-domain-xcore-embed-xcore-domain)       |
@@ -345,8 +345,9 @@ folder with its `server/` bundle.
 
 ### The first publish of a folder
 
-A folder's first publish creates a new game on the account this computer is signed in to, and the game takes one of
-that account's slots ([HOSTING.md](HOSTING.md#plans-xcore-plan)). So it is confirmed first. `xcore publish` prints:
+A folder's first publish creates a new game on the account this computer is signed in to, and the game counts toward
+that account's games: 2 on a Free account, 10 on a Creator account ([HOSTING.md](HOSTING.md#plans-xcore-plan)). So it
+is confirmed first. `xcore publish` prints:
 
 ```text
 This creates a new game on https://xgames.fun:
@@ -355,7 +356,9 @@ This creates a new game on https://xgames.fun:
   slot:    one of your 2 free slots (0 in use now, 1 after this)
 ```
 
-and changes nothing.
+and changes nothing. On a Creator account, the last line is `plan:    your Creator account (3 of 10 games now, 4 after
+this)`. An account that already has all its games is told so instead, and nothing is uploaded: archive a game you no
+longer need on your console, or, on Free, buy a Creator account (`--json`: `code: "game-cap"`).
 
 - At a terminal, type `publish` to go on.
 - Without a terminal (a script, an agent), run the same command again with `--yes <code>`, using the code it printed.
@@ -420,7 +423,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 24 }
-      - run: npx -y @xgamesfun/xcore@0.12.0 publish ./my-game
+      - run: npx -y @xgamesfun/xcore@0.13.0 publish ./my-game
 ```
 
 Commit the game's preview picture (`assets/card.jpg`, made once with `xcore card`). A publish without one stops, in a

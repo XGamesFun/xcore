@@ -381,9 +381,10 @@ xcore secret remove VOUCHER_SEED
 ### The economy's own RPC
 
 By default, a game with an economy (`xcore loot add`) sends its Solana calls through xgames.fun's shared devnet relay
-(the play host's `/loot/v1/rpc`). Every call counts toward the game's plan at $10 per million. This is usually the
-biggest cost of a player in an economy game: a page that reads balances every 5 s uses up Free's $1 in about 140
-player-hours.
+(the play host's `/loot/v1/rpc`). Every call is billed: it uses up the included amount, counted at cost ($10 per
+million), and past it is charged from usage credit at $20 per million. Relay calls never count toward the cap that
+switches a game's server off. They are usually the biggest cost of a player in an economy game: a page that reads
+balances every 5 s makes about 720 calls a player-hour, so $1 of use at cost lasts about 140 player-hours.
 
 Instead, you can use the game's own devnet RPC (Helius, Triton, QuickNode; their free plans fit a small game):
 
@@ -890,7 +891,7 @@ sockets close.
 - A running room stops within about five minutes.
 - Its rooms' data and its secrets are kept.
 - The server comes back on its own when the game is published again (within 30 days, to be sure its data is kept) or
-  when its cap lifts (the start of the next month, a paid slot, or usage credit).
+  when its cap lifts (the start of the next month, a Creator account, or usage credit).
 - A version published while the game is capped goes live with its pages, and its server waits.
 - The page keeps loading in the meantime, so a game whose server can be off should tell players so when `api/`
   returns 451.

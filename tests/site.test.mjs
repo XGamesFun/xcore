@@ -93,7 +93,8 @@ function standIn(state) {
       return send(200, site());
     }
     if (url.pathname.endsWith('/site/domains') && req.method === 'POST') {
-      if (state.tier === 'free') return send(403, { error: 'Free has no custom domains.', code: 'plan' });
+      if (state.tier === 'free')
+        return send(403, { error: state.planWords ?? 'Free has no custom domains.', code: 'plan' });
       if (json.check) {
         state.domains = state.domains.map(d =>
           d.hostname === json.hostname ? { ...d, status: 'active', records: [] } : d,
@@ -179,8 +180,18 @@ test('xcore embed and xcore domain, as a person runs them', async t => {
   assert.equal(r.status, 1);
   assert.match(
     r.stderr,
-    /Free has no custom domains\. Custom domains come with Creator \(1\) and Scale \(5\): put the game in a slot with .* plan activate/,
+    /Free has no custom domains\. Custom domains come with Creator \(1\) and Scale \(5\): a Creator account runs every game you own \(up to 10\) at Creator limits\. Buy or renew it in your console → Plans\./,
   );
+  // an xgames.fun before per-account plans names `xcore plan activate`, which is gone: said without it
+  state.planWords =
+    'Your own domain comes with the Creator plan (one domain a game) and Scale (five): `xcore plan activate` puts this game on Creator.';
+  r = await xc(['domain', 'add', 'play.mygame.com', dir]);
+  assert.match(
+    r.stderr,
+    /Your own domain comes with the Creator plan \(one domain a game\) and Scale \(five\)\. A Creator account runs every game you own \(up to 10\) at Creator limits\. Buy or renew it in your console → Plans\./,
+  );
+  assert.doesNotMatch(r.stderr, /activate/);
+  state.planWords = undefined;
   const before = state.calls.length;
   r = await xc(['domain', 'add', 'moth-play.xgames.fun', dir]);
   assert.match(r.stderr, /xgames.fun's own/);

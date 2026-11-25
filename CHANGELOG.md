@@ -2,9 +2,47 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.13.0 — 2026-11-25
 
-Fixes from a usability run of 0.12.0 (a new developer's first hour).
+Plans are per account. xgames.fun's paid plan is now a Creator account, $15 per 30 days prepaid in SOL or USDC: every
+game you own, up to 10, runs at Creator limits, with $10 of use a month shared by them. There are no slots to buy or
+move. A Free account is as it was: 2 games, $1 of use a month each. Each game keeps its own plan's limits
+(`PLAN_LIMITS` is unchanged). xcore works with xgames.fun before and after the change: with an older xgames.fun it
+prints what it printed before.
+
+**Breaking**
+
+- **`xcore plan activate` and `xcore plan deactivate` are removed.** There are no slots to move a game in or out of.
+  For this release both words still exist, ask xgames.fun nothing, and exit with code 2 and "Plans are per account
+  now: a Creator account runs every game you own (up to 10). Buy or renew it in your console → Plans." (`--json`:
+  `code: "per-account"`). xgames.fun's own refusal of a slot move (409 `per-account`) is said the same way.
+
+**Changed**
+
+- `xcore plan` and `xcore plan --all` show your account first: Free or Creator, how many of its games you have (of 2
+  or 10), what is included and this month's use, usage credit, and the period's end with the days left, or the
+  7 days' grace. Then each game's plan and use, as before. On a Creator account a game's month is its part of the
+  account's shared use. `--verbose` adds the unit prices that usage credit pays. `--json` is xgames.fun's answer,
+  with its new `account` and every field it had before.
+- The first publish of a folder says where the new game goes: one of a Free account's 2 free slots, as before, or
+  "your Creator account (3 of 10 games now, 4 after this)". An account that already has all its games is told so,
+  with what makes room, before anything is built or uploaded (exit code 1, `code: "game-cap"`). xgames.fun's own
+  refusal of a game over a Creator account's cap (409 `game-cap`) is said in the same words. Confirming with
+  `--yes <code>` is unchanged.
+- A new game xgames.fun refuses (`no-free-slot`), and a domain refused on Free, name the Creator account (your
+  console → Plans) instead of `xcore plan activate`.
+- Past what is included, usage credit is charged at published unit prices. [docs/FEES.md](docs/FEES.md) lists them,
+  where it used to say "twice what xgames.fun pays". Use inside the included amount is counted at cost, half these
+  prices.
+- What the shared Solana relay costs is said as xgames.fun counts it, everywhere xcore says it: its calls use up the
+  included amount at cost ($10 a million) and past it are charged from usage credit ($20 a million), and they never
+  count toward the cap that switches a game's server off. `xcore publish` no longer says they use up Free's $1.
+- The documents ([README](README.md), [FEES.md](docs/FEES.md), [HOSTING.md](docs/HOSTING.md),
+  [SERVER.md](docs/SERVER.md), [COMMANDS.md](docs/COMMANDS.md), the bring-your-own-game skill) describe Free and
+  Creator accounts. The account limit of "100 games", never enforced, is now the real one: 2 games on Free, 10 on
+  Creator. A lapsed Creator account (after its 7 days' grace) drops every game to Free limits and takes nothing down.
+
+**Fixed**, from a usability run of 0.12.0 (a new developer's first hour):
 
 - `xcore loot …` piped into a reader that stops early (`| head`) ends quietly instead of crashing with EPIPE.
 - Paths in hints are the ones you typed: `xcore loot approve game/xsolana.json` says `(game/xsolana.json)` in its

@@ -8,7 +8,7 @@ import { studioOrigin } from '../lib/publish/client.mjs';
 import { gate } from '../lib/publish/gate.mjs';
 import { buildFailure, pageRoots, runBuild } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
-import { confirmFirstPublish, firstPublish } from '../lib/publish/first.mjs';
+import { confirmFirstPublish, creatorCapWords, firstPublish } from '../lib/publish/first.mjs';
 import { reviewNudge } from '../lib/review.mjs';
 import { cardPrinted, drawable } from '../lib/card.mjs';
 import { plural, sizeText } from '../lib/util.mjs';
@@ -21,10 +21,11 @@ Publish a game to xgames.fun at a link anyone can play. xgames.fun hosts it; you
 Sign in first with ${CMD} login. In a GitHub Actions job with "permissions: id-token: write", the job's OIDC token
 is used instead of a login.
 
-The first publish of a folder creates a new game on the account this computer is signed in to, and takes one of
-its game slots. It first prints the account, the game's name and the slot, and changes nothing. At a terminal, type
-"publish" to go on; otherwise run the same command again with --yes <code>, using the code it prints. Publishing a
-folder that is already linked to a game updates that game without asking.
+The first publish of a folder creates a new game on the account this computer is signed in to, and counts toward
+its games (2 on a Free account, one of its free slots; up to 10 on a Creator account). It first prints the account,
+the game's name and where it goes, and changes nothing; an account with no room for another game is told so before
+anything is uploaded. At a terminal, type "publish" to go on; otherwise run the same command again with --yes <code>,
+using the code it prints. Publishing a folder that is already linked to a game updates that game without asking.
 
 What happens:
   - A game you adopted (${CMD} adopt) is built first if it has a build. Its published folder (gamesfun.json
@@ -57,7 +58,7 @@ Options:
   --draft        publish a private version in your xgames.fun Studio, with no public link
   --new          publish as a new game (a new link), not as an update of this folder's game
   --title <name> the game's name on xgames.fun (default: its page title)
-  --yes <code>   confirm the first publish of a folder (a new game, and a slot), with the code that was printed
+  --yes <code>   confirm the first publish of a folder (a new game on the account), with the code that was printed
   --no-card      publish without a preview picture: the link shows a plain card (a gradient with the title)
   --status       show this folder's link and the account it is published from; publishes nothing
   --check        run only the offline checks (files, secrets, backend origins, the server bundle); publishes nothing
@@ -177,8 +178,10 @@ export function publishCommand({
           if (!values.json && out.verify) console.log(verifyLine(out.verify, shown(dir)));
           return out.ok ? 0 : 1;
         }
-        // the first publish of a folder makes a game on the signed-in account and takes a slot: confirmed first
+        // the first publish of a folder makes a game on the signed-in account, which counts toward its games: confirmed
+        // first, and refused here when the account has no room (before anything is built or uploaded)
         const first = await firstPublish(dir, { origin, newGame: values.new, title: values.title ?? null });
+        if (first?.full) throw first.full;
         if (first) {
           const go = await confirmFirstPublish(first, { args, values });
           if (go !== true) return go;
@@ -192,11 +195,22 @@ export function publishCommand({
           card: askCard,
           progress: values.json ? () => {} : l => console.error(l),
         }).catch(e => {
-          // A new game needs one of the account's 2 free slots (xgames.fun's words say so); name the commands that free one.
+          // A new game needs room on the account (xgames.fun's words say so): name what makes some.
+          // A Creator account at its cap (xgames.fun's 409 game-cap): the words of the check before uploading.
+          if (e?.code === 'game-cap')
+            throw Object.assign(
+              new Error(
+                creatorCapWords(Number(/up to (\d+) games?/.exec(e.message)?.[1]) || 10, {
+                  origin,
+                  then: 'No game was made.',
+                }),
+              ),
+              { status: e.status, code: e.code, next: `${CMD} plan --all` },
+            );
           if (e?.code === 'no-free-slot')
             throw Object.assign(
               new Error(
-                `${e.message}\n  ${CMD} plan activate <another game's folder>   moves that game to a paid slot\n  ${CMD} plan --all   your slots and games; archive one on ${origin}/console`,
+                `${e.message}\n  ${CMD} plan --all   your account and its games; archive one you no longer need on ${origin}/console\n  A Creator account runs every game you own, up to 10: your console → Plans`,
               ),
               { status: e.status, code: e.code },
             );

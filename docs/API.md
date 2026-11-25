@@ -24,7 +24,7 @@ Publishing, the database, secrets and the economy are done with the command line
 | `check(dir, options?)`         | `xcore check`                     | the record: `pass`, `checks` (`{n, name, ok, detail}`), `notes`, `outDir` (with `record.json` and screenshots) |
 | `publishCheck(dir, options?)`  | `xcore publish --check`           | `ok`, `files`, `bytes`, `skipped`, `problems`, `secrets`, `backend`, `cardWarnings`, `server`                  |
 | `publishStatus(dir, options?)` | `xcore publish --status`          | `signedIn`, `signIn.state`, `link` (`never`, `started`, `public`, `draft`, `draft-over-public`), `known`       |
-| `PLAN_LIMITS`                  | the limits `xcore plan` describes | `{free, creator, scale}`, each with `cpuMs`, `saves`, `scores`, `reads` and `files` (sizes in bytes)           |
+| `PLAN_LIMITS`                  | the limits `xcore plan` describes | `{free, creator, scale}`, each with `cpuMs`, `saves`, `scores`, `reads` and `files` (sizes in bytes), per game |
 
 - `adopt` options: `build`, `out`, `static`, `noBuild`, `onLine` (as the command's flags).
 - `check` options: `noBuild`, `out`, `port`, `log`. It needs Chrome, Edge or Chromium, or downloads Playwright's
