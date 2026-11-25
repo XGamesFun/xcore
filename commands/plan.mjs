@@ -1,58 +1,59 @@
-// `xcore plan`: a game's backend plan on xgames.fun (../lib/publish/plans.mjs).
-import { guard, parse, printJson, UsageError, tooMany, folderArg, verbOrFolder } from '../lib/cli.mjs';
+// `xcore plan`: a game's backend plan on xgames.fun, and the account's (../lib/publish/plans.mjs).
+import { guard, parse, printJson, failureJson, UsageError, tooMany, folderArg } from '../lib/cli.mjs';
 import { resolveGame } from '../lib/games.mjs';
-import { accountPlan, describeAccount, describeGame, gamePlan, setActive } from '../lib/publish/plans.mjs';
+import { accountPlan, describeAccount, describeGame, gamePlan, PER_ACCOUNT } from '../lib/publish/plans.mjs';
 import { CMD } from '../lib/command.mjs';
 
-const usage = `Usage: xcore plan [dir] [--json]
-       xcore plan --all [--json]
-       xcore plan activate [dir] [--json]
-       xcore plan deactivate [dir] [--json]
+const usage = `Usage: xcore plan [dir] [--verbose] [--json]
+       xcore plan --all [--verbose] [--json]
 
 The game's folder is the last word or --dir <folder> (default: the current directory).
 
-Show what a game's backend may use on xgames.fun (its server, saves and scores), and what it used this month.
+Show your account's plan, then what a game's backend may use on xgames.fun (its server, saves and scores), and what
+it used this month.
 
-Plans:
-  Free       The default for every game. A small server (50 ms of CPU per request, 600 requests a minute) and $1 of
-             use a month. Past that, the game is capped until the month ends: its server is switched off (every
-             api/ request answers 451), its pages keep loading, and saves and scores slow down.
-  Creator    A game in one of your paid slots. 200 ms per request, 6,000 requests a minute, 1 GB of saves, and $10
-             of use a month per paid slot, shared by your Creator games.
+Accounts:
+  Free       Every account starts here: up to 2 games, each on the Free plan with $1 of use a month.
+  Creator    $15 per 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans); it does not renew by
+             itself. Every game you own, up to 10, runs on the Creator plan, with $10 of use a month shared by them.
+             There are no slots to buy or move. After a period ends there are 7 days' grace; then every game drops
+             to Free limits and keeps running (nothing is taken down).
+
+Plans (per game):
+  Free       A small server (50 ms of CPU per request, 600 requests a minute) and $1 of use a month. Past that, the
+             game is capped until the month ends: its server is switched off (every api/ request answers 451), its
+             pages keep loading, and saves and scores slow down.
+  Creator    Every game of a Creator account. 200 ms per request, 6,000 requests a minute, 1 GB of saves. Past the
+             account's included use, usage credit (bought the same way) pays for more at published unit prices
+             (--verbose lists them); without credit, its games are capped together.
   Scale      Granted by xgames.fun to a game that needs more.
 
 Every plan lets your own sites embed the game (Free 3, Creator 10, Scale 25: ${CMD} embed). Creator and Scale also
-serve it on your own domains (1 and 5: ${CMD} domain).
-
-Slots and prices:
-  - Every game uses a slot. Everyone gets 2 free slots; games in them run on Free.
-  - Each further game needs a paid slot: $15 for 30 days, prepaid in SOL or USDC on xgames.fun (your console →
-    Plans). It does not renew automatically. A game in a paid slot runs on Creator.
-  - You can move a paid slot between your games at any time; the bill does not change.
-  - Usage credit, bought the same way, lets Creator games go past what their slots include instead of being capped.
-    It is charged at twice what xgames.fun pays.
-  - Every cost in one table: docs/FEES.md.
-
-Commands:
-  activate     move this folder's game to a paid slot (its free slot becomes available for another game)
-  deactivate   move it back to a free slot (one must be available; its paid slot becomes available for another game)
+serve it on your own domains (1 and 5: ${CMD} domain). Every cost in one table: docs/FEES.md.
 
 Options:
-  --all        list your free and paid slots and every game's plan
-  --json       print the result as JSON`;
+  --all        your account and every game's plan
+  --verbose    also the unit prices usage credit pays
+  --json       print xgames.fun's answer as JSON (its account, and the fields older versions printed)`;
 
 export default {
   name: 'plan',
-  summary: "show a game's plan, limits and this month's use; move it between slots",
+  summary: "show your account's plan, a game's limits and this month's use",
   usage,
   run: args =>
     guard(async () => {
-      const { values, positionals } = parse(args, { all: { type: 'boolean' }, dir: { type: 'string' } }, usage);
-      const { verb, rest } = verbOrFolder(positionals, ['activate', 'deactivate'], null, usage);
-      if (rest.length > 1) throw new UsageError(`${tooMany(rest.slice(1))}\n\n${usage}`);
-      const [first, second] = verb
-        ? [verb, folderArg(values.dir, rest[0], usage)]
-        : [folderArg(values.dir, rest[0], usage)];
+      const { values, positionals } = parse(
+        args,
+        { all: { type: 'boolean' }, dir: { type: 'string' }, verbose: { type: 'boolean' } },
+        usage,
+      );
+      // Moving a game between slots is gone (one release keeps the words, to say so): nothing is asked of xgames.fun.
+      if (positionals[0] === 'activate' || positionals[0] === 'deactivate') {
+        console.error(`xcore: ${PER_ACCOUNT}`);
+        if (values.json) printJson({ ...failureJson(PER_ACCOUNT, 'per-account'), next: `${CMD} plan --all` });
+        return 2;
+      }
+      if (positionals.length > 1) throw new UsageError(`${tooMany(positionals.slice(1))}\n\n${usage}`);
       const out = values.json ? printJson : null;
       const plain = e => {
         if (e?.status === 404)
@@ -62,44 +63,20 @@ export default {
           );
         throw e;
       };
+      const verbose = Boolean(values.verbose);
       if (values.all) {
-        if (verb) throw new UsageError(`--all lists; activate and deactivate take a game folder\n\n${usage}`);
         const r = await accountPlan().catch(plain);
         if (out) out(r);
-        else console.log(describeAccount(r));
+        else console.log(describeAccount(r, { verbose }));
         return 0;
       }
-      const dir = await resolveGame(verb ? second : first);
-      if (!verb) {
-        const r = await gamePlan(dir).catch(plain);
-        if (out) out(r);
-        else console.log(describeGame(r));
-        return 0;
-      }
-      const r = await setActive(dir, verb === 'activate').catch(e => {
-        // which games sit in which slots is what the person needs next, whichever slot is missing
-        if (e?.status === 409)
-          throw Object.assign(
-            new Error(
-              e.code === 'no-free-slot'
-                ? `${e.message} Archive a game you no longer need on your console (xgames.fun/console), or move another game to a paid slot.`
-                : `${e.message} Open one with ${CMD} plan deactivate <another game>, or buy a paid slot on xgames.fun (your console → Plans, in SOL or USDC).`,
-            ),
-            { code: e.code ?? 'no-slot', next: `${CMD} plan --all` },
-          );
-        return plain(e);
-      });
+      const dir = await resolveGame(folderArg(values.dir, positionals[0], usage));
+      const r = await gamePlan(dir).catch(plain);
       if (out) out(r);
       else {
-        const what =
-          verb === 'activate'
-            ? r.changed
-              ? 'In a paid slot: Creator from its next request; its free slot is open for another game.'
-              : 'Already in a paid slot.'
-            : r.changed
-              ? 'Back in a free slot: Free from its next request, and its paid slot is open for another game.'
-              : 'It was not in a paid slot.';
-        console.log(`${what}\n${describeGame(r)}`);
+        // the account's month and credit are on its own answer, not the game's: read it too, and go on without it
+        const pool = r?.account ? await accountPlan().catch(() => null) : null;
+        console.log(describeGame(r, { pool, verbose }));
       }
       return 0;
     }, args),
