@@ -406,9 +406,25 @@ test(
     assert.equal(ready.data.live, true);
     assert.deepEqual(ready.data.wallets, ['Stub Wallet']);
     assert.match((await a.evaluate(() => GamesFun.loot.call('shop'))).error, /Connect a wallet first/);
+    // before a wallet: the kit's app reads
+    assert.equal(await a.evaluate(async () => (await (await GamesFun.loot.app()).data.app.shop())[0].key), 'sword');
     const c = await a.evaluate(() => GamesFun.loot.connect());
     assert.equal(c.data.address, 'PlayerAddress11111111111111111111111111111');
     assert.equal(await a.evaluate(() => GamesFun.loot.address), c.data.address);
+    // a web page: the solana kit's own app, its own answers (a bigint stays one), signing with the connected wallet
+    const kit = await a.evaluate(async () => {
+      const r = await GamesFun.loot.app();
+      const s = await r.data.app.shop();
+      const b = await r.data.app.buy('sword', { listing: s[0] });
+      return {
+        cluster: r.data.cluster,
+        live: r.data.live,
+        price: typeof s[0].priceUnits,
+        by: b.by,
+        kit: !!r.data.kit.solanaApp,
+      };
+    });
+    assert.deepEqual(kit, { cluster: 'devnet', live: true, price: 'bigint', by: c.data.address, kit: true });
     const shop = await a.evaluate(() => GamesFun.loot.call('shop'));
     assert.deepEqual(shop.data[0], { key: 'sword', priceUnits: '1500000000', bytes: [1, 2] });
     const bought = await a.evaluate(

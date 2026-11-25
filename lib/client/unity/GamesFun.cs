@@ -92,6 +92,11 @@ public class GamesFun : MonoBehaviour
     public static Task<string> SavesPut(string key, string valueJson) => Call("saves.put", "[" + Str(key) + "," + valueJson + "]");
     public static Task<string> SavesDelete(string key) => Call("saves.delete", "[" + Str(key) + "]");
     public static Task<string> SavesList() => Call("saves.list", "[]");
+    // a guest's saves (made before sign-in, kept in the browser): the game decides what they become once signed in
+    public static Task<string> SavesGuestList() => Call("saves.guest.list", "[]");
+    public static Task<string> SavesGuestGet(string key) => Call("saves.guest.get", "[" + Str(key) + "]");
+    public static Task<string> SavesGuestMove(string key) => Call("saves.guest.move", "[" + Str(key) + "]");
+    public static Task<string> SavesGuestDelete(string key) => Call("saves.guest.delete", "[" + Str(key) + "]");
 
     /// <summary>order: "high" (default) or "low" (a time).</summary>
     public static Task<string> ScoresSubmit(string board, double score, string name = null, string order = null) =>

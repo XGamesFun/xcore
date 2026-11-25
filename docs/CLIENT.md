@@ -54,8 +54,9 @@ No call throws. Where xgames.fun is not available, the game keeps running and th
   never the wallet.
 - `wallet` is the wallet linked to the account, or empty when there is none.
 
-**Test sign-in with `xcore dev`.** Just like a published game, it requires sign-in to save or post a score.
-A plain local server and `xcore check` let guests do both in browser storage.
+**Test sign-in with `xcore dev`.** It works as a published game does: a guest's saves stay in the browser, and
+posting a score needs sign-in. A plain local server and `xcore check` keep every save and score in browser storage,
+signed in or not.
 
 ## Sign-in
 
@@ -224,7 +225,7 @@ The page calls the game's own server with `GamesFun.api(path, init)` (Godot: `Ga
 
 ## Saves
 
-Sign in before reading or writing a save. Each player gets up to 16 named saves, up to 64 KB of JSON each.
+Each player gets up to 16 named saves, up to 64 KB of JSON each.
 
 ```js
 const { error } = await GamesFun.saves.put('main', { level: 3 });
@@ -234,6 +235,31 @@ const { data: save } = await GamesFun.saves.get('main');
 
 A missing save returns `data: null`. Use `GamesFun.saves.list()` to list keys or `GamesFun.saves.delete('main')`
 to remove one.
+
+**Signed in**, saves are kept in the player's account and follow them to any browser.
+
+**Guests** (nobody signed in) save in their browser, with the same limits, and `put` returns `{ok: true, guest:
+true}`. A guest keeps their progress without signing in, but only in that browser: another device, or clearing site
+data, loses it. Saves are written by the player's own page, so a server that pays out never trusts one.
+
+Each game chooses what guests get:
+
+- **No guest saves:** add `data-guest-saves="off"` to the `<script>` tag (or set `GamesFun.saves.guests = false`).
+  A guest's save then returns `Sign in first.` (status 401).
+- **At sign-in:** guest saves stay in the browser until the game moves them. `saves.guest.list()` and
+  `saves.guest.get(key)` read them, `saves.guest.move(key)` copies one into the account (replacing a save with the
+  same key) and removes it from the browser, and `saves.guest.delete(key)` drops it. The game can carry everything
+  over, keep the better save, ask the player, or start fresh. Godot: `saves_guest_list`, `saves_guest_get`,
+  `saves_guest_move`, `saves_guest_delete`. Unity: `SavesGuestList`, `SavesGuestGet`, `SavesGuestMove`,
+  `SavesGuestDelete`.
+
+```js
+GamesFun.onChange(async player => {
+  if (!player) return;
+  const { data: kept } = await GamesFun.saves.guest.list();
+  for (const { key } of kept) await GamesFun.saves.guest.move(key); // this game carries guest progress over
+});
+```
 
 ## Leaderboards
 
@@ -535,19 +561,45 @@ for prizes by place, or a voucher signed with the game's own key (`xcore add vou
 
 ## The economy: `GamesFun.loot` and `gf/loot/`
 
-Run `xcore loot add` to install the client beside `xsolana.json`. Publish keeps `gf/loot/` up to date.
+`xcore loot add` (or `xcore dev`, once `xsolana.json` is there) installs the client beside `xsolana.json`. Publish keeps
+`gf/loot/` up to date.
 
-### From any engine: `GamesFun.loot`
+The economy's code is the solana kit's (`@xgamesfun/solana`): its play client is what `gf/loot/` holds, and its
+README and apps.md document every call. `GamesFun.loot` sets it up for this game (the economy's file, its cluster,
+the wallet, xgames.fun's relay, and the player's sign-in that mainnet's relay needs), so a page does not wire it by
+hand. A web page then uses the kit directly; an engine reaches the same calls as JSON.
 
-Use this with `gamesfun.js`, Godot or Unity. Sign in to the game first on mainnet. The client sends the player's
-token to the relay and selects the network in your spec. Connect the wallet, then resume unfinished purchases.
+### A web page: the solana kit, from `GamesFun.loot.app()`
+
+`app()` gives the kit's own app, set up for this game. Before `connect()` it only reads; call `app()` again after
+connecting to sign with the wallet. Its calls and answers are the kit's own (`shop()` returns an array), as
+`@xgamesfun/solana`'s README and apps.md document them.
+
+```js
+let { data, error } = await GamesFun.loot.app();
+if (error) throw new Error(error); // for example, the economy is not live yet
+const shop = await data.app.shop();
+await GamesFun.loot.connect();
+({ data } = await GamesFun.loot.app()); // now it signs with the wallet
+await data.app.recover(); // finish purchases a closed page left
+// When the player chooses a listing, show its price before calling buy.
+await data.app.buy('potion', { listing: shop.find(l => l.key === 'potion') });
+const boxes = await data.app.boxes();
+await data.app.openBox('crate', { listing: boxes.find(l => l.key === 'crate') }); // one prompt
+```
+
+`data` also holds `kit` (the play module: `walletStandardSigner`, readers and builders), `wallets` and `cluster`. Use
+these instead of the kit examples' public devnet RPC and `node_modules/` paths.
+
+### From Godot, Unity or JSON: `GamesFun.loot.call`
+
+The same calls with JSON in and out (big numbers as text). Sign in to the game first on mainnet.
 
 ```js
 await GamesFun.loot.connect();
 await GamesFun.loot.call('recover');
 const { data: items, error } = await GamesFun.loot.call('shop');
 if (error) throw new Error(error);
-// When the player chooses a listing, show its price before calling buy.
 const buy = item => GamesFun.loot.call('buy', item.key, { listing: item });
 ```
 
@@ -564,9 +616,9 @@ in the project's own `gamesfun/` folder (with a `.gdignore`, so Godot ignores it
 `page.static`. Publish, `xcore check` and `xcore dev` copy that folder over the export, so you export as before. The
 file that records the addresses the economy went live at stays in the project: keep it in git.
 
-### A web page, by hand: `gf/loot/`
+### Without `gamesfun.js`: `gf/loot/` by hand
 
-The page loads loot's page client at run time with a page-relative URL, so a bundler leaves it alone:
+Only for a page that does not load `gamesfun.js`. The page loads loot's page client at run time with a page-relative URL, so a bundler leaves it alone:
 
 ```js
 const { solanaApp, walletStandardSigner } = await import(
@@ -596,7 +648,7 @@ economy's cluster:
 `solanaWallets({ cluster: 'mainnet' })`, `connectWallet(wallet, { cluster: 'mainnet' })`,
 `walletStandardSigner(wallet, account, chainOf('mainnet'))`, and `pageRpc('mainnet')` instead of `PAGE_RPC`. The
 mainnet relay answers only players signed in to the game, so every call to it must also carry the player's sign-in.
-`GamesFun.loot` handles the network and sign-in token for you.
+`GamesFun.loot.app()` handles the network and sign-in token for you.
 
 `@xgamesfun/solana`'s own examples use a public devnet RPC and `node_modules/` paths. On xgames.fun, use `PAGE_RPC` and
 `gf/loot/` as shown above.

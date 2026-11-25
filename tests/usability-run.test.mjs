@@ -41,7 +41,7 @@ test('loot add names the game and its economy file from the folder the command r
   const name = path.basename(dir);
   const before = await addLoot(dir, { cwd: path.dirname(dir) });
   assert.match(before.next.join('\n'), new RegExp(`loot check ${name}/public/${ECONOMY_FILE}`));
-  assert.match(before.next.join('\n'), new RegExp(`loot add ${name} again`));
+  assert.match(before.next.join('\n'), new RegExp(`test it with .*dev ${name}, which installs the page client`));
   await writeFile(path.join(dir, 'public', ECONOMY_FILE), '{}');
   const after = (await addLoot(dir, { cwd: path.dirname(dir) })).next.join('\n');
   assert.match(after, new RegExp(`dev ${name}\\b`));

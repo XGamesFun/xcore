@@ -15,6 +15,7 @@
 #                                                  # (no window opened, and the page drew no sign-in panel of its own)
 #   await GamesFun.saves_put("main", {"level": 3}) # this player's saves (JSON, 64 KB each, 16 a player)
 #   var r = await GamesFun.saves_get("main")       # r.data is the value, or null
+#   await GamesFun.saves_guest_move("main")        # a guest's save (kept in the browser) into the account
 #   await GamesFun.scores_submit("best", 1200)     # leaderboards: r.data {improved, best, rank}
 #   await GamesFun.fullscreen()                    # from a button: full screen (again: back)
 #   var top = await GamesFun.scores_top("best")    # top.data: [{rank, player, name, score, at}]
@@ -174,6 +175,24 @@ func saves_delete(key: String):
 
 func saves_list():
 	return await _run("saves.list", [])
+
+
+## A guest's saves (made before sign-in, kept in this browser): the game decides what they become once signed in.
+func saves_guest_list():
+	return await _run("saves.guest.list", [])
+
+
+func saves_guest_get(key: String):
+	return await _run("saves.guest.get", [key])
+
+
+## Into the signed-in player's account, then out of the browser.
+func saves_guest_move(key: String):
+	return await _run("saves.guest.move", [key])
+
+
+func saves_guest_delete(key: String):
+	return await _run("saves.guest.delete", [key])
 
 
 ## opts: {"name": "...", "order": "high" | "low"}

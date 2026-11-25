@@ -62,13 +62,19 @@ for a token").
 
 ## Adding it to a game: `xcore loot add`
 
-`xcore loot add <folder>` shows where to save `xsolana.json`. Save the spec there, then run the command again to
-install the page client in `gf/loot/`. Publish keeps that copy up to date. For Godot and Unity, keep the project's
-`gamesfun/` folder in git.
+`xcore loot add <folder>` shows where to save `xsolana.json`. Save the spec there; `xcore dev` and publish then
+install the page client in `gf/loot/` (or run `xcore loot add` again), and publish keeps that copy up to date. For
+Godot and Unity, keep the project's `gamesfun/` folder in git.
 
-Use `GamesFun.loot` from HTML, Godot or Unity. It connects the wallet, selects the network and sends the player's sign-in token to the mainnet
-relay. Calls return `{ data, error, status }`. Import `gf/loot/play/index.js` directly when you need to supply your own
-wallet or RPC. Its `shop()` returns an array. [Page examples](CLIENT.md#the-economy-gamesfunloot-and-gfloot)
+The page client is the solana kit (`@xgamesfun/solana`), and the kit's docs cover every call. `GamesFun.loot` sets it
+up for the game: it connects the wallet, selects the network and sends the player's sign-in token to the mainnet relay.
+
+- In a web page, `const { data } = await GamesFun.loot.app()` gives the kit's own app: `data.app.shop()` returns an
+  array, and `.buy(…)`, `.openBox(…)` and `.recover()` work as the kit documents them.
+- In Godot or Unity, `GamesFun.loot.call('shop')` makes the same calls as JSON, returning `{ data, error, status }`.
+- Without `gamesfun.js`, import `gf/loot/play/index.js` directly and supply your own wallet and RPC.
+
+[Page examples](CLIENT.md#the-economy-gamesfunloot-and-gfloot)
 
 ## Going live
 
