@@ -890,7 +890,7 @@ sockets close.
 - A running room stops within about five minutes.
 - Its rooms' data and its secrets are kept.
 - The server comes back on its own when the game is published again (within 30 days, to be sure its data is kept) or
-  when its cap lifts (the start of the next month, a paid slot, or usage credit).
+  when its cap lifts (the start of the next month, a Creator account, or usage credit).
 - A version published while the game is capped goes live with its pages, and its server waits.
 - The page keeps loading in the meantime, so a game whose server can be off should tell players so when `api/`
   returns 451.
