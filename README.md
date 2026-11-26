@@ -17,7 +17,7 @@ Use Node 24 or newer. For browser checks, xcore uses Chrome, Edge or Chromium, o
 npm i -g @xgamesfun/xcore
 ```
 
-To run without installing, use `npx -y @xgamesfun/xcore@0.13.0 adopt .`. The unscoped npm package `xcore` is unrelated.
+To run without installing, use `npx -y @xgamesfun/xcore@0.14.0 adopt .`. The unscoped npm package `xcore` is unrelated.
 
 ## Quick start
 

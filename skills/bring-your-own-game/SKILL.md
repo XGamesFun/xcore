@@ -6,7 +6,7 @@ description: Bring a web game someone already made (plain HTML/JS, or a Vite, Ne
 # Bring your own game
 
 The person already has a game. Make it fit xgames.fun's hosting with the smallest change to _their_ files; remaking it
-would throw away their work. Every command here is `@xgamesfun/xcore`: run it as `npx -y @xgamesfun/xcore@0.13.0 <command>`,
+would throw away their work. Every command here is `@xgamesfun/xcore`: run it as `npx -y @xgamesfun/xcore@0.14.0 <command>`,
 or `xcore <command>` once installed with `npm i -g @xgamesfun/xcore` (a bare `npx xcore` finds another package on npm).
 Each command prints its findings with their fix and the command that comes next, and `<command> --help` gives its
 options and limits: they are the reference, so this file holds the method and the order, not the details. `xcore add`
