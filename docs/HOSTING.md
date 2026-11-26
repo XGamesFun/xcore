@@ -404,21 +404,27 @@ xcore domain                           # where the game plays, the sites that em
 
 ## Your game's data, and getting it out
 
-A published game's data is kept in three places. Only the first two can be exported in full today.
+A published game's data is kept in three places, and each can be exported in full.
 
 | Data                                                                                                                      | Where it is kept                                  | How to get it out                                                                 |
 | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------- |
 | The game's database: your server's tables, and the page's `GamesFun.db` documents                                         | the game's own D1 database on xgames.fun          | `xcore db export --live` writes all of it as SQL; `xcore db import` loads it back |
 | Project files (`env.GF.files`)                                                                                            | xgames.fun's file store for the game              | `xcore files list --live`, then `xcore files get <path> --live` for each file     |
-| Player saves and leaderboards (`GamesFun.saves`, `GamesFun.scores`, and `env.GF.saves` and `env.GF.scores` on the server) | xgames.fun's player services, not the D1 database | no bulk export yet; see below                                                     |
+| Player saves and leaderboards (`GamesFun.saves`, `GamesFun.scores`, and `env.GF.saves` and `env.GF.scores` on the server) | xgames.fun's player services, not the D1 database | `xcore data export`: every save and every board's entries, in one JSON file       |
 
-`xcore db export` does not include saves or leaderboards. A game's own server can read them through `env.GF`
-([SERVER.md](SERVER.md#envgf-the-platform)), within these limits:
+`xcore data export` writes `.gamesfun/exports/data-<time>.json` (or `--out <file>`), which git leaves out:
 
-- **Saves:** `saves.list(player)` and `saves.get(player, key)` read one player's saves. Nothing lists every player, so
-  a server can only export the players it already knows (for example, from its own database or a leaderboard).
-- **Leaderboards:** `scores.list()` lists the game's boards, and `scores.top(board, {limit, offset})` reads a board in
-  pages of up to 100 entries. Player IDs are specific to each game.
+- `saves`: `{pid, key, value, bytes, updatedAt}` for every save, its value the game's own JSON, whole.
+- `boards`: `{board, order, entries: [{pid, score, name, at, hidden?}]}` for every board. Entries of players the owner
+  hid or banned are marked `hidden`.
+
+Each player is the game's player id on xgames.fun (`pid`, as xgames.fun/console shows it), never their X id or wallet.
+It runs signed in as the game's owner, never from a GitHub Actions run, and each export is recorded in the game's audit
+log. `xcore db export` does not include saves or leaderboards.
+
+A game's own server reads them through `env.GF` ([SERVER.md](SERVER.md#envgf-the-platform)): `saves.list(player)` and
+`saves.get(player, key)` one player at a time, and `scores.top(board, {limit, offset})` in pages of up to 100 entries.
+Player IDs are specific to each game.
 
 The local copies that `xcore dev` uses are files in the game's folder: `.gamesfun/dev/d1/` (the database),
 `.gamesfun/dev/files/` (project files) and `.gamesfun/dev-platform.json` (saves and scores). Local leaderboard reads stop at offset 10,000.
