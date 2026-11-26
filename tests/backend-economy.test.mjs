@@ -176,7 +176,8 @@ test('gamesfun loot approve opens nothing unless told how it is signed; a key fi
   assert.equal(bytes.length, 64);
   assert.ok(!made.stdout.includes(bytes.slice(0, 4).join(',')));
   assert.match(made.stdout, /Its address:\n {2}[1-9A-HJ-NP-Za-km-z]{32,44}\n/);
-  assert.match(made.stdout, /xcore loot approve xsolana\.json --keypair /);
+  // (the economy file it finds from where the person stands: @xgamesfun/solana 0.29.13 and later)
+  assert.match(made.stdout, /xcore loot approve public\/xsolana\.json --keypair /);
   // A key file named from where the person stands is found from the economy file's own folder, and its name ending
   // in .json is never taken for the economy file. (A key that does not exist is said before anything is read.)
   await mkdir(path.join(game, 'k'));

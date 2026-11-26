@@ -2,7 +2,18 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
-## Unreleased
+## 0.14.0 — 2026-11-26
+
+Guests keep their saves, a web page uses the solana kit directly, one `xcore loot add`, and `xcore data export` for a
+published game's saves and leaderboards. No price or limit changed.
+
+**Ships with `@xgamesfun/solana` 0.29.13** (`xcore loot …`): one answer to how many wallet prompts a box takes, warnings
+and review lines only where the spec has what they are about, the late-oracle refund in `review`'s table, a treasury
+line before going live, the mainnet total in `cost`, and plainer words. Its changelog has the rest.
+
+**Can change how a game behaves:** a guest's `GamesFun.saves.put` on the published game used to answer "Sign in first."
+and now saves in the browser. A game that wants the old answer adds `data-guest-saves="off"` to its `<script>`.
+Leaderboards still need sign-in.
 
 - **Guests keep their saves.** `gamesfun.js` 1.10.0: with nobody signed in, `GamesFun.saves` keeps a published game's
   saves in the browser (64 KB each, 16), as on a plain local server, instead of answering "Sign in first.". Each game
