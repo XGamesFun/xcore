@@ -380,11 +380,11 @@ xcore secret remove VOUCHER_SEED
 
 ### The economy's own RPC
 
-By default, the page sends Solana calls through the shared devnet relay at `/loot/v1/rpc`.
+The shared relay uses `/loot/v1/rpc` on devnet. On mainnet it uses `/loot/v1/rpc?cluster=mainnet` and requires player sign-in.
 100,000 calls use $1 of the included allowance or $2 of Creator credit. At one call every five seconds,
 $1 of allowance covers about 140 player-hours. Relay calls alone cannot trigger a hosting cap. [Hosting fees](FEES.md#hosting)
 
-Instead, you can use the game's own devnet RPC (Helius, Triton, QuickNode; their free plans fit a small game):
+To use your own RPC, choose an endpoint for your economy’s network and run these commands.
 
 ```sh
 xcore add rpc                            # server/rpc.js at api/rpc, routed in server/index.js
