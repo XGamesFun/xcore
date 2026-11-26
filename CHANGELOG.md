@@ -2,6 +2,21 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- **Guests keep their saves.** `gamesfun.js` 1.10.0: with nobody signed in, `GamesFun.saves` keeps a published game's
+  saves in the browser (64 KB each, 16), as on a plain local server, instead of answering "Sign in first.". Each game
+  chooses: `data-guest-saves="off"` on its `<script>` (or `GamesFun.saves.guests = false`) keeps the old answer, and
+  `GamesFun.saves.guest.list()`, `.get(key)`, `.move(key)` and `.delete(key)` let the game carry a guest's saves into
+  the account its own way once they sign in (Godot `saves_guest_*`, Unity `SavesGuest*`). docs/CLIENT.md has a Saves
+  section.
+- **The economy is the solana kit.** `GamesFun.loot.app()` hands a web page `@xgamesfun/solana`'s own app, set up for
+  the game (its file, cluster, relay and, on mainnet, the player's sign-in): every call the kit documents, with the
+  kit's own answers. `GamesFun.loot.call` stays for Godot and Unity. `loot add`, ECONOMY.md and CLIENT.md point there
+  first; loading `gf/loot/` by hand is for a page without `gamesfun.js`.
+- **One `xcore loot add`.** `xcore dev` copies the page client into a game whose economy file came after `loot add`, as
+  publish does, so the second run is no longer needed.
+
 ## 0.13.0 — 2026-11-25
 
 Plans are per account. xgames.fun's paid plan is now a Creator account, $15 per 30 days prepaid in SOL or USDC: every

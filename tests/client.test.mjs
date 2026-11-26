@@ -209,6 +209,11 @@ test(
     assert.equal(await page.evaluate(() => GamesFun.slug), 'moth');
     assert.equal(await page.evaluate(() => GamesFun.local), false);
     assert.equal(await page.evaluate(() => GamesFun.ready), null, 'nobody signed in yet');
+    // a guest's save: in this browser, nothing sent
+    const kept = await page.evaluate(() => GamesFun.saves.put('run', { level: 1 }));
+    assert.deepEqual(kept.data, { ok: true, guest: true });
+    assert.deepEqual((await page.evaluate(() => GamesFun.saves.get('run'))).data, { level: 1 });
+    assert.ok(!g.s.seen.some(l => /\/saves\//.test(l)), 'not sent');
     const popup = page.waitForEvent('popup');
     await page.click('#in');
     const win = await popup;
@@ -222,6 +227,11 @@ test(
     assert.equal(player.id, 'x:42', "the platform's id for the player");
     assert.equal(await page.evaluate(() => GamesFun.token), 'tok-own');
     assert.ok(win.isClosed(), 'the window closes once signed in');
+    // signed in: the guest's save is still in this browser, and the game moves it into the account
+    assert.deepEqual((await page.evaluate(() => GamesFun.saves.guest.list())).data, [{ key: 'run', guest: true }]);
+    assert.deepEqual((await page.evaluate(() => GamesFun.saves.guest.move('run'))).data, { ok: true, moved: true });
+    assert.deepEqual(g.s.saves['x:42/run'], { level: 1 });
+    assert.deepEqual((await page.evaluate(() => GamesFun.saves.guest.list())).data, []);
 
     assert.equal((await page.evaluate(() => GamesFun.saves.put('main', { level: 3 }))).error, null);
     assert.deepEqual((await page.evaluate(() => GamesFun.saves.get('main'))).data, { level: 3 });
@@ -264,11 +274,19 @@ test(
     assert.equal((await page.evaluate(() => GamesFun.saves.get('bad key!'))).status, 0);
     assert.ok(g.s.seen.includes('PUT moth-play.xgames.test/platform/v1/saves/main (tok-own)'), g.s.seen.join('\n'));
     await page.evaluate(() => GamesFun.signOut());
-    assert.equal(
-      (await page.evaluate(() => GamesFun.saves.get('main'))).status,
-      401,
-      'signed out: refused here, not sent',
+    assert.deepEqual(
+      await page.evaluate(() => GamesFun.saves.get('main')),
+      { data: null, error: null, status: 404 },
+      "signed out: a guest again, whose saves are this browser's (the account's are not read)",
     );
+    // a game that turns guests' saves off: "Sign in first." as before, nothing kept
+    const strict = await browser.newPage();
+    await strict.addInitScript(() => {
+      window.GAMESFUN_GUEST_SAVES = false;
+    });
+    await strict.goto(`http://moth-play.xgames.test:${g.port}/`);
+    const refused = await strict.evaluate(() => GamesFun.saves.put('run', 1));
+    assert.deepEqual([refused.status, refused.error], [401, 'Sign in first.']);
     assert.equal(await page.evaluate(() => changes.at(-1)), null);
   },
 );
