@@ -70,7 +70,11 @@ test('xcore data export reads every page of saves and of each board into .gamesf
   const out = JSON.parse(r.stdout);
   assert.equal(out.saves, 2);
   assert.deepEqual(out.boards, [{ board: 'best', entries: 2 }]);
-  assert.match(out.file, /^\.gamesfun\/exports\/data-.+\.json$/);
+  assert.match(
+    out.file,
+    /^\.gamesfun[\\/]exports[\\/]data-.+\.json$/,
+    "a path from the game folder, in the system's own separators",
+  );
   assert.deepEqual(seen, ['saves@', 'saves@["a","main"]', 'boards@', 'board:best@']);
   const file = JSON.parse(await readFile(path.join(dir, out.file), 'utf8'));
   assert.equal(file.gamesfun, 'data-export-v1');
