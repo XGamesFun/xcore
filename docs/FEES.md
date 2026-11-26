@@ -60,24 +60,16 @@ your own to each.
 | Use included a month                               | $1 per game                                                        | $10 for the account, shared by its games                             |
 | Past what is included                              | capped until the month ends                                        | usage credit at the unit prices below; without it, capped            |
 
-- **Paying:** a Creator account is prepaid on xgames.fun (your console → Plans) in SOL or USDC, $15 per 30 days, for
-  1 to 12 periods at a time. It does not renew automatically. There are no slots to buy or move: every game you own, up to 10, is on Creator.
-- **When it lapses:** after a period ends there are 7 days' grace. Then every game drops to Free limits and keeps
-  running; nothing is taken down. A new game waits until the account has fewer than 2 games, or is renewed.
-- **What counts as use:** everything a game runs up is billed: its server, rooms, saves, database and files, and also
-  its page files and every call the published page makes through xgames.fun's shared Solana relay. Relay calls and
-  page files use up the included amount, counted at cost ($10 per million relay calls), and past it are charged from
-  usage credit at the unit prices below ($20 per million relay calls). They never count toward the cap that switches a
-  game's server off: only the game's own server, rooms and stored data do. A game with its own RPC (`xcore add rpc`)
-  instead pays one server request per call (about $0.30 per million at cost) plus its RPC provider's own price. See
-  [SERVER.md](SERVER.md#the-economys-own-rpc).
-- **Over the limit:** a Free game past its $1, and a Creator account's games past their shared $10 without usage
-  credit, are capped until the month ends: the server is switched off (every `api/*` request answers 451), the pages
-  keep loading, and saves and scores slow down. A Creator account's games are capped together, since their included
-  use is shared. Usage credit, bought the same way as the plan, lets them go past what is included instead of being
-  capped, at the unit prices below.
-- **Account limits** (not priced): 30 publishes and 1 GB of new files a day; 2 games on a Free account, 10 on a
-  Creator account.
+- **Payment.** Prepay 1–12 periods in SOL or USDC under Plans in the creator console. Renew manually.
+- **After expiry.** You have 7 days to renew. Then every game keeps running at Free limits. To publish another,
+  renew Creator or bring your account below 2 games.
+- **Metered use.** Server work, rooms and stored data count toward the hosting cap. Page files and shared Solana
+  relay calls also use the allowance, but cannot trigger the cap. For example, 100,000 relay calls use $1 of the
+  allowance or $2 of Creator credit. With your own RPC, each call costs one server request plus your provider’s charge.
+  [RPC setup](SERVER.md#the-economys-own-rpc)
+- **At the cap.** Pages stay up, the server returns HTTP 451, and saves and scores slow down until the month ends.
+  Free games have individual caps. Creator games share one cap. Buy usage credit under Plans to cover overage.
+- **Daily account limits.** 30 publishes and 1 GB of new files.
 
 `xcore plan` shows your account and a game's plan and this month's use; `xcore plan --all` shows every game, and
 `xcore plan --verbose` the unit prices xgames.fun publishes.

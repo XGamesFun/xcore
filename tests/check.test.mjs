@@ -401,7 +401,7 @@ test(
     assert.equal(w.firstSignIn, null);
     assert.equal(w.firstWallet, null);
     assert.equal(w.walletPrompts, 0);
-    assert.equal(w.tell[0], 'A first-time player on a phone reaches play in 1 tap, with no sign-in or wallet.');
+    assert.equal(w.tell[0], 'The game screen changed on tap 1, with no sign-in or wallet.');
     assert.ok(w.tell.length >= 2 && w.tell.length <= 4, w.tell.join('\n'));
     for (const shot of w.screenshots) assert.ok(existsSync(path.join(out, shot)), shot);
     assert.deepEqual(JSON.parse(await readFile(path.join(out, 'record.json'), 'utf8')).firstSession.tell, w.tell);
@@ -427,7 +427,7 @@ test(
     assert.deepEqual(w.firstSignIn, { step: 1, provider: 'X' }, JSON.stringify(w.steps));
     assert.deepEqual(w.steps[0].asked, [{ kind: 'signin', detail: 'X' }]);
     assert.equal(w.firstWallet, null);
-    assert.equal(w.tell[0], 'A first-time player on a phone reaches play in 1 tap, after a sign-in with X (at tap 1).');
+    assert.equal(w.tell[0], 'The game screen changed on tap 1, after a sign-in with X (at tap 1).');
   },
 );
 
