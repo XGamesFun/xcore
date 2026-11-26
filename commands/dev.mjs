@@ -129,7 +129,7 @@ export default {
         );
         if (values.verbose) {
           say(`  saves and scores: kept in ${shown(dev.store.file)}, with the ${dev.store.plan.name} plan's limits`);
-          say(`  economy RPC: ${dev.rpc}`);
+          if (dev.hasEconomy) say(`  economy RPC: ${dev.rpc}`);
         }
       }
       if (values.open) {

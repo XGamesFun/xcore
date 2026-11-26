@@ -51,7 +51,7 @@ Use relative URLs (`./assets/x.js`, not `/assets/x.js`) so the game works in all
 ### Paths from the root
 
 `xcore adopt` and `xcore check` name each file the page loads by a path from the root (`/assets/x.js`), with the
-setting for the framework adopt detected. Every framework's setting:
+setting for your framework. Fix paths in the source and rebuild. For Vite without a config, create `vite.config.mjs` with `export default { base: './' }`.
 
 | Framework             | Setting for relative paths                                                                                                                                                                             |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -62,6 +62,8 @@ setting for the framework adopt detected. Every framework's setting:
 | Nuxt                  | `ssr: false`, `app: { cdnURL: './' }` and `router: { options: { hashMode: true } }` in `nuxt.config`; in templates, `:src="'x.png'"` for a file in `public/` (`src="./x.png"` is read as an import)    |
 | Create React App      | `"homepage": "."` in `package.json`                                                                                                                                                                    |
 | Parcel                | build with the option --public-url ./                                                                                                                                                                  |
+
+When Vite warns that `gamesfun.js` cannot be bundled, keep its plain `<script>` tag. Vite copies the client from `public/` into the build.
 
 ### Routing by path
 
@@ -218,14 +220,10 @@ A game's server gets a 429 with `scope` (`"player"` or `"game"`) and `plan` when
 
 ### Paying for a Creator account and usage
 
-- A Creator account costs $15 per 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans), for 1 to 12
-  periods at a time.
-- There is no automatic renewal. After the period ends there are 7 days' grace. Then every game drops to Free limits
-  and keeps running; nothing is taken down. A new game waits until the account has fewer than 2 games, or is renewed.
-- A Creator account's games are capped together when they pass the $10 they share, since the included use is the
-  account's.
-- Usage credit, bought the same way, lets them go past what is included instead of being capped, at published unit
-  prices ([FEES.md](FEES.md#unit-prices); `xcore plan --verbose` prints xgames.fun's).
+- Prepay $15 per 30 days in SOL or USDC under Plans in the creator console. Buy 1–12 periods at a time and renew manually.
+- You have 7 days to renew after expiry. Then all games keep running at Free limits. To publish another, renew or bring the account below 2 games.
+- Creator games share $10 of monthly use and one cap. Buy usage credit to cover overage. Page files and shared relay calls count toward the bill but cannot trigger the cap.
+- Run `xcore plan --verbose` for current rates. [Unit prices](FEES.md#unit-prices)
 
 ### Seeing a plan
 
@@ -420,11 +418,10 @@ A published game's data is kept in three places. Only the first two can be expor
 - **Saves:** `saves.list(player)` and `saves.get(player, key)` read one player's saves. Nothing lists every player, so
   a server can only export the players it already knows (for example, from its own database or a leaderboard).
 - **Leaderboards:** `scores.list()` lists the game's boards, and `scores.top(board, {limit, offset})` reads a board in
-  pages of up to 100 entries. `xcore dev` stops at an offset of 10,000, so the full contents of a larger board can't
-  be read this way. Player ids are specific to each game.
+  pages of up to 100 entries. Player IDs are specific to each game.
 
 The local copies that `xcore dev` uses are files in the game's folder: `.gamesfun/dev/d1/` (the database),
-`.gamesfun/dev/files/` (project files) and `.gamesfun/dev-platform.json` (saves and scores).
+`.gamesfun/dev/files/` (project files) and `.gamesfun/dev-platform.json` (saves and scores). Local leaderboard reads stop at offset 10,000.
 
 ## What is not supported, and why
 

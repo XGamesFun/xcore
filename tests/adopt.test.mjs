@@ -211,7 +211,7 @@ test('adopting again keeps what the last adopt recorded: a build that writes ind
   const again = await adopt(dir);
   assert.deepEqual(again.refused, [], 'the recorded out is used');
   assert.ok(again.fromRecord);
-  assert.match(reportLines(again).join('\n'), /as gamesfun\.json records it/);
+  assert.match(reportLines(again).join('\n'), /using settings from gamesfun\.json/);
   assert.ok(
     !again.warn.some(w => /package\.json/.test(w.what) && /other site/.test(w.what)),
     'package.json is no page',
@@ -563,10 +563,7 @@ test('one setting, one line: the long root-path advice once, a tab icon from the
   assert.doesNotMatch(roots[0].fix, /Vite|Next|Astro|Nuxt|Parcel/);
   for (const f of [...r.fix, ...r.warn]) assert.ok(f.fix.length <= 200, `${f.fix.length}: ${f.fix}`);
   const { rootPathFix } = await import('../lib/publish/adopt/page-scan.mjs');
-  assert.match(
-    rootPathFix('Vite'),
-    /In vite\.config, set base: '\.\/' \(with none yet, make vite\.config\.js: export default \{ base: '\.\/' \}\)\.$/,
-  );
+  assert.match(rootPathFix('Vite'), /create vite\.config\.mjs with: export default \{ base: '\.\/' \}/);
   assert.doesNotMatch(rootPathFix('Vite'), /next\.config|astro|nuxt/i);
   assert.match(
     rootPathFix('Gatsby'),

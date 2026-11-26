@@ -30,7 +30,8 @@ Plans (per game):
   Scale      Granted by xgames.fun to a game that needs more.
 
 Every plan lets your own sites embed the game (Free 3, Creator 10, Scale 25: ${CMD} embed). Creator and Scale also
-serve it on your own domains (1 and 5: ${CMD} domain). Every cost in one table: docs/FEES.md.
+serve it on your own domains (1 and 5: ${CMD} domain). Prices: docs/FEES.md.
+Page files and shared relay calls count toward usage. Only server work, rooms and stored data can trigger a cap.
 
 Options:
   --all        your account and every game's plan

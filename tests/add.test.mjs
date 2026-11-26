@@ -531,7 +531,7 @@ test('signin for a Godot project: the autoload carries the client; for a Unity p
 test("each add says its own steps once: the sign-in's come with whichever add put the sign-in into the game", async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
-  const signInWords = /takes the tab to X and back|Framed by another site|a local player and this browser/;
+  const signInWords = /Sign-in reloads|gf\.onCode\(|Use xcore dev to test sign-in/;
   // sign-in first: its steps are said then, and the adds after it say only their own
   const dir = await fixture(tmp, 'static');
   const first = await addSignin(dir);

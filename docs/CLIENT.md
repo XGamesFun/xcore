@@ -10,6 +10,7 @@ GDScript and C#. For the game's own server code, see [SERVER.md](SERVER.md).
 - [Getting it: `xcore add signin`](#getting-it-xcore-add-signin)
 - [Sign-in](#sign-in): where it happens, one sign-in for every place, what is stored
 - [Calling the game's server: `GamesFun.api`](#calling-the-games-server-gamesfunapi)
+- [Saves](#saves)
 - [Leaderboards](#leaderboards)
 - [Full screen](#full-screen)
 - [A wallet app, for a claim](#a-wallet-app-for-a-claim)
@@ -53,8 +54,8 @@ No call throws. Where xgames.fun is not available, the game keeps running and th
   never the wallet.
 - `wallet` is the wallet linked to the account, or empty when there is none.
 
-Under `xcore dev`, the client uses the dev server's sign-in, saves and leaderboards. On a plain local server, it uses
-the browser's storage instead ([COMMANDS.md](COMMANDS.md#dev)).
+**Test sign-in with `xcore dev`.** Just like a published game, it requires sign-in to save or post a score.
+A plain local server and `xcore check` let guests do both in browser storage.
 
 ## Sign-in
 
@@ -138,13 +139,12 @@ The game is notified through `GamesFun.onCode(({code, site, url, window}) => …
 - When `window` is false, no window opened _and_ no panel was drawn. This happens in a frame on another site, or in a
   game that turned the panel off with `globalThis.GAMESFUN_SIGNIN_PANEL = false` or `data-signin-panel="off"`. Show
   the code clearly.
-- When `window` is true, the player already has a way to sign in on screen. X's login takes a while, and its page hides
-  from the game whether the window is still open. Show the code at most as a quiet line, never over the game.
+- When `window` is true, the sign-in window or panel is already on screen. Keep the game visible.
+  If you show the code too, use a small line of text.
 
 #### On your machine
 
-On localhost and in `xcore check`, a local player and the browser's own storage stand in, so you can build and test the
-game before publishing it.
+On a plain local server or in `xcore check`, saves and scores stay in this browser.
 
 Under `xcore dev`:
 
@@ -222,28 +222,35 @@ The page calls the game's own server with `GamesFun.api(path, init)` (Godot: `Ga
   before trusting who is asking.
 - It returns `{data, error, status}`, like every other call.
 
+## Saves
+
+Sign in before reading or writing a save. Each player gets up to 16 named saves, up to 64 KB of JSON each.
+
+```js
+const { error } = await GamesFun.saves.put('main', { level: 3 });
+if (error) console.warn(error);
+const { data: save } = await GamesFun.saves.get('main');
+```
+
+A missing save returns `data: null`. Use `GamesFun.saves.list()` to list keys or `GamesFun.saves.delete('main')`
+to remove one.
+
 ## Leaderboards
 
-**A leaderboard entry submitted from the page is only the player's claim.** A signed-in player submits their own scores
-from the page, so anyone can submit any score for themselves from the browser console.
+Sign in to post a score. The first submission creates the board and ranks higher scores first. Guests can read the top 100.
 
-A game with its own server can make a board the page cannot write to:
+```js
+const { data: result } = await GamesFun.scores.submit('best', score);
+const { data: leaders } = await GamesFun.scores.top('best', { limit: 10 });
+```
 
-1. The server calls `env.GF.scores.setup('ranked', {writer: 'server'})` (or uses a pattern for future boards, such as
-   `'daily-*'`).
-2. Submits from the page to that board are refused: the answer's `code` is `'server-only'` (HTTP 403).
-3. The server submits each run after checking it. The page reads the board as before
-   ([SERVER.md](SERVER.md#envgf-the-platform)).
+`result` includes the player's best score and rank. Use `GamesFun.scores.mine('best')` to look them up later.
+Each entry in `leaders` has a game-specific player ID. The signed-in player's entry has `me: true`.
 
-Other rules:
-
-- A board created by a page ranks higher scores first.
-- A lower-first board (for example, a time) must be created by the game's server. A page's `order: 'low'` for a new
-  board is refused (`code: 'order'`).
-- `scores.top` gives each entry's `player` as an ID specific to this game, and marks the signed-in player's own entry
-  with `me: true`.
-
-What a page may write and read on each plan is in [COMMANDS.md](COMMANDS.md#the-plans-limits-refused-as-published).
+Players can submit any score from their browser. For verified scores, have your server create the board with
+`env.GF.scores.setup('ranked', { writer: 'server' })` and check each run before submitting it.
+Page submissions to that board return HTTP 403 (`server-only`). For fastest-time boards, set `order: 'low'` on the server.
+[Server API](SERVER.md#envgf-the-platform) · [Plan limits](COMMANDS.md#the-plans-limits-refused-as-published)
 
 ## Full screen
 
@@ -528,25 +535,24 @@ for prizes by place, or a voucher signed with the game's own key (`xcore add vou
 
 ## The economy: `GamesFun.loot` and `gf/loot/`
 
-`xcore loot add` puts loot's page client next to the game's economy, in `gf/loot/`: `@xgamesfun/solana`'s client
-bundled and minified by esbuild (`play/index.js`, `chain/rpc.js` and their shared `chunks/`), xcore's `wallets.js`,
-and `release.json`, which names the version. It is a managed copy: never edit it. To refresh it after
-`@xgamesfun/solana` changes, run `xcore loot add` again (it rebuilds only when something changed); every publish does
-the same. What the economy is and how it goes live: [ECONOMY.md](ECONOMY.md).
+Run `xcore loot add` to install the client beside `xsolana.json`. Publish keeps `gf/loot/` up to date.
 
 ### From any engine: `GamesFun.loot`
 
-From Godot, Unity or any page with `gamesfun.js` (`xcore add signin`), `GamesFun.loot` does everything the next section
-wires up by hand. It takes and returns JSON (big numbers as text), so an engine calls it like the rest of xgames.fun.
-It reads the cluster from the economy's file. **On mainnet, connect the economy through it.**
+Use this with `gamesfun.js`, Godot or Unity. Sign in to the game first on mainnet. The client sends the player's
+token to the relay and selects the network in your spec. Connect the wallet, then resume unfinished purchases.
 
 ```js
-await GamesFun.loot.ready(); // {live, project, wallets: [names], spec}
-await GamesFun.loot.connect(); // {address, wallet}: the wallet asks the player
-await GamesFun.loot.link(); // {wallet}: it signs that it is this player's (a game server that pays needs it)
-const shop = await GamesFun.loot.call('shop'); // any method of loot's page client, with its arguments
-await GamesFun.loot.call('buy', 'sword', { listing: shop.data[0] }); // a listing goes back as it came
+await GamesFun.loot.connect();
+await GamesFun.loot.call('recover');
+const { data: items, error } = await GamesFun.loot.call('shop');
+if (error) throw new Error(error);
+// When the player chooses a listing, show its price before calling buy.
+const buy = item => GamesFun.loot.call('buy', item.key, { listing: item });
 ```
+
+Use `GamesFun.loot.ready()` to list available wallets. Call `GamesFun.loot.link()` when your server needs proof
+that the signed-in player owns the connected wallet.
 
 - Godot: `await GamesFun.loot_ready()`, `loot_connect()`, `loot_link()`, `loot_call("shop")`,
   `loot_call("buy", ["sword", {"listing": item}])`.
@@ -590,8 +596,7 @@ economy's cluster:
 `solanaWallets({ cluster: 'mainnet' })`, `connectWallet(wallet, { cluster: 'mainnet' })`,
 `walletStandardSigner(wallet, account, chainOf('mainnet'))`, and `pageRpc('mainnet')` instead of `PAGE_RPC`. The
 mainnet relay answers only players signed in to the game, so every call to it must also carry the player's sign-in.
-`GamesFun.loot` (above) reads the cluster from the economy's file and does all of this for you: on mainnet, connect the
-economy through it.
+`GamesFun.loot` handles the network and sign-in token for you.
 
 `@xgamesfun/solana`'s own examples use a public devnet RPC and `node_modules/` paths. On xgames.fun, use `PAGE_RPC` and
 `gf/loot/` as shown above.

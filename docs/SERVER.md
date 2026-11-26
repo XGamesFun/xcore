@@ -380,13 +380,11 @@ xcore secret remove VOUCHER_SEED
 
 ### The economy's own RPC
 
-By default, a game with an economy (`xcore loot add`) sends its Solana calls through xgames.fun's shared devnet relay
-(the play host's `/loot/v1/rpc`). Every call is billed: it uses up the included amount, counted at cost ($10 per
-million), and past it is charged from usage credit at $20 per million. Relay calls never count toward the cap that
-switches a game's server off. They are usually the biggest cost of a player in an economy game: a page that reads
-balances every 5 s makes about 720 calls a player-hour, so $1 of use at cost lasts about 140 player-hours.
+The shared relay uses `/loot/v1/rpc` on devnet. On mainnet it uses `/loot/v1/rpc?cluster=mainnet` and requires player sign-in.
+100,000 calls use $1 of the included allowance or $2 of Creator credit. At one call every five seconds,
+$1 of allowance covers about 140 player-hours. Relay calls alone cannot trigger a hosting cap. [Hosting fees](FEES.md#hosting)
 
-Instead, you can use the game's own devnet RPC (Helius, Triton, QuickNode; their free plans fit a small game):
+To use your own RPC, choose an endpoint for your economy’s network and run these commands.
 
 ```sh
 xcore add rpc                            # server/rpc.js at api/rpc, routed in server/index.js
@@ -567,8 +565,7 @@ The command:
   git, adds `.dev.vars` to `.gitignore`);
 - prints the test key's address.
 
-The **live key** is created by xcore and sent only to xgames.fun; it is never stored on your machine. Follow these steps
-in this order, so that none has to be repeated:
+xcore sends the **live key** straight to xgames.fun. Set it up in this order.
 
 1. Run `xcore add vouchers <folder>`, as above.
 2. Write `PAY.check` at the top of `server/vouchers.js`: what your server checks before a result pays.
@@ -588,8 +585,7 @@ in this order, so that none has to be repeated:
    `xcore dev` are paid once step 5 has put it on chain. Never do this on mainnet, because a copy of the folder holds
    the test key.
 
-3. Run `xcore publish`. The server is deployed. A secret can only be set on a server xgames.fun already has, and until
-   this one has it, the server pays nothing.
+3. Run `xcore publish` to deploy the server. It needs the live key before it can pay.
 4. Run `xcore secret set VOUCHER_SEED --new-key`. A new key is created and sent to the server only. The command:
    - puts the key's address in the grants your server pays in `xsolana.json` (those that name a voucher key, and
      those `PAY.check` names);

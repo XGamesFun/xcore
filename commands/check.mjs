@@ -115,7 +115,7 @@ export default {
               : cardPrinted(r.card),
           );
         console.log(
-          `\ncheck: ${r.pass ? 'PASS' : 'FAIL'}, ${checkCounts(r.checks)} · evidence ${shown(r.outDir)}${values.out ? '' : ' (never published, kept out of git)'}`,
+          `\ncheck: ${r.pass ? 'PASS' : 'FAIL'}, ${checkCounts(r.checks)} · evidence ${shown(r.outDir)}${values.out ? '' : ' (local only, git-ignored)'}`,
         );
       }
       return r.pass ? 0 : 1;

@@ -268,6 +268,7 @@ export function ownWords({ file = null, named = null } = {}) {
     let t = text
       .replace(npx, (all, command) => (command === 'mcp' ? all : `xcore loot ${command}`))
       .replace(own, '$1xcore loot $2')
+      .replaceAll('xsolana <command> --help', 'xcore loot <command> --help')
       .replace(tool, 'xcore loot $1');
     if (asNamed) t = t.replace(asNamed, `$1 ${file}`).replaceAll(`(${named})`, `(${file})`);
     // its help's columns: the three letters `xcore loot` adds are taken from the gap after

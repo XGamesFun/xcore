@@ -1,8 +1,6 @@
 # xcore's commands
 
-`xcore --help` lists the commands, and `xcore <command> --help` lists each command's options. The help is the
-reference for flags, so they are not repeated here. This document covers what the help has no room for: what each
-command reads and writes, the steps it takes, and what it prints for scripts.
+`xcore --help` lists the commands. Use `xcore <command> --help` for options.
 
 Run a command without installing it, as `npx -y @xgamesfun/xcore@0.13.0 <command>`. Or install it once with
 `npm i -g @xgamesfun/xcore` and run `xcore <command>`.
@@ -519,19 +517,18 @@ For other agents (Cursor, Copilot, Gemini CLI and more), `npx skills add XGamesF
 
 ## For scripts and agents: `--json` and exit codes
 
-Every command takes `--json`. By default the commands print a short result: a verdict, one line per finding, and at
-most three next steps. `--verbose` prints the rest, and `--json` always has everything:
+The default output shows the result, findings and up to three next steps. Use `--verbose` for details.
 
-- `xcore add` and `xcore loot add`: every note on using what was added (`--json`: `next` and `steps`);
-- `xcore check`: each check's detail and every tap of the first-session walk (also in `record.json`);
-- `xcore review`: how it reads, every finding with its fix, every question and the trade-offs (also in `review.md`);
-- `xcore dev`: where saves are kept, the economy's RPC, and what the stand-in does not imitate.
+| Command                       | Extra detail                                                   |
+| ----------------------------- | -------------------------------------------------------------- |
+| `xcore add`, `xcore loot add` | Setup notes                                                    |
+| `xcore check`                 | Each check and tap, also in `record.json`                      |
+| `xcore review`                | Findings, fixes, questions and trade-offs, also in `review.md` |
+| `xcore dev`                   | Save location, economy RPC and local limits                    |
 
-- A failure is then also printed on stdout as `{ "ok": false, "error", "code", "state", "next" }`:
-  - `code` is the reason (`usage`, `login`, `files`, `secrets`, `build`, `card`, `size`…; `failed` when there is no
-    more specific code);
-  - `next` is the command that moves it on;
-  - `state` and `next` are present only when the failure has them.
+Use `--json` for the full result. Failures print `ok: false`, an `error` message and a reason in `code` on stdout.
+Some include a `state` and the next command in `next`.
+
 - `check --json` and `adopt --json` print their whole report, with the same `ok`, `error` and `code` in it when the
   check fails or the game is refused.
 - `xcore loot <command> --json` passes on the economy tools' own JSON unchanged.

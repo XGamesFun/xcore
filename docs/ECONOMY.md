@@ -62,19 +62,13 @@ for a token").
 
 ## Adding it to a game: `xcore loot add`
 
-`xcore loot add <folder>` tells you where the economy file goes: `xsolana.json`, in the `static` folder. Once the file
-is there, run it again and it puts the page client next to it, as `gf/loot/`: one bundled, minified client
-(`play/index.js` and `chain/rpc.js`, about 0.5 MB with their shared chunk) and `wallets.js`. This is a managed copy:
-never edit it. Running `xcore loot add` again is the update path: it rebuilds the copy when the installed
-`@xgamesfun/solana` changed, and leaves it alone otherwise. Each publish does the same.
+`xcore loot add <folder>` shows where to save `xsolana.json`. Save the spec there, then run the command again to
+install the page client in `gf/loot/`. Publish keeps that copy up to date. For Godot and Unity, keep the project's
+`gamesfun/` folder in git.
 
-The page uses the client in one of two ways:
-
-- through `GamesFun.loot` (any engine, and every economy on mainnet), or
-- by loading `gf/loot/` directly.
-
-[CLIENT.md](CLIENT.md#the-economy-gamesfunloot-and-gfloot) covers both. In a Godot or Unity project, both files live in
-the project's own `gamesfun/` folder, outside the engine's export.
+Use `GamesFun.loot` from HTML, Godot or Unity. It connects the wallet, selects the network and sends the player's sign-in token to the mainnet
+relay. Calls return `{ data, error, status }`. Import `gf/loot/play/index.js` directly when you need to supply your own
+wallet or RPC. Its `shop()` returns an array. [Page examples](CLIENT.md#the-economy-gamesfunloot-and-gfloot)
 
 ## Going live
 
@@ -102,7 +96,7 @@ keys sign.
 - Keep it outside the game's folder and out of git. The tools refuse a key file inside a repository, and `xcore publish`
   refuses to upload one.
 - Back it up yourself, and never paste it anywhere.
-- Unless `xsolana.json` names a `treasury`, what the economy earns for you goes to the key's address.
+- Set `"treasury": "wallet:<address>"` before going live to choose where sales proceeds go. The default is the signing key. Changing it later requires an owner transaction outside the spec. Collection royalties go to the original signing wallet.
 
 Why a key file: it is a new key that has never held anything else, so the wallet that holds your assets is never
 connected. It also signs each transaction exactly as shown, with no web page involved. The cost: it is a plain file,
@@ -308,25 +302,17 @@ xcore coin launch … --yes <code>                   # the same command, with th
 
 ### What xcore checks before the key signs
 
-xgames.fun's launchpad builds the launch's transactions, and the code you approve covers only your own choices. So
-before the key signs, xcore reads every transaction and holds it to the launch the first run printed.
-[`lib/coin-check.mjs`](../lib/coin-check.mjs) has the full rule, and says what it does not read. Each transaction must
-have:
+Before signing, xcore compares the launchpad's transactions with the plan you approved.
+[Validation rules](../lib/coin-check.mjs)
 
-- only the instructions a launch on that venue is made of, each once and in order, with exactly the accounts its
-  program takes, and the key, the coin and the pair where the program reads them;
-- one coin, signed by its own new key (the signature is checked), with the plan's name, ticker and link byte for byte,
-  paired with what the plan said, and this key as its creator;
-- on Meteora: no fee for creating the pool or for moving to it; at least 90% of the creator's side of trading fees and
-  of liquidity going to this key; the launchpad's part of the liquidity locked; a fixed supply; and nobody able to mint
-  more of the coin or rename it;
-- on pump.fun: none of its optional modes, and at least 90% of the creator fee going to this key;
-- no buy, and nothing from the System or Token programs (so no transfer of the key's SOL or of a token it holds);
-- a token program (and on pump.fun, Token-2022 for the coin) wherever an instruction reads one;
-- the key's share of a pump.fun fee paid to the key's own account;
-- no change to another of the key's coins, nothing that names loot (the game's economy, which the same key may own),
-  and no lookup table;
-- at most 0.1 SOL in fees paid by the key itself.
+- **Instructions.** Only the venue's launch instructions may appear, once each, in order, with the expected accounts.
+- **Coin.** xcore checks the new mint's signature, creator, pair, name, ticker and link against the plan.
+- **Meteora.** The supply is fixed and the name is locked. Pool creation and migration carry no fee.
+  The creator keeps at least 90% of the creator's trading fees and liquidity. The launchpad's liquidity stays locked.
+- **pump.fun.** Optional modes stay off. At least 90% of the creator fee goes to the creator's account.
+- **Transfers.** The launch excludes buys, System or Token program instructions, changes to other coins, loot
+  instructions and lookup tables. Each token program must match the venue's requirements.
+- **Fees.** The signing key pays at most 0.1 SOL in fees.
 
 **The cluster is checked too.** A transaction does not name its cluster, so before the key signs, xcore asks an RPC of
 the launch's cluster: devnet, or mainnet with `--cluster mainnet` (checked against mainnet's first block).

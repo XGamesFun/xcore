@@ -8,14 +8,10 @@ import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore add signin|database|multiplayer|rpc|vouchers [folder] [--verbose] [--json]
 
-Add xgames.fun services to a web, Godot 4 or Unity game. Each one writes files into the game; run the same command
-again to update the files it wrote. The folder defaults to the current directory.
-It prints what it wrote and the next steps in short; --verbose prints every note, and --json has both.
+Install or update services in a web, Godot 4 or Unity game. The folder defaults to the current directory.
 
-  signin       Player sign-in through xgames.fun (X or Google; a Solana wallet the player linked comes with the
-               sign-in), plus each player's saves and the game's leaderboards, called from the game's own code.
-               A web game gets gamesfun.js next to its page, a Godot 4 project an autoload (GamesFun), and a Unity
-               project a WebGL plugin (Assets/Plugins/GamesFun). On this machine, a local player stands in.
+  signin       X or Google sign-in, saves and leaderboards. Installs gamesfun.js for web games, a Godot autoload
+               or a Unity WebGL plugin. Test with a local player in xcore dev.
   database     Everything signin adds, plus a database for the game: one D1 database per game, created on
                xgames.fun by the first publish (gamesfun.json → database).
                - With its own server, the game's code reads and writes it (server/gf-db.js; tables come from
@@ -57,7 +53,9 @@ export function unknownKind(what) {
   const WITH = {
     leaderboard: 'signin',
     leaderboards: 'signin',
+    score: 'signin',
     scores: 'signin',
+    save: 'signin',
     saves: 'signin',
     login: 'signin',
     auth: 'signin',
