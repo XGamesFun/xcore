@@ -32,8 +32,10 @@ What it reads:
                - The payout ledger: each route that pays, who signs it, what decides it (the request, or state the
                  server keeps), who is paid, the identity its limits count, its trust level (declared and
                  observed), and its ceiling (identities one person can make × the limit for each × time).
-               - Key custody: each key (the test key in .dev.vars, the live key, any key in the page's files),
-                 every place its bytes are, and who can read them.
+               - Key custody: each key (the test key in .dev.vars, the live key, any key in the page's files or
+                 written in the server's code, a secret of env a route answers or a log line prints), every place
+                 its bytes are, and who can read them. Key-shaped bytes under no name (64 hex characters, 32 or 64
+                 numbers made into bytes) are a medium: a key, or not, is yours to say.
                It also flags a server that does work before checking a player's token, and lists every api/ route.
   design/code  what the economy declares the server does off chain ("offchain", a grant's "serverLimit") compared
                with what server/ does: conversions it does not declare, declarations no code implements, and
