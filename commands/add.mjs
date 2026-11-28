@@ -2,7 +2,7 @@
 // the game's own, multiplayer rooms, the economy's own Solana RPC or its own voucher key, put into a web game, a Godot 4 project or a Unity project (../lib/add.mjs).
 import path from 'node:path';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
-import { shown } from '../lib/games.mjs';
+import { shown, typedDir } from '../lib/games.mjs';
 import { addDatabase, addMultiplayer, addRpc, addSignin, addVouchers } from '../lib/add.mjs';
 import { CMD } from '../lib/command.mjs';
 
@@ -79,7 +79,7 @@ export function addedLines(what, where, r, { verbose = false } = {}) {
   const steps = verbose ? r.steps : (r.next ?? r.steps);
   if (steps.length) lines.push('', 'Next:', ...steps.map((s, i) => `  ${i + 1}. ${s}`));
   if (!verbose && r.next && r.steps.length)
-    lines.push('', `Details (${r.steps.length} notes): ${CMD} add ${what} ${where === '.' ? '.' : where} --verbose`);
+    lines.push('', `Details (${r.steps.length} notes): ${CMD} add ${what} ${typedDir(where)} --verbose`);
   return lines;
 }
 

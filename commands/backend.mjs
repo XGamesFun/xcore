@@ -5,7 +5,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
-import { resolveGame, shown } from '../lib/games.mjs';
+import { resolveGame, shown, typedDir } from '../lib/games.mjs';
 import { backendOrigins, BACKEND_FILE } from '../lib/publish/scan.mjs';
 import { pageRoots } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -71,7 +71,7 @@ export default {
       if (values.json) printJson({ file: shown(file), ...config });
       else
         console.log(
-          `Wrote ${shown(file)}: the published page may reach ${config.origins.join(', ')}. Next: ${CMD} check, which fails on a request to any other origin.`,
+          `Wrote ${shown(file)}: the published page may reach ${config.origins.join(', ')}. Next: ${CMD} check ${typedDir(dir)}, which fails on a request to any other origin.`,
         );
       return 0;
     }, args),

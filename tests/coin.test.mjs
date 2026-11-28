@@ -2178,7 +2178,11 @@ test('status and drop: the folder’s game, the saved sign-in; a folder never pu
   for (const act of [() => coinStatus(dir, opts), () => dropLaunch(dir, opts), () => launchCoin(dir, FORM, opts)])
     await assert.rejects(
       act,
-      e => e.code === 'not-published' && /a coin is launched for a published game\. Publish it first/.test(e.message),
+      e =>
+        e instanceof CoinError &&
+        e.code === 'not-published' &&
+        /not on .* yet: publish it first \(.* publish .+\), then launch its coin$/.test(e.message) &&
+        / publish .+$/.test(e.next),
     );
   // an xgames.fun from before the route
   await writeFile(path.join(dir, '.gamesfun', 'publish.json'), JSON.stringify({ [ORIGIN]: { projectId: 'g-old' } }));
