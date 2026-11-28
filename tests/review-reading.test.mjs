@@ -136,6 +136,7 @@ test('a round new on every request, however it is made, or one the request names
   for (const [expr, above, want] of [
     ['newRound()', 'function newRound() {\n  return crypto.randomUUID();\n}', 'round-fresh'],
     ['`${player.sub}:${Math.floor(Date.now() / 1000)}`', '', 'round-fresh'],
+    ['`${player.sub}:${Math.floor(Date.now() / (10 * 1000))}`', '', 'round-fresh'],
     ['String(body.nonce)', '', 'round-request'],
     ['`${body.runId}:${body.checkpoint}`', '', 'round-request'],
   ]) {
@@ -148,8 +149,13 @@ test('a round new on every request, however it is made, or one the request names
     r.findings.find(f => f.cases?.includes('round-request')).message,
     /its round comes from the request \(body\.checkpoint\), which the check never looks state up by/,
   );
-  // the run's own id, looked up; a day's bucket of the clock: nothing
-  for (const expr of ['body.runId', '`${player.sub}:${Math.floor(Date.now() / 86_400_000)}`'])
+  // the run's own id, looked up; a bucket of the clock a day, an hour or a minute long: nothing
+  for (const expr of [
+    'body.runId',
+    '`${player.sub}:${Math.floor(Date.now() / 86_400_000)}`',
+    '`${player.sub}:${Math.floor(Date.now() / 3_600_000)}`',
+    '`${player.sub}:${Math.floor(Date.now() / (60 * 1000))}`',
+  ])
     assert.deepEqual(cases(await round(expr), 'payout-input'), [], expr);
   // a round made by a function the reading did not follow: not read
   const u = await round('makeRound(body.runId)', "import { makeRound } from './rounds-not-here.js';");
