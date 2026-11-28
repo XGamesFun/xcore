@@ -159,3 +159,87 @@ test('a paid-read that answers null, undefined or 0 when the chain fails is open
     [],
   );
 });
+
+test('stored input: a request value copied to a name first, given to a Durable Object, or a board the page writes; and a value that only picks the row is not', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await game(tmp, 's');
+  const stored = r => r.findings.filter(f => f.id === 'payout-stored-input').map(f => f.message);
+  await withCheck(
+    dir,
+    "const s = await db(env).first('SELECT best FROM scores WHERE player = ?', player.sub);\n    if (!s || s.best < 1000) return { why: 'Score 1000 first.' };\n    return { grant: 'found-whale', round: `${player.sub}:whale`, amount: 'grant' };",
+  );
+  const route = body =>
+    writeFile(
+      path.join(dir, 'server', 'score.js'),
+      `import { db, withPlayer } from './gf-db.js';\nexport async function handleScore(request, env) {\n  const sub = await withPlayer(request, env);\n  const b = await request.json();\n  ${body}\n  return Response.json({ ok: true });\n}\n`,
+    );
+  await route(
+    "const best = Math.floor(Number(b.score));\n  await db(env).run('INSERT OR REPLACE INTO scores (player, best) VALUES (?, ?)', sub, best);",
+  );
+  let r = await review(dir);
+  assert.equal(r.verdict, 'FAIL');
+  assert.match(
+    stored(r)[0],
+    /reads the table scores, and server\/score\.js:6 writes it with what a request sent \(best\)/,
+  );
+  // the request's id only picks the row, and the column it writes is the server's clock, which the check never reads
+  await route(
+    "await db(env).run('UPDATE scores SET finished_at = ? WHERE player = ? AND run = ?', Date.now(), sub, String(b.run));",
+  );
+  r = await review(dir);
+  assert.deepEqual(stored(r), []);
+  assert.equal(r.verdict, 'PASS', JSON.stringify(r.findings.map(f => f.id)));
+  // the same UPDATE storing the request's score in the column the check reads
+  await route("await db(env).run('UPDATE scores SET best = ? WHERE player = ?', Number(b.score), sub);");
+  assert.equal(stored(await review(dir)).length, 1);
+  // a Durable Object the check reads, given the request's score by a method that writes its storage
+  await withCheck(
+    dir,
+    "const best = await env.BEST.get(env.BEST.idFromName(player.sub)).best();\n    if (best < 1000) return { why: 'Score 1000 first.' };\n    return { grant: 'found-whale', round: `${player.sub}:whale`, amount: 'grant' };",
+  );
+  await writeFile(
+    path.join(dir, 'server', 'best.js'),
+    "import { DurableObject } from 'cloudflare:workers';\nexport class Best extends DurableObject {\n  async record(score) { await this.ctx.storage.put('best', score); }\n  async best() { return (await this.ctx.storage.get('best')) ?? 0; }\n}\nexport async function handleBest(request, env) {\n  const player = await env.GF.verifyPlayer((request.headers.get('authorization') ?? '').slice(7));\n  const body = await request.json();\n  await env.BEST.get(env.BEST.idFromName(player.sub)).record(Number(body.score));\n  return Response.json({ ok: true });\n}\n",
+  );
+  r = await review(dir);
+  assert.equal(r.verdict, 'FAIL');
+  assert.match(stored(r)[0], /reads env\.BEST, and server\/best\.js:9 writes it with what a request sent \(body\)/);
+  // a board the page writes (no writer: 'server'): player input; one the server makes its own: state
+  await withCheck(
+    dir,
+    "const best = await env.GF.scores.best('main', player.sub);\n    if (!best || best.score < 1000) return { why: 'Score 1000 first.' };\n    return { grant: 'found-whale', round: `${player.sub}:whale`, amount: 'grant' };",
+  );
+  r = await review(dir);
+  assert.equal(r.verdict, 'FAIL');
+  assert.deepEqual(cases(r, 'payout-input'), ['request-decides']);
+  assert.match(r.ledger[0].seen ?? '', /env\.GF\.scores, which the player writes/);
+  await writeFile(
+    path.join(dir, 'server', 'boards.js'),
+    "export const boards = env => env.GF.scores.setup('main', { writer: 'server' });\n",
+  );
+  r = await review(dir);
+  assert.equal(r.ledger[0].source, 'env');
+  assert.deepEqual(cases(r, 'payout-input'), []);
+});
+
+test('a KV put whose key alone is the request’s stores nothing of it; one whose value is the request’s does', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await game(tmp, 'kv');
+  await withCheck(
+    dir,
+    "const run = await env.RUNS.get(String(body.runId), 'json');\n    if (!run || run.player !== player.sub) return { why: 'no' };\n    return { grant: 'found-whale', round: body.runId, amount: 'grant' };",
+  );
+  const start = value =>
+    writeFile(
+      path.join(dir, 'server', 'start.js'),
+      `export async function start(request, env) {\n  const player = await env.GF.verifyPlayer(request.headers.get('authorization'));\n  const b = await request.json();\n  await env.RUNS.put(b.runId, ${value});\n  return new Response('ok');\n}\n`,
+    );
+  await start('JSON.stringify({ player: player.sub, at: Date.now() })');
+  let r = await review(dir);
+  assert.ok(!r.findings.some(f => f.id === 'payout-stored-input'), JSON.stringify(r.findings.map(f => f.id)));
+  await start('JSON.stringify({ player: player.sub, at: b.startedAt })');
+  r = await review(dir);
+  assert.ok(r.findings.some(f => f.id === 'payout-stored-input'));
+});
