@@ -35,3 +35,16 @@ test('the sign-in client is asked for only where it is served', () => {
   );
   assert.match(CLIENT, /var serves = w === 'dev' \|\|/);
 });
+
+test('every page switch the client reads is named in CLIENT.md', () => {
+  const read = new Set([...CLIENT.matchAll(/globalThis\.(GAMESFUN_[A-Z_]+) (?:===|!==)/g)].map(m => m[1]));
+  assert.ok(read.has('GAMESFUN_SIGNIN_SHARED'), [...read].join(' '));
+  for (const name of read) assert.ok(DOC.includes(`globalThis.${name}`), `${name} is not in CLIENT.md`);
+});
+
+test("xcore dev's /play/ page, the play page's frame before publishing, is in CLIENT.md", () => {
+  const dev = DOC.slice(DOC.indexOf('Under `xcore dev`:'), DOC.indexOf('### One sign-in for every place'));
+  assert.match(dev, /`\/play\/` shows the game framed as xgames\.fun's play page frames it/);
+  assert.match(dev, /`GamesFun\.ready`/);
+  assert.doesNotMatch(DOC, /\*\*Test sign-in with `xcore dev`\.\*\* It works as a published game does/);
+});

@@ -54,9 +54,10 @@ No call throws. Where xgames.fun is not available, the game keeps running and th
   never the wallet.
 - `wallet` is the wallet linked to the account, or empty when there is none.
 
-**Test sign-in with `xcore dev`.** It works as a published game does: a guest's saves stay in the browser, and
-posting a score needs sign-in. A plain local server and `xcore check` keep every save and score in browser storage,
-signed in or not.
+**Test sign-in with `xcore dev`.** Its `/game/` page works as the game does on its own link: a guest's saves stay in
+the browser, and posting a score needs sign-in. Its `/play/` page shows the game in a frame, as xgames.fun's play page
+does, and signs the player in from the page above. A plain local server and `xcore check` keep every save and score in
+browser storage, signed in or not.
 
 ## Sign-in
 
@@ -156,6 +157,9 @@ Under `xcore dev`:
 - the dev server answers the three xgames.fun addresses above for this one game. Sign in sends the tab through the dev
   server's stand-in for X and back, as on the game's own host. `GamesFun.signIn({name: 'Ana'})` signs in a named dev
   player immediately.
+- `/play/` shows the game framed as xgames.fun's play page frames it: the same sandbox, and a bar with Sign in and Sign
+  out that stand in for the play page's own. Test there what the game does at `GamesFun.ready` and with its first save
+  when the play page has already signed the player in.
 
 ### One sign-in for every place the game can be
 
@@ -198,7 +202,8 @@ stored where another game's page could read it.
 `xcore dev`, when the page loads as the top window, it also requests a sign-in client from the dev server at
 `/platform/v1/signin/v1.js` (the client of the `xcore` version that runs it). xgames.fun does not serve that address
 yet, so on the game's own link and its own domain nothing is requested and the built-in client runs. A frame never
-requests it.
+requests it. A host that does serve it can have the page ask for it there too: set
+`globalThis.GAMESFUN_SIGNIN_SHARED = true` before loading `gamesfun.js`.
 
 - If the hosted client arrives in time, it runs. If the address returns nothing, or not in time, the built-in client
   runs and the game behaves the same.
@@ -254,8 +259,9 @@ data, loses it. Saves are written by the player's own page, so a server that pay
 
 Each game chooses what guests get:
 
-- **No guest saves:** add `data-guest-saves="off"` to the `<script>` tag (or set `GamesFun.saves.guests = false`).
-  A guest's save then returns `Sign in first.` (status 401).
+- **No guest saves:** add `data-guest-saves="off"` to the `<script>` tag, set `GamesFun.saves.guests = false`, or set
+  `globalThis.GAMESFUN_GUEST_SAVES = false` before loading `gamesfun.js`. A guest's save then returns `Sign in first.`
+  (status 401).
 - **At sign-in:** guest saves stay in the browser until the game moves them. `saves.guest.list()` and
   `saves.guest.get(key)` read them, `saves.guest.move(key)` copies one into the account (replacing a save with the
   same key) and removes it from the browser, and `saves.guest.delete(key)` drops it. The game can carry everything
