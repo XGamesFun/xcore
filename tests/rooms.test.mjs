@@ -69,7 +69,14 @@ function room(env = {}) {
 test('the first in is the host (id 1); the next get ids of their own and the room says who is there', async () => {
   const { join } = room();
   const host = await join({ name: 'Ada' });
-  assert.deepEqual(host.last('welcome'), { t: 'welcome', id: 1, host: 1, code: 'K7MXQ2', peers: [] });
+  assert.deepEqual(host.last('welcome'), {
+    t: 'welcome',
+    id: 1,
+    host: 1,
+    code: 'K7MXQ2',
+    peers: [],
+    messageBytes: ROOM.messageBytes,
+  });
   const b = await join({ name: 'Bo<b>' });
   const w = b.last('welcome');
   assert.ok(w.id > 1 && w.id < 2 ** 31, String(w.id));
