@@ -1,5 +1,6 @@
 # Lint and the tests on every push and pull request: Linux, macOS and Windows, Node 24. The runners have Chrome,
-# which the page check's tests drive.
+# which the page check's tests drive. On Linux the server tools (Miniflare and workerd) are installed too, and every
+# test must run there (XCORE_TEST_ALL=1: a skipped test fails the run).
 name: ci
 
 on:
@@ -17,7 +18,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -30,4 +31,12 @@ jobs:
       - name: Lint and formatting (on Linux only, as the result is the same everywhere)
         if: matrix.os == 'ubuntu-latest'
         run: npm run lint
+      - name: The server tools, for the tests that run a game's server under workerd (on Linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          # an assignment, so a failed install stops the job here
+          dir="$(node scripts/server-tools.mjs "$RUNNER_TEMP/server-tools")"
+          echo "GAMESFUN_SERVER_DEPS=$dir" >> "$GITHUB_ENV"
+          echo "XCORE_TEST_ALL=1" >> "$GITHUB_ENV"
       - run: npm test
