@@ -41,7 +41,7 @@ export default {
       const r = await logout(origin, { forget: !!values.forget });
       const kept = !r.forgot && !!r.why;
       if (!kept) await forgetReach(origin);
-      if (values.json) printJson({ studio: origin, ...r, ...(kept ? { next: `${CMD} logout` } : {}) });
+      if (values.json) printJson({ ok: !kept, studio: origin, ...r, ...(kept ? { next: `${CMD} logout` } : {}) });
       else
         console.log(
           kept

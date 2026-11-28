@@ -85,6 +85,9 @@ test('a logout xgames.fun did not answer keeps the token to try again; --forget 
   g.state.handle = (method, url) => (method === 'DELETE' && url === '/api/kit/token' ? [500, { error: 'down' }] : null);
   assert.deepEqual(await logout(g.origin, { env }), { revoked: false, forgot: false, why: 'offline', status: 500 });
   assert.equal((await signInState(g.origin, { env })).state, 'signed-in', 'still signed in: it can be tried again');
+  const keptJson = await runAsync(['logout', '--json'], cli);
+  assert.equal(keptJson.status, 1);
+  assert.equal(JSON.parse(keptJson.stdout).ok, false);
   const kept = await runAsync(['logout'], cli);
   assert.equal(kept.status, 1);
   assert.match(
@@ -94,6 +97,7 @@ test('a logout xgames.fun did not answer keeps the token to try again; --forget 
   const forgot = await runAsync(['logout', '--forget', '--json'], cli);
   assert.equal(forgot.status, 0, forgot.stderr);
   assert.deepEqual(JSON.parse(forgot.stdout), {
+    ok: true,
     studio: g.origin,
     revoked: false,
     forgot: true,
@@ -131,7 +135,7 @@ test('login --status asks xgames.fun once: confirmed, ended there, or not confir
   const { g, env, cli } = await setup(t);
   await signIn(g, env);
   let j = JSON.parse((await runAsync(['login', '--status', '--json'], cli)).stdout);
-  assert.deepEqual([j.signedIn, j.confirmed, j.studioSays], [true, true, 'ok']);
+  assert.deepEqual([j.ok, j.signedIn, j.confirmed, j.studioSays], [true, true, true, 'ok']);
   // revoked elsewhere (the console): xgames.fun says so, and the way on is a sign-in
   g.state.tokens.clear();
   j = JSON.parse((await runAsync(['login', '--status', '--json'], cli)).stdout);

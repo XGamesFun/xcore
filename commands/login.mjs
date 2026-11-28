@@ -65,6 +65,7 @@ export default {
         const next = says?.said === 'ended' ? `${CMD} login` : s.next;
         if (values.json)
           printJson({
+            ok: true,
             ...s,
             next,
             signedIn: s.state === 'signed-in' && says?.said !== 'ended',

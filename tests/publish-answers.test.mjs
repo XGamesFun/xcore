@@ -211,6 +211,7 @@ test('a version xgames.fun kept but could not put live is said as that, and the 
     url === '/api/kit/games/g1'
       ? [200, { published: true, slug: 'dot-catch', url: 'http://x/play/dot-catch', version: { number: 1 } }]
       : null;
+  assert.equal(JSON.parse((await runAsync(['publish', dir, '--status', '--json'], cli)).stdout).ok, true);
   const st = await runAsync(['publish', dir, '--status'], cli);
   assert.match(
     st.stdout,

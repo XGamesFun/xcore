@@ -128,3 +128,36 @@ test('add vouchers: no "write PAY.check" once it names a grant, and the last ste
   assert.equal(again.status, 0, again.stderr);
   assert.doesNotMatch(again.stdout, /Write PAY\.check in server\/vouchers\.js/);
 });
+
+test('every command that needs the published game refuses an unpublished folder the same way', async t => {
+  const cwd = await webGame(t);
+  const dir = path.join(cwd, 'nx');
+  const origin = 'https://studio.example';
+  const noNetwork = () => assert.fail('nothing is fetched for a folder with no game there');
+  const opts = { origin, env: {}, fetchImpl: noNetwork };
+  const { filesList } = await import('../lib/files.mjs');
+  const { liveGameId } = await import('../lib/db.mjs');
+  const { exportData } = await import('../lib/data-export.mjs');
+  const { listSecrets } = await import('../lib/publish/secrets.mjs');
+  const { gamePlan } = await import('../lib/publish/plans.mjs');
+  const { gameSite } = await import('../lib/publish/site.mjs');
+  const here = process.cwd();
+  process.chdir(cwd);
+  t.after(() => process.chdir(here));
+  for (const [what, call, then] of [
+    ['files', () => filesList(dir, { ...opts, live: true }), ', then put its files'],
+    ['db', () => liveGameId(dir, origin), ', then use its database there'],
+    ['data export', () => exportData(dir, opts), ', then export its players’ data'],
+    ['secret', () => listSecrets(dir, opts), ', then set its secrets (its server/ reads them)'],
+    ['plan', () => gamePlan(dir, opts), / plan$/],
+    ['embed and domain', () => gameSite(dir, opts), ''],
+  ])
+    await assert.rejects(call, e => {
+      assert.equal(e.code, 'not-published', what);
+      assert.match(e.next, / publish nx$/, what);
+      assert.ok(e.message.startsWith(`this folder's game is not on ${origin} yet: publish it first (`), what);
+      if (then instanceof RegExp) assert.match(e.message, then, what);
+      else assert.ok(e.message.endsWith(` publish nx)${then}`), `${what}: ${e.message}`);
+      return true;
+    });
+});

@@ -117,7 +117,7 @@ export function publishCommand({
         if (nudge) console.error(nudge);
         if (values.status) {
           const s = await publishStatus(dir, { origin });
-          if (values.json) printJson(s);
+          if (values.json) printJson({ ok: true, ...s });
           else {
             console.log(
               s.signedIn
