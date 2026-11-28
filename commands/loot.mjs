@@ -58,9 +58,9 @@ every build includes them. It prints the next steps in short; --verbose prints e
 (next and steps).`;
 
 /** xsolana's commands that read an economy file ([file], default xsolana.json). */
-const ON_FILE = new Set(['check', 'simulate', 'cost', 'explain', 'review', 'publish', 'status', 'approve']);
+const ON_FILE = new Set(['check', 'simulate', 'cost', 'explain', 'review', 'publish', 'status', 'approve', 'handover']);
 /** xsolana's flags that take a value: the value is never the economy file, whatever it ends with. */
-const VALUED = new Set(['--keypair', '--yes', '--port', '--host', '--args-file', '--agent', '--scope']);
+const VALUED = new Set(['--keypair', '--to', '--yes', '--port', '--host', '--args-file', '--agent', '--scope']);
 
 /** Where each argument stands: the indexes of those that are neither a flag nor a flag's value. */
 function plainArgs(args) {
@@ -77,17 +77,16 @@ function plainArgs(args) {
 
 /**
  * The arguments as xsolana gets them when it runs in another folder than the person's: a key file named from where
- * they stand (`--keypair keys/game.json`) is given whole. One that starts with ~ is the home folder's, left as it is.
+ * they stand (`--keypair keys/game.json`, handover's `--to keys/new.json`) is given whole. One that starts with ~ is the home folder's, left as it is.
  */
 export function fromFolder(args, cwd) {
   const whole = p => (p.startsWith('~') || path.isAbsolute(p) ? p : path.resolve(cwd, p));
-  return args.map((a, i) =>
-    a.startsWith('--keypair=')
-      ? `--keypair=${whole(a.slice('--keypair='.length))}`
-      : i > 0 && args[i - 1] === '--keypair'
-        ? whole(a)
-        : a,
-  );
+  const KEYS = ['--keypair', '--to'];
+  return args.map((a, i) => {
+    const joined = KEYS.find(k => a.startsWith(`${k}=`));
+    if (joined) return `${joined}=${whole(a.slice(joined.length + 1))}`;
+    return i > 0 && KEYS.includes(args[i - 1]) ? whole(a) : a;
+  });
 }
 
 /**
@@ -192,13 +191,20 @@ export default {
     );
     if (rpc) env.XSOLANA_RPC_URL = rpc;
     else delete env.XSOLANA_RPC_URL;
+    // `version` reads no file: it names the program of the cluster the folder's economy is on, as check there does
+    if (args[0] === 'version' && !env.XSOLANA_CLUSTER) env.XSOLANA_CLUSTER = economyCluster(cwd);
     // its words name its own commands (`npx -y @xgamesfun/solana@… approve xsolana.json --keypair …`, `xsolana check`):
     // said here as this package's, with the file as it was named
     const say = ownWords({ file, named: file ? path.basename(file) : null });
     // the MCP server and `tool` talk to an agent, which calls the tools by the names they list (xsolana_check): their
     // output goes through as it is, and their notes on stderr keep the tools' names
     const asTools = args[0] === 'mcp' || args[0] === 'tool';
-    const note = asTools ? ownWords({ file, named: file ? path.basename(file) : null, tools: false }) : say;
+    // (its refusals on stderr start "xsolana:": said as every xcore refusal is)
+    const note = text =>
+      (asTools ? ownWords({ file, named: file ? path.basename(file) : null, tools: false }) : say)(text).replace(
+        /^xsolana: /gm,
+        'xcore: ',
+      );
     const child = spawn(xsolana[0], [xsolana[1], ...rest], { stdio: ['inherit', 'pipe', 'pipe'], env, cwd });
     // a reader that stops early (`| head`) closes our output: stop the tools and end quietly, as a pipe expects
     const gone = { yes: false };
@@ -280,6 +286,12 @@ export function ownWords({ file = null, named = null, tools = true } = {}) {
     file && named && file !== named
       ? new RegExp(String.raw`(xcore loot \w+) ${named.replace(/[.]/g, '\\.')}\b`, 'g')
       : null;
+  // a command that reads the economy file, suggested with none: the file as it was named (run from where it was
+  // named, it reads that folder's file only so)
+  const bare =
+    file && named && file !== named
+      ? new RegExp(String.raw`\b(xcore loot (?:${[...ON_FILE].join('|')}))\b(?! (?:\S+\.json|\[|<|--help))`, 'g')
+      : null;
   return text => {
     let t = text
       .replace(npx, (all, command) => (command === 'mcp' ? all : `xcore loot ${command}`))
@@ -287,6 +299,7 @@ export function ownWords({ file = null, named = null, tools = true } = {}) {
       .replaceAll('xsolana <command> --help', 'xcore loot <command> --help')
       .replace(tool, all => (tools ? `xcore loot ${all.slice('xsolana_'.length)}` : all));
     if (asNamed) t = t.replace(asNamed, `$1 ${file}`).replaceAll(`(${named})`, `(${file})`);
+    if (bare) t = t.replace(bare, `$1 ${file}`);
     // its help's columns: the three letters `xcore loot` adds are taken from the gap after
     t = t.replace(/^( {2}xcore loot \S.*?\S)( {5,})/gm, (_, a, gap) => a + gap.slice(3));
     return t;

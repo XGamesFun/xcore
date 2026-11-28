@@ -262,6 +262,12 @@ test('a key file named beside flags is given whole; approve never goes to the sh
     '~/.config/xsolana/k.json',
   ]);
   assert.deepEqual(fromFolder(['approve', '--keypair', '/abs/k.json'], cwd), ['approve', '--keypair', '/abs/k.json']);
+  assert.deepEqual(fromFolder(['handover', '--keypair', 'k.json', '--to=keys/new.json'], cwd), [
+    'handover',
+    '--keypair',
+    path.join(cwd, 'k.json'),
+    `--to=${path.join(cwd, 'keys/new.json')}`,
+  ]);
   // Going live makes mints and token accounts, which the shared relay does not pass: with no RPC of the person's
   // own, approve is left to the tools' default; every other command reads through the relay.
   const shared = solanaRpc({}, { file: null });
@@ -303,9 +309,19 @@ test("xsolana's words as xcore's", () => {
     '2. xcore loot approve public/xsolana.json --keypair ~/.config/xsolana/my-game.json',
   );
   assert.equal(say('(`xsolana keygen <file>` makes a key file)'), '(`xcore loot keygen <file>` makes a key file)');
+  const plain = ownWords();
   assert.equal(
-    say('`xsolana check` then xsolana_simulate; xsolana_save stays'),
+    plain('`xsolana check` then xsolana_simulate; xsolana_save stays'),
     '`xcore loot check` then xcore loot simulate; xsolana_save stays',
+  );
+  // a file named from elsewhere: the commands it suggests that read the file name it too, run from here
+  assert.equal(
+    say('Next: xsolana simulate and xsolana explain, or xsolana check [file]'),
+    'Next: xcore loot simulate public/xsolana.json and xcore loot explain public/xsolana.json, or xcore loot check [file]',
+  );
+  assert.equal(
+    say('then xsolana handover --keypair k.json'),
+    'then xcore loot handover public/xsolana.json --keypair k.json',
   );
   // the MCP server's command is what connect registers in an agent: said as it is, so a dry run shows the real thing
   assert.equal(
@@ -318,7 +334,7 @@ test("xsolana's words as xcore's", () => {
     say('cmd /c npx -y --package=@xgamesfun/solana@0.20.1 xsolana mcp'),
     'cmd /c npx -y --package=@xgamesfun/solana@0.20.1 xsolana mcp',
   );
-  assert.equal(say('npx -y --package=@xgamesfun/solana@0.20.1 xsolana check'), 'xcore loot check');
+  assert.equal(plain('npx -y --package=@xgamesfun/solana@0.20.1 xsolana check'), 'xcore loot check');
   assert.equal(say('xsolana: the tools for loot'), 'xsolana: the tools for loot');
   assert.equal(say('  xsolana guide [part]            what'), '  xcore loot guide [part]         what');
 });
@@ -507,4 +523,32 @@ test('loot with a command the tools do not have, and --json: a usage refusal as 
   assert.match(out.error, /Unknown subcommand "bogus"/);
   // without --json, the tools' own words
   assert.notEqual(run(['loot', 'bogus']).status, 0);
+});
+
+test("loot handover reads a loot.json game's file, version names the program of the folder's cluster, a refusal says xcore", async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const legacy = path.join(tmp.dir, 'legacy');
+  await mkdir(legacy);
+  const examples = path.join(solanaRoot(), 'examples');
+  const spec = await readFile(
+    path.join(
+      examples,
+      readdirSync(examples).find(f => f.endsWith('.json')),
+    ),
+    'utf8',
+  );
+  await writeFile(path.join(legacy, 'loot.json'), spec);
+  const h = run(['loot', 'handover', '--keypair', 'none.json', '--to', 'other.json'], { cwd: legacy });
+  assert.equal(h.status, 1);
+  assert.doesNotMatch(h.stderr, /xsolana\.json does not exist/, 'loot.json is the file it reads');
+  assert.doesNotMatch(h.stderr, /^xsolana: /m, "a refusal is xcore's");
+  const main = path.join(tmp.dir, 'mainshop');
+  await mkdir(main);
+  await writeFile(path.join(main, 'xsolana.json'), JSON.stringify({ ...JSON.parse(spec), network: 'mainnet' }));
+  const v = run(['loot', 'version'], { cwd: main, env: { XSOLANA_CLUSTER: '' } });
+  assert.equal(v.status, 0, v.stderr);
+  assert.match(v.stdout, /mainnet/);
+  assert.doesNotMatch(v.stdout, /devnet/);
+  assert.match(run(['loot', 'version'], { cwd: legacy, env: { XSOLANA_CLUSTER: '' } }).stdout, /devnet/);
 });

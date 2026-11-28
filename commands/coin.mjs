@@ -17,6 +17,21 @@ import {
   VENUE_WORDS,
 } from '../lib/coin.mjs';
 import { CMD } from '../lib/command.mjs';
+import { economyCluster } from '../lib/solana-rpc.mjs';
+
+/**
+ * The cluster a coin command is for: the one --cluster names; else the cluster of the folder's economy (mainnet when
+ * its xsolana.json says so), for reading where the coin stands. A launch or a drop never takes mainnet by default: in
+ * a folder whose economy is on mainnet it asks for --cluster. → 'devnet' | 'mainnet' | null (devnet)
+ */
+export function clusterFor(dir, named, verb) {
+  if (named != null) return named;
+  if (economyCluster(dir) !== 'mainnet') return null;
+  if (verb === 'status') return 'mainnet';
+  throw new UsageError(
+    `This game's economy is on mainnet (its xsolana.json says so): say which coin, --cluster mainnet (real money) or --cluster devnet (a rehearsal).\n\n${usage}`,
+  );
+}
 
 const usage = `Usage: xcore coin [game] [--cluster devnet|mainnet] [--json]
        xcore coin launch [game] --name <name> --ticker <TICKER> --picture <file> --keypair <keyfile>
@@ -96,7 +111,7 @@ function statusText(game, s) {
     lines.push(
       `${game} has a launch of $${symbol || 'a coin'} that was begun and is not on Solana. Launch again (it is built anew), or give it up: ${CMD} coin drop`,
     );
-  else lines.push(`${game} has no coin yet.`);
+  else lines.push(`${game} has no coin on ${cluster.words} yet.`);
   if (!launch.on) {
     lines.push(clean(launch.why ?? s.why) || 'Launching a coin is not on for this XGames.fun yet.');
     return lines.join('\n');
@@ -170,16 +185,17 @@ export default {
           if (!value?.trim()) throw new UsageError(`launch needs ${flag}\n\n${usage}`);
       const dir = await resolveGame(folderArg(values.dir, rest[0], usage));
       const game = named(dir);
+      const cluster = clusterFor(dir, values.cluster ?? null, verb);
       const out = values.json ? v => process.stdout.write(safeJson(v) + '\n') : null;
 
       if (verb === 'status') {
-        const s = await coinStatus(dir, { refresh: true, cluster: values.cluster ?? null });
+        const s = await coinStatus(dir, { refresh: true, cluster });
         if (out) out(s);
         else console.log(statusText(game, s));
         return 0;
       }
       if (verb === 'drop') {
-        const s = await dropLaunch(dir, { cluster: values.cluster ?? null });
+        const s = await dropLaunch(dir, { cluster });
         if (out) out(s);
         else
           console.log(
@@ -198,7 +214,7 @@ export default {
           venue: values.venue?.trim().toLowerCase() || undefined,
           pair: values.pair?.trim() || undefined,
         },
-        { keyFile: values.keypair, yes: values.yes ?? null, cluster: values.cluster ?? null },
+        { keyFile: values.keypair, yes: values.yes ?? null, cluster },
       );
       if (r.planned) {
         const command = sameCommand(args);
