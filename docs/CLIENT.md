@@ -70,10 +70,18 @@ game a token. The game sends no sign-in requests of its own. `GamesFun.ready` re
 is signed in (up to 1.5 s), so a signed-in player is already set when the game reads its save. A save read or written
 before `ready` resolves waits for it, and so goes to the account of a player the page names.
 
+A post's picture card on X (and X's Android app) opens this page, not the game's own host. Here a tap on Sign in takes
+the tab to X and back, and the game starts again, unless the browser is signed in to xgames.fun already. A game that
+asks to stay (`GamesFun.signIn({stay: true})`, or `GAMESFUN_SIGNIN_STAY` for the whole page) has the play page run the
+sign-in in a window instead, where one can open, and the game keeps running. In an app's own browser (X's in-app
+browser) the sign-in still takes the tab, so a game that must not restart asks for sign-in before play starts. After
+the game's own Sign out, the play page asks "Continue as … / Use another account" before it signs anyone in.
+
 #### On its own host, as the whole tab
 
-The game's own host is `https://<name>-play.xgames.fun/`. A post's card on X opens the game there, and so does
-xgames.fun's wallet hand-off inside a wallet app's browser. Here the game signs in by itself. A game that loads
+The game's own host is `https://<name>-play.xgames.fun/`. A `?card=player` link plays the game from there inside a
+post on X (the plain link's picture card opens the play page), and xgames.fun's wallet hand-off inside a wallet app's
+browser opens it there too. Here the game signs in by itself. A game that loads
 `gamesfun.js` 1.9.0 or later needs no changes for this.
 
 - **When the page loads**, the client asks xgames.fun who is signed in
@@ -96,7 +104,8 @@ xgames.fun's wallet hand-off inside a wallet app's browser. Here the game signs 
     to X only when the browser shows that the navigation came from the player's own tap.
   - If the game must not restart, ask it to stay on the page: `GamesFun.signIn({stay: true})`. For the whole page, set
     `globalThis.GAMESFUN_SIGNIN_STAY = true` before loading `gamesfun.js`, or add `data-signin-stay` to its `<script>`
-    tag. The sign-in then opens a small window on xgames.fun instead.
+    tag. The sign-in then opens a small window on xgames.fun instead. The play page reads the same ask (see
+    [In xgames.fun's play page](#in-xgamesfuns-play-page)).
 - **A sign-in that ends with nobody signed in** (the player declined at X, or it failed) returns with
   `#gf-signin=cancelled` or `#gf-signin=failed` in the address. `gamesfun.js` removes it when the page loads and sets
   `GamesFun.signInEnded` to `'cancelled'` or `'failed'`. On phones where X's app handles the login and answers in

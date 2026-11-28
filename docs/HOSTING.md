@@ -94,9 +94,10 @@ a post on X, it shows the game's picture, and a tap opens the play page in X's o
 bare link until the post is opened). That player runs the game on its own host, `https://<slug>-play.xgames.fun/`.
 
 **A tap on Sign in here reloads the game**, unless this browser already has the player signed in to xgames.fun. The
-play page sends the whole tab to X (or Google) and back, so the game restarts and loses what it held in memory.
-`GamesFun.signIn({stay: true})` does not change that on the play page. Ask for sign-in before a run starts, or save
-the run first ([CLIENT.md](CLIENT.md#sign-in)).
+play page sends the whole tab to X (or Google) and back, so the game restarts and loses what it held in memory. A game
+that asks to stay (`GamesFun.signIn({stay: true})`) has the play page run the sign-in in a window instead, where one
+can open. In an app's own browser (X's in-app browser) it still takes the tab, so ask for sign-in before a run
+starts, or save the run first ([CLIENT.md](CLIENT.md#in-xgamesfuns-play-page)).
 
 ### Its server, if any
 

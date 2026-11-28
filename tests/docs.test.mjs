@@ -319,7 +319,8 @@ test('the hosting guide says where a post on X lands, and that Sign in there rel
       /xgames\.fun\/play\/<slug>/,
       /card=player/,
       /Sign\s+in[^.]*reloads\s+the\s+game/,
-      /stay:\s*true[^.]*does\s+not/,
+      /stay:\s*true[^.]*window/,
+      /app's\s+own\s+browser[^.]*takes\s+the\s+tab/,
     ),
     [],
   );
