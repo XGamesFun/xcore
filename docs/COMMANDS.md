@@ -355,7 +355,8 @@ days. xcore never sees your password.
 | Linux   | the Secret Service (`secret-tool`) when it runs; otherwise a file only you can read under `~/.config/gamesfun/secrets/` |
 | Windows | a file encrypted for your user (DPAPI) under `%APPDATA%\gamesfun\secrets\`                                              |
 
-`GAMESFUN_CREDENTIALS=file` always uses the file.
+`GAMESFUN_SECRET_STORE=file` always uses the file, and `GAMESFUN_CONFIG_DIR=<folder>` moves the folder it is in
+([environment variables](#environment-variables)).
 
 `xcore logout` signs this computer out: the publish token is revoked at xgames.fun and deleted locally. Published
 games stay published.
@@ -415,9 +416,9 @@ The steps of every publish:
    - A game installed as an app (a web manifest and a service worker) installs from its own link,
      `https://<slug>-play.xgames.fun/`.
 
-Before anything is uploaded, publish needs the game's **preview picture** ([card](#card)). If there is none, or
-xgames.fun cannot use it, publish stops and says what is wrong. Make one (`xcore card`), or publish without one
-(`--no-card`).
+Before anything is uploaded, publish needs the game's **preview picture** ([card](#card)). If there is none, it makes
+one from the newest page check screenshot and says so. If there is no screenshot either, or xgames.fun cannot use the
+picture, publish stops and says what is wrong. Make one (`xcore card`), or publish without one (`--no-card`).
 
 Other modes:
 
@@ -576,11 +577,17 @@ Exit codes:
 
 ## Environment variables
 
-| Variable                        | Effect                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GAMESFUN_STUDIO=<origin>`      | publishes to another xgames.fun (one on your own machine while developing it)                                                                                                                                                                                                                                                             |
-| `GAMESFUN_CREDENTIALS=file`     | always keeps the publish token in the file ([login and logout](#login-and-logout))                                                                                                                                                                                                                                                        |
-| `XSOLANA_RPC_URL`               | a Solana RPC of your own. In `.env`: for `xcore dev`'s `/loot/v1/rpc` and for going live ([ECONOMY.md](ECONOMY.md#going-live)). When set, it is also the RPC a coin launch uses ([ECONOMY.md](ECONOMY.md#a-coin-that-trades-xcore-coin)). In `.dev.vars` or as a secret: the game's own RPC ([SERVER.md](SERVER.md#the-economys-own-rpc)) |
-| `GAMESFUN_SERVER_DEPS=<folder>` | a Miniflare installed elsewhere ([SERVER.md](SERVER.md#running-it-locally))                                                                                                                                                                                                                                                               |
-| `XCORE_DEV_SIGNIN=wallet`       | `xcore dev` signs local players in with a wallet only ([SERVER.md](SERVER.md#your-own-key-xcore-add-vouchers))                                                                                                                                                                                                                            |
-| `GAMESFUN_DEBUG=1`              | prints stack traces for errors                                                                                                                                                                                                                                                                                                            |
+| Variable                          | Effect                                                                                                                                                                                                                                                                                                                                    |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GAMESFUN_STUDIO=<origin>`        | publishes to another xgames.fun (one on your own machine while developing it)                                                                                                                                                                                                                                                             |
+| `GAMESFUN_SECRET_STORE=file`      | keeps the publish token and backend sign-ins in a file only you can read, never in the system's keychain ([login and logout](#login-and-logout)). `GAMESFUN_CREDENTIALS=file`, an older name, does the same                                                                                                                               |
+| `GAMESFUN_CONFIG_DIR=<folder>`    | the folder for this computer's sign-in (`credentials.json`, and `secrets/` when the file is used), in place of `~/.config/gamesfun` (Linux), `~/Library/Application Support/gamesfun` (macOS) or `%APPDATA%\gamesfun` (Windows)                                                                                                           |
+| `GAMESFUN_OIDC_AUDIENCE=<origin>` | the audience of the GitHub Actions token a publish signs in with (default `https://xgames.fun`), for an xgames.fun of your own ([From GitHub Actions](#from-github-actions-no-key-stored))                                                                                                                                                |
+| `XSOLANA_RPC_URL`                 | a Solana RPC of your own. In `.env`: for `xcore dev`'s `/loot/v1/rpc` and for going live ([ECONOMY.md](ECONOMY.md#going-live)). When set, it is also the RPC a coin launch uses ([ECONOMY.md](ECONOMY.md#a-coin-that-trades-xcore-coin)). In `.dev.vars` or as a secret: the game's own RPC ([SERVER.md](SERVER.md#the-economys-own-rpc)) |
+| `GAMESFUN_SERVER_DEPS=<folder>`   | a Miniflare installed elsewhere ([SERVER.md](SERVER.md#running-it-locally))                                                                                                                                                                                                                                                               |
+| `XCORE_DEV_SIGNIN=wallet`         | `xcore dev` signs local players in with a wallet only ([SERVER.md](SERVER.md#your-own-key-xcore-add-vouchers))                                                                                                                                                                                                                            |
+| `GAMESFUN_DEBUG=1`                | prints stack traces for errors                                                                                                                                                                                                                                                                                                            |
+| `GAMESFUN_SOLANA=<folder>`        | the economy tools from another copy of `@xgamesfun/solana` (one you are working on), in place of the installed one                                                                                                                                                                                                                        |
+| `GAMESFUN_WORK=<folder>`          | the folder whose `.env` the economy's RPC is read from (default: the current folder)                                                                                                                                                                                                                                                      |
+| `GAMESFUN_KIT=<folder>`           | the game-making kit's folder, for the commands that are the kit's                                                                                                                                                                                                                                                                         |
+| `XCORE_COMMAND=<command>`         | how printed next steps call xcore (by default `xcore`, the pinned `npx` command or `node bin/xcore.mjs`, from how it was installed)                                                                                                                                                                                                       |

@@ -412,3 +412,35 @@ test('the data guide names what has no export, and how far a list of project fil
   problems.push(...said('README.md', '## Your data', /Not exported/, /at\s+most\s+100\s+files/));
   assert.deepEqual(problems, []);
 });
+
+test("every environment variable the command line reads is in COMMANDS.md's table of them", () => {
+  const sources = [];
+  const walk = dir => {
+    for (const f of readdirSync(dir, { withFileTypes: true }))
+      if (f.isDirectory()) walk(path.join(dir, f.name));
+      else if (/\.(mjs|js)$/.test(f.name)) sources.push(path.join(dir, f.name));
+  };
+  for (const dir of ['bin', 'commands', 'lib']) walk(path.join(ROOT, dir));
+  const used = new Set();
+  for (const file of sources)
+    for (const [, name] of read(file).matchAll(/\benv\??\.((?:GAMESFUN|XCORE|XSOLANA)_[A-Z0-9_]+)\b/g)) used.add(name);
+  assert.ok(used.has('GAMESFUN_STUDIO') && used.has('GAMESFUN_SECRET_STORE'), `the variables are read: ${[...used]}`);
+  const table = partOf('docs/COMMANDS.md', '## Environment variables');
+  const named = new Set([...table.matchAll(/`([A-Z][A-Z0-9_]+)(?:=[^`]*)?`/g)].map(m => m[1]));
+  assert.deepEqual(
+    [...used].filter(name => !named.has(name)),
+    [],
+    'a variable the table does not name',
+  );
+});
+
+test('the publish steps say a missing preview picture is made from the check screenshot, as publish --help does', () => {
+  assert.deepEqual(
+    said(
+      'docs/COMMANDS.md',
+      '### The first publish of a folder',
+      /preview\s+picture[^.]*\.\s+If\s+there\s+is\s+none,\s+it\s+makes\s+one\s+from\s+the\s+newest\s+page\s+check\s+screenshot/,
+    ),
+    [],
+  );
+});
