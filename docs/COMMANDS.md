@@ -239,7 +239,8 @@ has behind it, so you can run the whole game before you publish:
     and after `xcore dev` restarts;
   - a Sign out that persists (`session/forget`);
   - Sign in's round trip to X or Google (`x/begin`, `google/begin`);
-  - the sign-in client at `/platform/v1/signin/v1.js`.
+  - the sign-in client at `/platform/v1/signin/v1.js`, served by `xcore dev` only. A published game does not ask for
+    it unless its page sets `GAMESFUN_SIGNIN_SHARED` ([CLIENT.md](CLIENT.md)).
 - **`/platform/v1/live`**: the game's live settings ([`GamesFun.live`](CLIENT.md#live-settings-gamesfunlive)): its announcement,
   config and maintenance mode, from `.gamesfun/live.json` (read again on each request, never published). With
   maintenance on, the game's pages show the holding page, and its `api/` and `/platform/v1/*` answer `503` with code

@@ -120,7 +120,8 @@ Limits depend on the game's plan ([HOSTING.md](HOSTING.md#plans-xcore-plan), `xc
 
 ### Not allowed
 
-xcore's check names the file and line before anything is sent, and xgames.fun refuses the same things at publish:
+xcore's check names the file and line before anything is sent. xgames.fun refuses the same things at publish, except
+code built from text at run time, which its runtime refuses when it runs:
 
 - **Raw network connections**: an import, a re-export or an `import()` of `cloudflare:sockets`, `node:net`,
   `node:tls`, `node:dgram`, `node:http2`, `node:module` or `node:child_process` (with or without the `node:` prefix),
@@ -132,7 +133,9 @@ xcore's check names the file and line before anything is sent, and xgames.fun re
   parser rather than searching its text, so a word in a comment or a string is not treated as an import.
 - **Node's built-in modules** (`node:crypto`, `node:buffer`, `fs`, …). `nodejs_compat` is not offered, so use the Web
   APIs a Worker has (`crypto.subtle`, `crypto.getRandomValues`, `TextEncoder`, `URL`).
-- **Code built from text at run time** (`eval`, `new Function`, `importScripts`). The runtime refuses these too.
+- **Code built from text at run time** (`eval`, `new Function`, `importScripts`). xcore reads the finished bundle: a
+  call in `server/` is a problem, and a call in a package it bundles is a warning (a package's unused code is often
+  dropped from the bundle, and the runtime refuses only a call that runs).
 - **Files from outside the game folder.** Packages from `node_modules` are fine.
 
 ### One request at a time, between awaits
