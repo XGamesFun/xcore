@@ -381,8 +381,13 @@ fallback locally, and the wallet app on xgames.fun.
 ## Live settings: `GamesFun.live`
 
 Announcements, remote config and maintenance mode, without republishing. On xgames.fun/console, a game's **Live** tab
-sets three things. Players get changes within about 35 seconds. xgames.fun's play edge serves them from one cached
-record per game.
+sets three things. xgames.fun's play edge serves them from one cached record per game:
+
+- **Players who open the game** get a change within about 35 seconds.
+- **Players already in the game** get it when `gamesfun.js` asks again: about a minute later when the game listens
+  with `GamesFun.live.onChange`, and up to about five and a half minutes later when only the banner asks (every five
+  minutes, plus the caches). `GamesFun.live.refresh()` asks at once. A pause shows sooner: the game's next call to
+  its server, saves or leaderboards answers `maintenance`, and the banner says so.
 
 - **Announcement**: a short line of plain text (up to 280 characters), `info` or `warning`, with an optional start and
   end time.
@@ -392,7 +397,7 @@ record per game.
   - Players who open the game get a plain holding page from xgames.fun instead.
   - The server's `api/*` (WebSockets included) and the page's saves and leaderboards return `503` with code
     `maintenance`. The server's code does not run.
-  - Turning it off brings the game back within about 35 seconds (up to a minute).
+  - Turning it off brings the game back within about 35 seconds (up to a minute) for players who open it.
   - Anything already running (an open WebSocket, an alarm) is not stopped.
 
 `gamesfun.js` reads them (since 1.5.0):
