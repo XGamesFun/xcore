@@ -9,6 +9,7 @@ import { CMD } from '../lib/command.mjs';
 import { designCodeLine } from '../lib/design-code.mjs';
 import { plural } from '../lib/util.mjs';
 import { ASK_HEADING, TELL_HEADING } from '../lib/review/record.mjs';
+import { liveWords } from '../lib/review/live.mjs';
 
 const usage = `Usage: xcore review [game] [--live [origin]] [--out <dir>] [--verbose] [--json]
 
@@ -19,9 +20,10 @@ How it works: it reads the game's code as text, by patterns, and runs none of it
   PASS          no high finding in what it read, and every payout read through. Never proof that the game is safe
                 to pay from: every result says this and lists what it could not read.
   FAIL          a high finding.
-  INCONCLUSIVE  no high finding, but a payout it could not read through: code it did not follow, or what the check
-                was handed read by a computed key (ctx[k], Reflect.get(ctx, k)). Write the field by name (ctx.body,
-                ctx.env.X), or check that code yourself.
+  INCONCLUSIVE  no high finding, but a part it could not read through: a payout in code it did not follow (or one
+                read by a computed key: ctx[k], Reflect.get(ctx, k); write the field by name, ctx.body, ctx.env.X),
+                server code that signs or sends a transaction itself, a file it could not open, or with --live a
+                game that did not answer. Make it readable, or check that part yourself. Never a pass.
 
 What it reads:
   the economy  @xgamesfun/solana's own review of the economy file, when the installed version has one: each route
@@ -56,10 +58,11 @@ The record:
   review.md ends with the trade-offs: for each route that pays, how the server checks it (decides, replays or
   bounds), what a cheater gets, and what the stronger level would cost.
 
-Exit code: 0 PASS, 1 FAIL, 3 INCONCLUSIVE (2 is a usage mistake, as for every command).
+Exit code: 0 PASS, 1 FAIL, 3 INCONCLUSIVE, also when the review itself could not finish (2 is a usage mistake, as
+for every command).
 Guide: docs/SERVER.md, "What a payout rests on".`;
 
-/** The exit code of each verdict: PASS 0, FAIL 1 (a high finding), INCONCLUSIVE 3 (a payout not read through). */
+/** The exit code of each verdict: PASS 0, FAIL 1 (a high finding), INCONCLUSIVE 3 (a part not read through). */
 export const EXIT = { PASS: 0, FAIL: 1, INCONCLUSIVE: 3 };
 
 /** --live takes an origin or nothing: `--live`, `--live <http…>`, `--live=<http…>`. → {args without it, live} */
@@ -104,7 +107,26 @@ export default {
       }
       const { reviewGame, unreadWords } = await import('../lib/review.mjs');
       if (base && !values.json) console.error(`Asking ${base} as a stranger (no sign-in, and a forged one)…`);
-      const r = await reviewGame(dir, { live: base, liveWhy, out: values.out ?? null });
+      let r;
+      try {
+        r = await reviewGame(dir, { live: base, liveWhy, out: values.out ?? null });
+      } catch (e) {
+        // a review that could not finish read nothing through: INCONCLUSIVE (3), never FAIL's code or a pass
+        const why = String(e?.message ?? e).split('\n')[0];
+        if (values.json)
+          printJson({
+            ok: false,
+            verdict: 'INCONCLUSIVE',
+            error: `the review could not finish: ${why}`,
+            code: 'review-unfinished',
+            unread: [{ what: shown(dir), why: `the review stopped: ${why}` }],
+          });
+        else
+          console.error(
+            `review: INCONCLUSIVE: the review could not finish (${why}). Nothing was read through: fix that, then run ${CMD} review again.`,
+          );
+        return EXIT.INCONCLUSIVE;
+      }
       if (values.json) printJson(r);
       else console.log(summary(r, shown(dir), unreadWords(r), values.verbose === true));
       return EXIT[r.verdict];
@@ -138,7 +160,7 @@ function summary(r, where, unread, verbose = false) {
         : `${r.economy.file} (not reviewed: ${r.economy.why})`
       : 'no economy',
     `server/ (${plural(r.ledger.length, 'paid route')}, ${plural(r.custody.length, 'key')}, ${plural(r.server.routes.length, 'api/ route')})`,
-    r.live ? `live: ${r.live.base}` : 'live: not asked',
+    r.live ? `live: ${liveWords(r.live)}` : 'live: not asked',
   ];
   lines.push(`read: ${read.join('; ')}`);
   const ask = r.ask ?? [];
@@ -174,7 +196,7 @@ function fullSummary(r, where, unread) {
       : `economy: ${where} has none`,
     `server: ${plural(r.ledger.length, 'paid route')} in the ledger, ${plural(r.custody.length, 'key')} in custody; ${plural(r.server.routes.length, 'api/ route')} named${r.server.facts.vouchers ? `; PAY.check ${r.server.facts.pay === 'template' ? 'is still the template' : r.server.facts.pay}, payOnly ${r.server.facts.payOnly ?? '?'}` : ''}`,
     designCodeLine(r.designCode),
-    r.live ? `live: ${r.live.base}, ${r.live.probes.length} requests` : `live: ${r.liveWhy}`,
+    r.live ? `live: ${liveWords(r.live)}, ${r.live.asked ?? r.live.probes.length} requests` : `live: ${r.liveWhy}`,
   );
   for (const t of r.tradeoffs)
     lines.push(
