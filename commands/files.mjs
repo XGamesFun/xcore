@@ -21,7 +21,7 @@ import { STUDIO_BODY_BYTES } from '../lib/server/contract.mjs';
 import { privateTarget, writePrivate } from '../lib/publish/private-file.mjs';
 import { stateFolder } from '../lib/state-folder.mjs';
 
-const usage = `Usage: xcore files list [prefix/] [--dir <game>] [--live] [--json]
+const usage = `Usage: xcore files list [prefix/] [--after <path>] [--dir <game>] [--live] [--json]
        xcore files put <file> [path] [--public] [--type <mime>] [--dir <game>] [--live [--yes <code>]] [--json]
        xcore files get <path> [--out <file>] [--force] [--dir <game>] [--live] [--json]
        xcore files remove <path> [--dir <game>] [--live [--yes <code>]] [--json]
@@ -38,7 +38,8 @@ never published). With --live, they use the game's files on xgames.fun, and each
 audit log.
 
 Commands:
-  list [prefix/]     list the files, or those in one folder ("replays/")
+  list [prefix/]     list the files, or those in one folder ("replays/"), 100 at a time: when there are more, it
+                     prints the command for the next ones (--after <path>, the last path it listed)
   put <file> [path]  upload a file from this machine to [path] (default: its file name). Up to 25 MB per file on
                      this machine; with --live up to ${mb(STUDIO_BODY_BYTES)} (it goes through xgames.fun's Studio, whose
                      host takes no bigger a request). A bigger file, up to 25 MB, can only be written by the game's
@@ -85,6 +86,7 @@ export default {
           force: { type: 'boolean' },
           dir: { type: 'string' },
           yes: { type: 'string' },
+          after: { type: 'string' },
         },
         usage,
       );
@@ -101,13 +103,18 @@ export default {
       const where = live ? 'on xgames.fun' : 'on this machine';
       const json = values.json ? printJson : null;
 
+      if (values.after !== undefined && verb !== 'list') throw new UsageError(`--after is for files list\n\n${usage}`);
       if (verb === 'list') {
-        const r = await filesList(dir, { live, prefix: a ?? '' });
+        const r = await filesList(dir, { live, prefix: a ?? '', after: values.after ?? '' });
         if (json) return json(r);
         if (!r.items.length) console.log(`${named(dir)} has no project files ${where}${a ? ` in ${a}` : ''}.`);
         for (const f of r.items)
           console.log(`${f.public ? 'public ' : 'private'}  ${mb(f.bytes).padStart(9)}  ${f.path}  (${f.type})`);
-        if (r.after) console.log(`… more after ${r.after}`);
+        // a page of the list: the next one starts after its last path
+        if (r.after)
+          console.log(
+            `… more after ${r.after}: ${CMD} files list${a ? ` ${typedPath(a)}` : ''} --after ${typedPath(r.after)}${values.dir ? ` --dir ${typedPath(values.dir)}` : ''}${live ? ' --live' : ''}`,
+          );
         return 0;
       }
       // the words a printout before a live change shares

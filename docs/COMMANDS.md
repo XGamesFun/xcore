@@ -310,7 +310,8 @@ your machine:
 
 ```bash
 xcore files put ./levels/forest-3.json levels/forest-3.json --public --live   # served at https://<slug>.xgamesusercontent.com/levels/forest-3.json
-xcore files list levels/ --live
+xcore files list levels/ --live                           # 100 at a time; it ends with the command for the next ones
+xcore files list levels/ --after levels/l-100.json --live # the next ones
 xcore files get replays/run-1.json --live --out run-1.json
 xcore files remove levels/old.json --live                 # prints what it would delete, with a code, and deletes nothing
 xcore files remove levels/old.json --live --yes <code>    # deletes it

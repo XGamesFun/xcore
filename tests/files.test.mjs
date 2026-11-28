@@ -524,6 +524,20 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
   r = await xc(['ls', 'art']);
   assert.match(r.stdout, /public\s+4 bytes\s+art\/hero\.png/);
   assert.equal(seen.at(-1).url, '/api/kit/games/g1/files?prefix=art%2F');
+  // a list is a page at a time: --after asks for the next one, and a page with more says the command for it
+  r = await xc(['ls', 'art', '--after', 'art/a.png']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(seen.at(-1).url, '/api/kit/games/g1/files?prefix=art%2F&after=art%2Fa.png');
+  const handle = g.state.handle;
+  g.state.handle = (method, url, ...rest) => {
+    const answer = handle(method, url, ...rest);
+    return url.startsWith('/api/kit/games/g1/files?') ? [200, { ...answer[1], after: 'art/hero.png' }] : answer;
+  };
+  r = await xc(['ls', 'art/']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /… more after art\/hero\.png: .* files list art\/ --after art\/hero\.png --live\n$/);
+  g.state.handle = handle;
+  assert.equal((await xc(['usage', '--after', 'x'])).status, 2, '--after is for list alone');
   r = await xc(['get', 'art/hero.png', '--out', path.join(tmp.dir, 'h.png')]);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Got art\/hero\.png .*image\/png\)/);

@@ -395,17 +395,17 @@ test('the economy guide says what moving to mainnet takes, and the fees say devn
   );
 });
 
-test('the data guide names what has no export, and how far a list of project files goes', () => {
+test('the data guide names what has no export, and how a list of project files goes on past 100', () => {
   const part = partOf('docs/HOSTING.md', "## Your game's data, and getting it out");
   const problems = said(
     'docs/HOSTING.md',
     "## Your game's data, and getting it out",
     /Durable\s+Objects/,
     /Secrets/,
-    /at\s+most\s+100\s+files/,
+    /100\s+files\s+at\s+a\s+time[^.]*--after/,
   );
   if (/each can be exported in full/.test(part)) problems.push('HOSTING.md says every place can be exported in full');
-  problems.push(...said('README.md', '## Your data', /Not exported/, /at\s+most\s+100\s+files/));
+  problems.push(...said('README.md', '## Your data', /Not exported/, /100\s+files\s+at\s+a\s+time[^.]*--after/));
   assert.deepEqual(problems, []);
 });
 

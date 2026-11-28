@@ -113,7 +113,7 @@ about 0.0031 SOL including rent. Run `xcore loot cost` for your economy. A coin 
 
 - **Database.** `xcore db export --live` downloads SQL, including documents saved with `GamesFun.db`. Restore it with `xcore db import`.
 - **Project files.** List them with `xcore files list --live`, then download each with `xcore files get <path> --live`.
-  A list shows at most 100 files, so list folder by folder; a folder of more than 100 lists only its first 100.
+  A list shows 100 files at a time and ends with the command for the next ones (`--after <path>`).
 - **Not exported:** the storage of the server's rooms (Durable Objects) and its secrets.
   [What is kept where](docs/HOSTING.md#your-games-data-and-getting-it-out)
 - **Saves and leaderboards.** `xcore data export` downloads every save and every board's entries into one JSON file,
