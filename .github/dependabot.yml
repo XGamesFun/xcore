@@ -1,0 +1,36 @@
+# Dependency updates as pull requests, once a week: the npm packages (exact pins in package.json) and the actions the
+# workflows use (pinned by commit). A version is offered only once it has been out for two weeks, and each week's
+# updates come as one pull request per group, which CI tests like any other.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 14
+    versioning-strategy: increase
+    # @xgamesfun/solana moves with a release of its own (the CHANGELOG names the pin), never on its own
+    ignore:
+      - dependency-name: '@xgamesfun/*'
+    open-pull-requests-limit: 5
+    groups:
+      runtime:
+        dependency-type: production
+      development:
+        dependency-type: development
+    commit-message:
+      prefix: deps
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 14
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: ci

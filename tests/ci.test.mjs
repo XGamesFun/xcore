@@ -1,6 +1,7 @@
-// What CI and the release workflow promise, held to their files (.github/workflows): the publish right is held only by
-// a job that runs no dependency's code, a release is tested on all three systems and installed from its tarball first,
-// the tests that need the server tools run on Linux, and Godot and .NET check the engine glue.
+// What CI and the release workflow promise, held to their files (.github): the publish right is held only by a job that
+// runs no dependency's code, a release is tested on all three systems and installed from its tarball first, the tests
+// that need the server tools run on Linux, Godot and .NET check the engine glue, every action is pinned to a commit,
+// and dependency updates come as pull requests.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -99,4 +100,18 @@ test('every action is pinned to a commit', () => {
   for (const file of ['ci.yml', 'release.yml'])
     for (const [, ref] of workflow(file).matchAll(/uses: ([^\s#]+)/g))
       assert.match(ref, /^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/, `${file}: ${ref}`);
+});
+
+test('dependency updates come weekly, two weeks after a release, for npm and the actions; nothing is overridden', () => {
+  const text = readFileSync(path.join(ROOT, '.github', 'dependabot.yml'), 'utf8');
+  for (const ecosystem of ['npm', 'github-actions']) {
+    const block = new RegExp(`- package-ecosystem: ${ecosystem}\\n([\\s\\S]*?)(?=\\n  - |$)`).exec(text);
+    assert.ok(block, ecosystem);
+    assert.match(block[1], /interval: weekly/, ecosystem);
+    assert.match(block[1], /default-days: 14/, ecosystem);
+    assert.match(block[1], /groups:/, ecosystem);
+  }
+  // an override pins a package under another one's feet, with no place in package.json to say why
+  const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  assert.equal(pkg.overrides, undefined);
 });
