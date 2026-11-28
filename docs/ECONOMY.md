@@ -140,6 +140,8 @@ real SOL. Changing `"network"` alone is not enough.
 5. If the game pays results with its own key ([`xcore add vouchers`](#paying-a-result-the-keeper-or-your-own-key)), run
    `xcore secret set VOUCHER_SEED --new-key` again now that the file says mainnet. It makes a new live key and removes
    the `.dev.vars` test key from the grants. Do not run `xcore add vouchers` again, which adds the test key back.
+   The key is kept on the game's server, so the game must be published first: a folder never published goes up on
+   devnet (`"network": "devnet"`, then `xcore publish`) before step 2.
 6. Run `xcore loot check`, `xcore loot cost` (now in real SOL) and `xcore review`.
 7. Go live as [above](#going-live): `xcore loot approve`, then the same command with the `mainnet-` code it prints.
    A browser wallet (`--browser`) is the safer signer for real money.

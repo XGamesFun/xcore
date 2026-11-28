@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync } from 'node:fs';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { adopt, addLoot } from '../lib/publish/adopt.mjs';
 import { ECONOMY_FILE, economyFile, lootProgram, solanaRoot } from '../lib/economy.mjs';
@@ -632,6 +632,19 @@ test('loot approve refuses what publish refuses of a mainnet economy, before any
     keyed.stderr,
     /^xcore: Nothing was sent: public[\\/]xsolana\.json: this economy is on mainnet, and grant "win" takes vouchers from the test voucher key/m,
   );
+  // never published: the live key needs the game's server, so it is made on devnet first, and said in that order
+  assert.match(
+    keyed.stderr.replace(/\s+/g, ' '),
+    /not on xgames\.fun yet, .* publish it on devnet first \("network": "devnet" in the economy file, then .*publish\), then set "network" back to "mainnet"\. Make the live key/,
+  );
+  await mkdir(path.join(game, '.gamesfun'));
+  await writeFile(
+    path.join(game, '.gamesfun', 'publish.json'),
+    JSON.stringify({ [(await import('../lib/publish/client.mjs')).studioOrigin()]: { projectId: 'g-1' } }),
+  );
+  const again = run(['loot', 'approve', 'public/xsolana.json', '--keypair', 'k/none.json'], { cwd: game });
+  assert.match(again.stderr, /pay real money\. Make the live key/, 'a published game goes straight to the live key');
+  await rm(path.join(game, '.gamesfun'), { recursive: true });
   assert.match(
     JSON.parse(run(['loot', 'approve', 'public/xsolana.json', '--json'], { cwd: game }).stdout).code,
     /^test-key$/,
