@@ -798,3 +798,34 @@ test('a literal address the code calls is found, even at a host that is mostly n
     'wss://rt.example.org',
   ]);
 });
+
+test('a Godot web export on its own is said as one, with where sign-in goes; every <form> is worth a look', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = path.join(tmp.dir, 'export');
+  await mkdir(dir);
+  await writeFile(
+    path.join(dir, 'index.html'),
+    '<!doctype html><title>Moth</title><canvas id="canvas"></canvas>\n<form onsubmit="event.preventDefault(); go()"><input name="n"><button>Start</button></form><script src="index.js"></script>',
+  );
+  await writeFile(path.join(dir, 'index.js'), 'var Engine = {};');
+  await writeFile(path.join(dir, 'index.pck'), 'GDPC');
+  await writeFile(path.join(dir, 'index.wasm'), Buffer.from([0, 97, 115, 109]));
+  const r = await adopt(dir);
+  assert.equal(r.shape.exported, 'Godot');
+  const lines = reportLines(r).join('\n');
+  assert.match(
+    lines,
+    /: a Godot web export \(the exported files only: change the game in its Godot project and export again\)\./,
+  );
+  assert.doesNotMatch(lines, /plain static files/);
+  const w = r.warn.find(x => /is a Godot web export/.test(x.what));
+  assert.match(w.fix, /add signin\), run them in the Godot project's folder \(the one with project\.godot\)/);
+  // a form a script handles still does nothing in the play page's frame: flagged, with the fix that works there
+  const form = r.warn.find(x => /has a <form>/.test(x.what));
+  assert.match(form.what, /^index\.html:2 has a <form>$/);
+  assert.match(
+    form.fix,
+    /blocks every form submit, even one a script handles.*Replace the <form> with a <div>.*keydown/,
+  );
+});
