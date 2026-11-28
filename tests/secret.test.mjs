@@ -352,11 +352,15 @@ test('secret set XSOLANA_RPC_URL waits for backend.json’s origin to be publish
   assert.equal(r.status, 1, r.stderr);
   const waits = JSON.parse(r.stdout);
   assert.deepEqual([waits.ok, waits.code, waits.set], [false, 'not-set', false]);
+  assert.match(waits.error, /^Not set yet: .* Two steps are left/, 'a failure says why in error, as every one does');
   assert.match(waits.next, / publish$/);
-  assert.deepEqual(waits.steps, [waits.next, waits.next.replace(/ publish$/, ' secret set XSOLANA_RPC_URL')]);
+  assert.deepEqual(waits.steps, [
+    waits.next,
+    waits.next.replace(/ publish$/, ' secret set XSOLANA_RPC_URL --from-file rpc.txt'),
+  ]);
   // and the help says so
   const help = (await import('../commands/secret.mjs')).default.usage.replace(/\s+/g, ' ');
-  assert.match(help, /\{ok: false, code: "not-set", set: false, added, file, next, steps\}/);
+  assert.match(help, /\{ok: false, error, code: "not-set", set: false, added, file, next, steps\}/);
   await rm(path.join(dir, 'backend.json'));
   r = await xc(['XSOLANA_RPC_URL', '--from-file', 'rpc.txt']);
   assert.equal(r.status, 1, r.stderr);

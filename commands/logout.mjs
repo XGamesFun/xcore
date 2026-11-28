@@ -42,11 +42,18 @@ export default {
       const r = await logout(origin, { forget: !!values.forget });
       const kept = !r.forgot && !!r.why;
       if (!kept) await forgetReach(origin);
-      if (values.json) printJson({ ok: !kept, studio: origin, ...r, ...(kept ? { next: `${CMD} logout` } : {}) });
+      // kept: a failure, said as every command's --json says one ({ok: false, error, code})
+      const words = kept ? NOT_REVOKED[r.why](origin, false, r.status) : null;
+      if (values.json)
+        printJson(
+          kept
+            ? { ok: false, error: words, code: 'not-revoked', studio: origin, ...r, next: `${CMD} logout` }
+            : { ok: true, studio: origin, ...r },
+        );
       else
         console.log(
           kept
-            ? NOT_REVOKED[r.why](origin, false, r.status)
+            ? words
             : !r.forgot
               ? `This computer was not signed in to ${origin}.`
               : r.revoked

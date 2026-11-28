@@ -373,8 +373,8 @@ days. xcore never sees your password.
 
 `xcore logout` signs this computer out: the publish token is revoked at xgames.fun and deleted locally. Published
 games stay published. When xgames.fun could not revoke it (no answer, or a server error), the token is kept so you can
-try again, and logout exits 1; its `--json` carries `status` for a server error. `xcore logout --forget` deletes it
-here anyway, and it stays live until it expires or you revoke it on your console's Sign-ins page. A new `xcore login`
+try again, and logout exits 1; its `--json` is `{ok: false, error, code: "not-revoked", why, next}`, with `status` for
+a server error. `xcore logout --forget` deletes it here anyway, and it stays live until it expires or you revoke it on your console's Sign-ins page. A new `xcore login`
 revokes the token it replaces.
 
 ## publish
@@ -593,8 +593,9 @@ Some include a `state` and the next command in `next`.
   `draft-over-public`.
 - `adopt --json` gives `state` (`refused`, `fix`, `ready`) and `next`.
 - `secret set XSOLANA_RPC_URL` (or `LOOT_RPC_URL`) whose origin `backend.json` did not list adds the origin and sets
-  nothing: it exits 1 with `{ok: false, code: "not-set", set: false, added, file, next, steps}`, where `steps` are the
-  two commands left (publish, then set it again with the same value).
+  nothing: it exits 1 with `{ok: false, error, code: "not-set", set: false, added, file, next, steps}`, where `steps`
+  are the two commands left (publish, then set it again with the same value, from the same `--from-file` or
+  `--from-dev-vars`).
 
 Exit codes:
 

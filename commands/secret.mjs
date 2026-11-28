@@ -5,7 +5,7 @@ import { guard, parse, printJson, UsageError, notOneOf, folderArg, tooMany, verb
 import { named, resolveGame, shown, typedDir } from '../lib/games.mjs';
 import { deleteSecret, listSecrets, setSecret } from '../lib/publish/secrets.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
-import { CMD } from '../lib/command.mjs';
+import { CMD, typedPath } from '../lib/command.mjs';
 import { consented } from '../lib/consent.mjs';
 import { allowOrigin, newVoucherKey, seedAddress } from '../lib/add.mjs';
 import { economyCluster, solanaRpc } from '../lib/solana-rpc.mjs';
@@ -45,7 +45,7 @@ Commands:
 
 An RPC URL (XSOLANA_RPC_URL, LOOT_RPC_URL) whose origin backend.json does not list yet is not set: the origin is added
 to backend.json, nothing is set, and the command exits 1: publish, then set it again with the same value. With --json
-that answer is {ok: false, code: "not-set", set: false, added, file, next, steps}.
+that answer is {ok: false, error, code: "not-set", set: false, added, file, next, steps}.
 
 Confirming changes:
   A new name is set immediately. Replacing a name the server already has, or deleting one, cannot be undone:
@@ -251,10 +251,18 @@ export default {
           const where = path.relative(process.cwd(), file) || file;
           // nothing was set: a failure to a script (`secret set … && …` stops), with both steps still to do
           const next = `${CMD} publish${shown(dir) === '.' ? '' : ` ${typedDir(dir)}`}`;
-          const again = `${CMD} secret set ${name}${shown(dir) === '.' ? '' : ` ${typedDir(dir)}`}`;
+          // the same value again, from where it came (typed or piped in: the person gives it again)
+          const from = values['from-dev-vars']
+            ? ' --from-dev-vars'
+            : values['from-file']
+              ? ` --from-file ${typedPath(values['from-file'])}`
+              : '';
+          const again = `${CMD} secret set ${name}${shown(dir) === '.' ? '' : ` ${typedDir(dir)}`}${from}`;
+          const words = `Not set yet: the game's server may call only the origins in ${where}, and ${origin} was not one. It is now. Two steps are left: publish (${next}), then set it again with the same value (${again}), and the server takes the URL with leave to call it.`;
           if (out)
             out({
               ok: false,
+              error: words,
               code: 'not-set',
               game,
               name,
@@ -264,10 +272,7 @@ export default {
               next,
               steps: [next, again],
             });
-          else
-            console.log(
-              `Not set yet: the game's server may call only the origins in ${where}, and ${origin} was not one. It is now. Two steps are left: publish (${next}), then set it again with the same value (${again}), and the server takes the URL with leave to call it.`,
-            );
+          else console.log(words);
           return 1;
         }
       }

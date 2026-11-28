@@ -87,7 +87,9 @@ test('a logout xgames.fun did not answer keeps the token to try again; --forget 
   assert.equal((await signInState(g.origin, { env })).state, 'signed-in', 'still signed in: it can be tried again');
   const keptJson = await runAsync(['logout', '--json'], cli);
   assert.equal(keptJson.status, 1);
-  assert.equal(JSON.parse(keptJson.stdout).ok, false);
+  const keptAnswer = JSON.parse(keptJson.stdout);
+  assert.deepEqual([keptAnswer.ok, keptAnswer.code, keptAnswer.why], [false, 'not-revoked', 'offline']);
+  assert.match(keptAnswer.error, /^Not signed out: .* so the token could not be revoked/);
   const kept = await runAsync(['logout'], cli);
   assert.equal(kept.status, 1);
   assert.match(
