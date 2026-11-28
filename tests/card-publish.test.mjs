@@ -385,8 +385,19 @@ test(
     const r = run(['card', dir, '--from', art]);
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /^Wrote assets\/card\.jpg in .*: 960×960, \d+(\.\d)? KB, from /m);
-    assert.match(r.stdout, /keep the subject clear of the top third \(the title\) and the bottom left \(the button\)/);
-    assert.match(r.stdout, /Open .*card\.jpg and look at it/);
+    // a plain link shows the picture wide, as xgames.fun's card.png?w=1 draws it: a look at it beside the picture
+    assert.match(
+      r.stdout,
+      /Keep the subject in the middle band \(a plain link shows the picture wide, its top and bottom cut away\)/,
+    );
+    assert.match(
+      r.stdout,
+      /Open .*card\.jpg and .*card-wide\.png \(the wide card, as a plain link shows it\) and look at them/,
+    );
+    const { imageFacts } = await import('../lib/card.mjs');
+    const wide = imageFacts(await readFile(path.join(dir, '.gamesfun', 'card-wide.png')));
+    assert.deepEqual([wide.format, wide.width, wide.height], ['png', 1200, 628]);
+    assert.ok(!(await buildTree(dir)).tree.files.some(f => /card-wide/.test(f.path)), 'the look is never published');
     assert.equal((await preflight(dir)).card.status, 'ok');
 
     // the fix publish names, in place: a wide picture (here a PNG named card.jpg, which xgames.fun cannot draw either)

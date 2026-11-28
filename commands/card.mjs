@@ -11,6 +11,8 @@ import {
   CARD_MAX_BYTES,
   CARD_SIZE,
   FROM_MAX_BYTES,
+  WIDE_CARD,
+  WIDE_PREVIEW,
   cardJson,
   cardVerdict,
   drawable,
@@ -24,15 +26,21 @@ const usage = `Usage: xcore card [dir] [--wait <seconds>] [--tap] [--path <path-
 
 Make the game's preview picture: what a link to the game shows when it is shared (in a post on X, or in a chat).
 
-xgames.fun draws a ${CARD_SIZE}×${CARD_SIZE} card for the link: this picture in the background, "XGames.fun" and the
-game's title in large type across the top, and a "Tap to play" button at the bottom left. Without a picture, the card
-is a plain gradient with the title. Publish asks for a picture (${CMD} publish --no-card publishes without one).
+xgames.fun draws two cards from this picture:
+  - a plain link (X's large-picture card, chat apps) shows it wide, ${WIDE_CARD.width}×${WIDE_CARD.height}: the picture
+    scaled to cover it, so a square picture loses its top and bottom, with the title and a "Tap to play" button on
+    its left;
+  - a link that plays the game in the post (?card=player) shows it square, ${CARD_SIZE}×${CARD_SIZE}: the picture in
+    the background, "XGames.fun" and the title across the top, and "Tap to play" at the bottom left.
+Without a picture, each card is a plain gradient with the title. Publish asks for a picture (${CMD} publish --no-card
+publishes without one).
 
 Output: ${CARD_FILE} (${CARD_SIZE}×${CARD_SIZE}, a JPEG of at most ${CARD_MAX_BYTES.toLocaleString('en-US')} bytes), written where the published files are:
   - in the game's folder; or
   - for an adopted game with a build, in the folder the build copies unchanged (gamesfun.json page.static, such as
     public/), so the build includes it. If the build has no such folder, card says where the picture must go.
 It never replaces an existing picture (card.jpg, or a card.png xgames.fun can draw) unless you pass --force.
+Beside it, ${WIDE_PREVIEW.split(path.sep).join('/')} is a look at the wide card, as a plain link shows it (never published).
 
 By default it serves the game as the page check does, opens it in Chrome at ${CARD_SIZE}×${CARD_SIZE}, waits, and
 takes a screenshot. If the page does not respond, or responds with an error, no picture is made. If the page throws or
@@ -49,7 +57,7 @@ Options:
   --no-build        for a game with a build: take the picture of what is already built
   --json            print the result as JSON
 
-Afterwards, open the picture and look at it: ${CARD_CLEAR}.`;
+Afterwards, open both pictures and look at them: ${CARD_CLEAR}.`;
 
 export default {
   name: 'card',
@@ -109,6 +117,7 @@ export default {
           replaced: r.replaced,
           over: r.over,
           errors: r.errors,
+          wide: r.wide,
           card: cardJson(verdict),
         });
         return failed ? 1 : 0;
@@ -138,8 +147,8 @@ export default {
       if (r.over)
         lines.push(`  ${CARD_FILE} now wins over ${shown(r.over)}: xgames.fun uses card.jpg when both are there.`);
       lines.push(
-        `  The card draws "XGames.fun" and the title large across its top band and a "Tap to play" button at its bottom left: ${CARD_CLEAR}.`,
-        `  Open ${shown(r.file)} and look at it before you publish${r.from ? '' : ': a loading screen or a blank page makes a poor card (--wait, --tap, --path, or --from a picture you have)'}.`,
+        `  ${CARD_CLEAR[0].toUpperCase()}${CARD_CLEAR.slice(1)}.`,
+        `  Open ${shown(r.file)}${r.wide ? ` and ${shown(r.wide)} (the wide card, as a plain link shows it)` : ''} and look at ${r.wide ? 'them' : 'it'} before you publish${r.from ? '' : ': a loading screen or a blank page makes a poor card (--wait, --tap, --path, or --from a picture you have)'}.`,
       );
       console.log(lines.join('\n'));
       return failed ? 1 : 0;
