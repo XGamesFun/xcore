@@ -1,8 +1,12 @@
 # Publish @xgamesfun/xcore to npm when a version tag is pushed: bump "version" in package.json and package-lock.json
-# (npm version <x.y.z> --no-git-tag-version), add its CHANGELOG.md entry, commit, then
+# (npm version <x.y.z> --no-git-tag-version), add its CHANGELOG.md entry, merge that to main, then tag the merge commit:
 #   git tag v<version> && git push origin v<version>
 # npm trusted publishing: the package's settings on npmjs.com name this repository, this workflow file and the `npm`
 # environment; npm then takes the run's OIDC token (id-token: write) instead of a stored NPM_TOKEN, and adds provenance.
+#
+# Only the publish job can ask for that token, and it runs no code but npm's own and this file's: no install, no
+# install scripts, no tests, no cache. Everything that runs the package's dependencies (lint, the tests on Linux,
+# macOS and Windows, the packed package installed and run) is in the jobs before it, which hold no token.
 name: release
 
 on:
@@ -11,17 +15,19 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  publish:
-    runs-on: ubuntu-latest
-    environment: npm
-    timeout-minutes: 20
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -29,8 +35,62 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
           cache: npm
+      - run: npm ci
+      - name: Lint and formatting (on Linux only, as the result is the same everywhere)
+        if: matrix.os == 'ubuntu-latest'
+        run: npm run lint
+      - name: The server tools, for the tests that run a game's server under workerd (on Linux)
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          # an assignment, so a failed install stops the job here
+          dir="$(node scripts/server-tools.mjs "$RUNNER_TEMP/server-tools")"
+          echo "GAMESFUN_SERVER_DEPS=$dir" >> "$GITHUB_ENV"
+          echo "XCORE_TEST_ALL=1" >> "$GITHUB_ENV"
+      - run: npm test
+
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      shasum: ${{ steps.try.outputs.shasum }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - name: The packed package installs and runs (xcore --version, --help, adopt, add signin)
+        id: try
+        run: node scripts/try-package.mjs
+
+  publish:
+    needs: [test, package]
+    runs-on: ubuntu-latest
+    environment: npm
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # all of main's history, to see that the tag is on it
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: The tagged commit is on main (reviewed and merged there)
+        run: |
+          git rev-parse --verify --quiet origin/main >/dev/null || { echo "::error::origin/main was not fetched"; exit 1; }
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME is at $GITHUB_SHA, which is not on main: merge the release to main first, then tag the merge commit."
+            exit 1
+          fi
       - name: The tag is package.json's version, and npm can publish with OIDC
         env:
           TAG: ${{ github.ref_name }}
@@ -46,11 +106,16 @@ jobs:
           const [a, b, c] = npm.split('.').map(Number);
           if (a < 11 || (a === 11 && (b < 5 || (b === 5 && c < 1)))) { console.error(`npm ${npm} cannot use trusted publishing (11.5.1 or newer needed)`); process.exit(1); }
           console.log(`publishing ${pkg.name}@${pkg.version} with npm ${npm}`);
-      - run: npm ci
-      - run: npm run lint
-      - run: npm test
-      - name: What goes into the package
-        run: npm pack --dry-run
+      - name: What goes into the package is what the package job installed and ran
+        env:
+          TRIED: ${{ needs.package.outputs.shasum }}
+        run: |
+          shasum="$(npm pack --dry-run --json --ignore-scripts | node -e "process.stdout.write(JSON.parse(require('fs').readFileSync(0, 'utf8'))[0].shasum)")"
+          npm pack --dry-run --ignore-scripts
+          if [ -z "$TRIED" ] || [ "$shasum" != "$TRIED" ]; then
+            echo "::error::the package here (shasum $shasum) is not the one the package job tried (${TRIED:-none})"
+            exit 1
+          fi
       - name: Publish (a pre-release version goes out under the "next" dist-tag)
         run: |
           version="$(node -p "require('./package.json').version")"
@@ -63,7 +128,8 @@ jobs:
             *-*) tag=next ;;
             *) tag=latest ;;
           esac
-          if ! npm publish --tag "$tag"; then
+          # --ignore-scripts: no lifecycle script runs while this job holds the publish right
+          if ! npm publish --ignore-scripts --tag "$tag"; then
             echo "::error::npm refused the publish. An E404 here means npm does not trust this workflow: on npmjs.com, @xgamesfun/xcore → Settings → Trusted publisher must name GitHub Actions, XGamesFun/xcore, release.yml and the environment npm."
             exit 1
           fi

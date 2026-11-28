@@ -1,5 +1,6 @@
-// What CI promises, held to its files (.github/workflows): the tests that need the server tools run on Linux, and every
-// action is pinned to a commit.
+// What CI and the release workflow promise, held to their files (.github/workflows): the publish right is held only by
+// a job that runs no dependency's code, a release is tested on all three systems and installed from its tarball first,
+// the tests that need the server tools run on Linux, and every action is pinned to a commit.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -26,8 +27,50 @@ const uncommented = job =>
     .filter(l => !/^\s*#/.test(l))
     .join('\n');
 
-test('on Linux the server tools are installed and every test must run', () => {
-  for (const file of ['ci.yml']) {
+test('only the publish job can publish, and it runs no install, install script, test or cache while it can', () => {
+  const { top, jobs } = parts(workflow('release.yml'));
+  assert.doesNotMatch(uncommented(top), /id-token/, 'the workflow itself grants no OIDC token');
+  for (const [name, job] of Object.entries(jobs))
+    assert.equal(/id-token:\s*write/.test(job), name === 'publish', `${name}: id-token`);
+  const publish = uncommented(jobs.publish);
+  assert.match(publish, /environment: npm/);
+  assert.match(publish, /needs: \[test, package\]/);
+  for (const banned of [
+    /npm ci\b/,
+    /npm install\b/,
+    /npm i\b/,
+    /npm test\b/,
+    /npm run\b/,
+    /\bcache:/,
+    /node scripts\//,
+  ])
+    assert.doesNotMatch(publish, banned, `publish runs ${banned}`);
+  assert.match(publish, /npm publish --ignore-scripts --tag "\$tag"/);
+  assert.match(publish, /npm pack --dry-run --json --ignore-scripts/);
+});
+
+test('a tag publishes only a commit that is on main', () => {
+  const publish = uncommented(parts(workflow('release.yml')).jobs.publish);
+  assert.match(publish, /fetch-depth: 0/);
+  assert.match(publish, /git merge-base --is-ancestor "\$GITHUB_SHA" origin\/main/);
+  // checked before anything is published
+  assert.ok(publish.indexOf('merge-base') < publish.indexOf('npm publish'));
+});
+
+test('a release is tested on Linux, macOS and Windows, and its tarball installed and run, before it publishes', () => {
+  const { jobs } = parts(workflow('release.yml'));
+  assert.match(jobs.test, /os: \[ubuntu-latest, macos-latest, windows-latest\]/);
+  assert.match(jobs.test, /fail-fast: false/);
+  assert.match(jobs.test, /- run: npm test/);
+  assert.match(jobs.package, /run: node scripts\/try-package\.mjs/);
+  assert.match(jobs.package, /shasum: \$\{\{ steps\.try\.outputs\.shasum \}\}/);
+  // the package published is the one the package job tried
+  assert.match(jobs.publish, /TRIED: \$\{\{ needs\.package\.outputs\.shasum \}\}/);
+  assert.match(jobs.publish, /"\$shasum" != "\$TRIED"/);
+});
+
+test('on Linux the server tools are installed and every test must run, in CI and in the release', () => {
+  for (const file of ['ci.yml', 'release.yml']) {
     const { jobs } = parts(workflow(file));
     const step = /- name: The server tools[^\n]*\n\s+if: matrix\.os == 'ubuntu-latest'\n[\s\S]*?(?=\n\s+- )/.exec(
       jobs.test,
