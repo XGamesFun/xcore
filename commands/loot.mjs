@@ -206,6 +206,12 @@ export default {
         return refuse(`${file} does not exist: there is no folder ${path.dirname(file)}.`, 'not-found');
       rest = fromFolder(rest, process.cwd()).map((a, i) => (i === at ? path.basename(file) : a));
     }
+    // going live: what publish refuses of the economy is refused here first, before anything is printed or signed
+    if (args[0] === 'approve') {
+      const named = file ?? [ECONOMY_FILE, 'loot.json'].find(f => existsSync(f));
+      const why = named ? await approveProblem(path.resolve(named)) : null;
+      if (why) return refuse(why.words, why.code);
+    }
     const env = { ...process.env };
     // (on the cluster of the economy in the folder it runs in: devnet unless its file says mainnet)
     const rpc = rpcFor(
@@ -253,6 +259,28 @@ export default {
     );
   },
 };
+
+/**
+ * Why going live (approve) on the economy at `economy` must not go on, as publish would refuse it: a "live" section of
+ * the other cluster's loot, or a mainnet economy that pays through the test voucher key in .dev.vars (the game's
+ * folder: where the command runs, or the economy file's folder or the one above it). → {words, code} or null
+ */
+export async function approveProblem(economy, { cwd = process.cwd() } = {}) {
+  let value;
+  try {
+    value = JSON.parse(readFileSync(economy, 'utf8'));
+  } catch {
+    return null; // the tools say what is wrong with a file they cannot read
+  }
+  const { liveClusterProblem, testKeyProblem } = await import('../lib/publish/index.mjs');
+  const name = path.relative(cwd, economy) || economy;
+  const cluster = liveClusterProblem(value);
+  if (cluster) return { words: `Nothing was sent: ${name}: ${cluster}`, code: 'live-cluster' };
+  const folders = [...new Set([cwd, path.dirname(economy), path.dirname(path.dirname(economy))])];
+  const game = folders.find(d => existsSync(path.join(d, '.dev.vars'))) ?? cwd;
+  const test = await testKeyProblem(game, value);
+  return test ? { words: `Nothing was sent: ${name}: ${test}`, code: 'test-key' } : null;
+}
 
 /** xsolana's commands a person runs as `xcore loot <command>`: the ones its own help lists (read from the installed
  *  package's bin, where each is a key of its COMMANDS table), else these. */

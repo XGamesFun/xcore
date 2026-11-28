@@ -612,3 +612,41 @@ test("loot handover reads a loot.json game's file, version names the program of 
   assert.doesNotMatch(v.stdout, /devnet/);
   assert.match(run(['loot', 'version'], { cwd: legacy, env: { XSOLANA_CLUSTER: '' } }).stdout, /devnet/);
 });
+
+test('loot approve refuses what publish refuses of a mainnet economy, before anything is printed or signed', async t => {
+  const { seedAddress } = await import('../lib/voucher-seed.mjs');
+  const { LOOT_PROGRAMS } = await import('../lib/solana-rpc.mjs');
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const game = path.join(tmp.dir, 'game');
+  await mkdir(path.join(game, 'public'), { recursive: true });
+  const seed = 'cd'.repeat(32);
+  const test = await seedAddress(seed);
+  await writeFile(path.join(game, '.dev.vars'), `VOUCHER_SEED=${seed}\n`);
+  const economy = spec => writeFile(path.join(game, 'public', 'xsolana.json'), JSON.stringify(spec));
+  // the test voucher key in a mainnet grant: refused, by name, with the way on
+  await economy({ network: 'mainnet', grants: [{ key: 'win', vouchers: [test] }] });
+  const keyed = run(['loot', 'approve', 'public/xsolana.json', '--keypair', 'k/none.json'], { cwd: game });
+  assert.equal(keyed.status, 1, keyed.stderr);
+  assert.match(
+    keyed.stderr,
+    /^xcore: Nothing was sent: public[\\/]xsolana\.json: this economy is on mainnet, and grant "win" takes vouchers from the test voucher key/m,
+  );
+  assert.match(
+    JSON.parse(run(['loot', 'approve', 'public/xsolana.json', '--json'], { cwd: game }).stdout).code,
+    /^test-key$/,
+  );
+  // a devnet "live" section under "network": "mainnet": refused too
+  await economy({ network: 'mainnet', live: { program: LOOT_PROGRAMS.devnet, project: 'P' }, grants: [] });
+  const crossed = run(['loot', 'approve', 'public/xsolana.json', '--keypair', 'k/none.json'], { cwd: game });
+  assert.equal(crossed.status, 1, crossed.stderr);
+  assert.match(
+    crossed.stderr,
+    /Nothing was sent: .*its "network" is "mainnet", and its "live" section is loot on devnet/,
+  );
+  // on devnet the test key is the point: the tools run (and here say the key file is not there)
+  await economy({ network: 'devnet', grants: [{ key: 'win', vouchers: [test] }] });
+  const devnet = run(['loot', 'approve', 'public/xsolana.json', '--keypair', 'k/none.json'], { cwd: game });
+  assert.doesNotMatch(devnet.stderr, /Nothing was sent: .*test voucher key/);
+  assert.match(devnet.stderr, /none\.json does not exist/);
+});
