@@ -358,18 +358,22 @@ test(
       return GamesFun.signIn();
     });
     assert.equal(player.id, 'x:43');
-    assert.deepEqual(await page.evaluate(() => window.asked), [{ type: 'gf:auth-signin', with: 'x' }]);
+    assert.deepEqual(await page.evaluate(() => window.asked), [{ type: 'gf:auth-signin', with: 'x', stay: false }]);
     // with Google (2026-11-09): the page above is asked with 'google'; 'wallet' signs in with X (a wallet signs nobody in)
     await frame.evaluate(async () => {
       GamesFun.signOut();
       void GamesFun.signIn({ how: 'google' });
       GamesFun.signOut();
       void GamesFun.signIn({ how: 'wallet' });
+      // a game that must not start again asks the play page to stay
+      GamesFun.signOut();
+      void GamesFun.signIn({ stay: true });
     });
-    await page.waitForFunction(() => window.asked.length >= 3);
-    assert.deepEqual((await page.evaluate(() => window.asked)).slice(1, 3), [
-      { type: 'gf:auth-signin', with: 'google' },
-      { type: 'gf:auth-signin', with: 'x' },
+    await page.waitForFunction(() => window.asked.length >= 4);
+    assert.deepEqual((await page.evaluate(() => window.asked)).slice(1, 4), [
+      { type: 'gf:auth-signin', with: 'google', stay: false },
+      { type: 'gf:auth-signin', with: 'x', stay: false },
+      { type: 'gf:auth-signin', with: 'x', stay: true },
     ]);
     assert.equal(g.s.requests.length, 0, 'no request of its own');
     assert.deepEqual(
