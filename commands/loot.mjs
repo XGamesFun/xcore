@@ -60,7 +60,18 @@ every build includes them. It prints the next steps in short; --verbose prints e
 /** xsolana's commands that read an economy file ([file], default xsolana.json). */
 const ON_FILE = new Set(['check', 'simulate', 'cost', 'explain', 'review', 'publish', 'status', 'approve', 'handover']);
 /** xsolana's flags that take a value: the value is never the economy file, whatever it ends with. */
-const VALUED = new Set(['--keypair', '--to', '--yes', '--port', '--host', '--args-file', '--agent', '--scope']);
+const VALUED = new Set([
+  '--keypair',
+  '--to',
+  '--yes',
+  '--mint-key',
+  '--save',
+  '--port',
+  '--host',
+  '--args-file',
+  '--agent',
+  '--scope',
+]);
 
 /** Where each argument stands: the indexes of those that are neither a flag nor a flag's value. */
 function plainArgs(args) {
@@ -75,17 +86,25 @@ function plainArgs(args) {
   return plain;
 }
 
+/** The index of the economy file a command names (a plain argument ending in .json), or undefined. */
+export function economyArg(args) {
+  return ON_FILE.has(args[0]) ? plainArgs(args).find(i => i > 0 && args[i].endsWith('.json')) : undefined;
+}
+
 /**
  * The arguments as xsolana gets them when it runs in another folder than the person's: a key file named from where
- * they stand (`--keypair keys/game.json`, handover's `--to keys/new.json`) is given whole. One that starts with ~ is the home folder's, left as it is.
+ * they stand (`--keypair keys/game.json`, handover's `--to keys/new.json`, approve's `--mint-key coin=keys/mint.json`)
+ * is given whole. One that starts with ~ is the home folder's, left as it is.
  */
 export function fromFolder(args, cwd) {
   const whole = p => (p.startsWith('~') || path.isAbsolute(p) ? p : path.resolve(cwd, p));
-  const KEYS = ['--keypair', '--to'];
+  // (a mint key is <token>=<key file>: the file after the first =)
+  const mint = v => (v.includes('=') ? `${v.slice(0, v.indexOf('=') + 1)}${whole(v.slice(v.indexOf('=') + 1))}` : v);
+  const KEYS = { '--keypair': whole, '--to': whole, '--mint-key': mint };
   return args.map((a, i) => {
-    const joined = KEYS.find(k => a.startsWith(`${k}=`));
-    if (joined) return `${joined}=${whole(a.slice(joined.length + 1))}`;
-    return i > 0 && KEYS.includes(args[i - 1]) ? whole(a) : a;
+    const joined = Object.keys(KEYS).find(k => a.startsWith(`${k}=`));
+    if (joined) return `${joined}=${KEYS[joined](a.slice(joined.length + 1))}`;
+    return i > 0 && Object.hasOwn(KEYS, args[i - 1]) ? KEYS[args[i - 1]](a) : a;
   });
 }
 
@@ -172,7 +191,7 @@ export default {
     if (args[0] === 'review' && !solanaHas('review')) return refuse(`${NO_REVIEW}.`, 'no-review');
     // a game made before the file was named xsolana.json keeps loot.json: given to the command when it names no file
     // (a key file's name is a flag's value, never the economy file)
-    const at = ON_FILE.has(args[0]) ? plainArgs(args).find(i => i > 0 && args[i].endsWith('.json')) : undefined;
+    const at = economyArg(args);
     let rest =
       ON_FILE.has(args[0]) && at === undefined && !existsSync(ECONOMY_FILE) && existsSync('loot.json')
         ? [...args, 'loot.json']
@@ -182,6 +201,9 @@ export default {
     const file = at === undefined ? null : args[at];
     if (file && path.dirname(file) !== '.') {
       cwd = path.resolve(path.dirname(file));
+      // (a folder that is not there would fail the tools' start, not say why)
+      if (!existsSync(cwd))
+        return refuse(`${file} does not exist: there is no folder ${path.dirname(file)}.`, 'not-found');
       rest = fromFolder(rest, process.cwd()).map((a, i) => (i === at ? path.basename(file) : a));
     }
     const env = { ...process.env };

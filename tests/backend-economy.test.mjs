@@ -10,7 +10,7 @@ import { ECONOMY_FILE, economyFile, lootProgram, solanaRoot } from '../lib/econo
 import { solanaRpc, rpcWords, SHARED_RPC } from '../lib/solana-rpc.mjs';
 import { spawn } from 'node:child_process';
 import { BIN, fixture, run, tempDir } from './helpers.mjs';
-import { fromFolder, ownWords, rpcFor } from '../commands/loot.mjs';
+import { economyArg, fromFolder, ownWords, rpcFor } from '../commands/loot.mjs';
 
 test('backend use custom: backend.json in the folder the build copies, its origins checked', async t => {
   const tmp = await tempDir();
@@ -247,6 +247,16 @@ test('gamesfun loot approve opens nothing unless told how it is signed; a key fi
   assert.equal(first.status, 1);
   assert.match(first.stderr, /game[\\/]k[\\/]none\.json does not exist/);
   assert.doesNotMatch(first.stderr, /public[\\/](k[\\/])?none\.json/);
+  // A mint's key file (--mint-key <token>=<file>) is a flag's value too, never the economy file, so the tools run
+  // and answer for themselves.
+  await writeFile(path.join(game, 'xsolana.json'), await readFile(path.join(game, 'public', 'xsolana.json')));
+  const minted = run(['loot', 'approve', '--keypair', 'k/none.json', '--mint-key', 'coin=k/mint.json'], { cwd: game });
+  assert.equal(minted.status, 1, minted.stderr);
+  assert.doesNotMatch(minted.stderr, /ENOENT|spawn/);
+  assert.match(minted.stderr, /game[\\/]k[\\/]none\.json does not exist/);
+  const nowhere = run(['loot', 'check', 'gone/xsolana.json'], { cwd: game });
+  assert.equal(nowhere.status, 1);
+  assert.match(nowhere.stderr, /gone\/xsolana\.json does not exist: there is no folder gone\./);
 });
 
 test('a key file named beside flags is given whole; approve never goes to the shared relay', () => {
@@ -265,6 +275,14 @@ test('a key file named beside flags is given whole; approve never goes to the sh
     '~/.config/xsolana/k.json',
   ]);
   assert.deepEqual(fromFolder(['approve', '--keypair', '/abs/k.json'], cwd), ['approve', '--keypair', '/abs/k.json']);
+  assert.equal(economyArg(['approve', '--keypair', 'k.json', '--mint-key', 'coin=keys/mint.json']), undefined);
+  assert.equal(economyArg(['approve', '--mint-key', 'coin=keys/mint.json', 'public/xsolana.json']), 3);
+  assert.deepEqual(fromFolder(['approve', '--mint-key', 'coin=keys/mint.json', '--mint-key=gem=/abs/g.json'], cwd), [
+    'approve',
+    '--mint-key',
+    `coin=${path.join(cwd, 'keys/mint.json')}`,
+    '--mint-key=gem=/abs/g.json',
+  ]);
   assert.deepEqual(fromFolder(['handover', '--keypair', 'k.json', '--to=keys/new.json'], cwd), [
     'handover',
     '--keypair',
