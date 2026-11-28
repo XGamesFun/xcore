@@ -295,6 +295,53 @@ test('the account in words: Creator with its games, period, shared use and credi
   assert.equal(graceDaysLeft({ graceUntil: null, periodEnd: null }), null);
   assert.equal(graceDaysLeft({ ...inGrace, graceUntil: ended + 86_400_000 }, ended + 1), 1, 'graceUntil wins');
 
+  // a card account in its grace days is never told it renews: a failed charge, or an ended subscription
+  const LIVE_PAY = { card: { ok: false, code: 'has-subscription' }, solana: { ok: false, code: 'card' } };
+  const ENDED_PAY = { card: { ok: true }, solana: { ok: true } };
+  const failed = describeAccount(
+    { games: [], account: { ...inGrace, method: 'card', pay: LIVE_PAY }, capCents: 2500 },
+    { now, verbose: true },
+  );
+  assert.match(
+    failed,
+    /^Account: Creator, 3 of 10 games; its card payment failed and it is in its 7 days' grace \(2 days left\): update the card in your console → Plans → Manage billing, or every game drops to Free limits/,
+  );
+  assert.doesNotMatch(failed, /renews: by card on \d/);
+  assert.match(
+    failed,
+    /\n {2}renews: by card once the card pays; update the card or cancel in your console → Plans → Manage billing\n/,
+  );
+  const endedCard = describeAccount(
+    { games: [], payments: PAYMENTS, account: { ...inGrace, method: 'card', pay: ENDED_PAY } },
+    { now, verbose: true },
+  );
+  assert.match(
+    endedCard,
+    /^Account: Creator, 3 of 10 games; its card subscription ended \(paid through 2026-11-20\) and it is in its 7 days' grace \(2 days left\): renew it in your console → Plans/,
+  );
+  assert.doesNotMatch(endedCard, /renews:|card invoice/);
+  assert.match(
+    endedCard,
+    /\n {2}renew: your console → Plans, in SOL or USDC, or by card \(\$15\.00 per 30 days; a cancelled card subscription does not renew\)/,
+  );
+  assert.match(endedCard, /usage credit pays for use at these prices/);
+  // cancelled with days left: paid through its end, and no renewal promised
+  const cancelled = describeAccount({
+    games: [],
+    payments: PAYMENTS,
+    account: { ...CREATOR, method: 'card', pay: ENDED_PAY },
+  });
+  assert.match(
+    cancelled,
+    /^Account: Creator, 3 of 10 games, paid through 2026-12-20 \(25 days left\); its card subscription is cancelled\n/,
+  );
+  assert.doesNotMatch(cancelled, /renews:/);
+  // a live one with xgames.fun's pay still renews
+  assert.match(
+    describeAccount({ games: [], account: { ...CREATOR, method: 'card', pay: LIVE_PAY } }),
+    /\n {2}renews: by card on 2026-12-20;/,
+  );
+
   // --verbose: the unit prices xgames.fun published, to the fraction of a cent they need
   const verbose = describeAccount({ games: [], account: CREATOR }, { verbose: true });
   assert.match(verbose, /\nPast what is included, usage credit pays for use at these prices:\n/);
