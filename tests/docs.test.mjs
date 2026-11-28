@@ -359,3 +359,21 @@ test("each plan's database size is stated, and that a database past it stops the
         problems.push(`${rel(file)}: ${part.trim().slice(0, 100)}`);
   assert.deepEqual(problems, []);
 });
+
+test('the console has one name, and the reference says what only the console does', () => {
+  const problems = said(
+    'docs/COMMANDS.md',
+    '## What only the console does',
+    /xgames\.fun\/console/,
+    /Logs\s+tab/,
+    /Make\s+live/,
+    /Unpublish/,
+    /Live\s+tab/,
+  );
+  problems.push(...said('README.md', '## Commands', /COMMANDS\.md#what-only-the-console-does/));
+  // the console is "your console" (xgames.fun/console); Studio is xgames.fun's game builder, a place apart
+  for (const file of REFERENCE)
+    for (const [m] of read(file).matchAll(/creator console|Studio is your|your xgames\.fun Studio|in Studio\.?$/gim))
+      problems.push(`${rel(file)}: "${m}"`);
+  assert.deepEqual(problems, []);
+});

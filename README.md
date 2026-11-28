@@ -48,8 +48,8 @@ To run without installing, use `npx -y @xgamesfun/xcore@0.14.1 adopt .`. The uns
 
 ## Names
 
-**xcore** is the CLI. **xgames.fun** hosts the game. **Studio** is your creator console.
-**GamesFun** is the client your game calls.
+**xcore** is the CLI. **xgames.fun** hosts the game. **Your console**, at xgames.fun/console, is where you manage a
+published game, its plan and its billing. **GamesFun** is the client your game calls.
 
 For economies, `xcore loot` runs **xsolana**, the CLI in `@xgamesfun/solana`. **loot** is the shared Solana
 program. [solana-kit source](https://github.com/XGamesFun/solana-kit)
@@ -64,7 +64,7 @@ program. [solana-kit source](https://github.com/XGamesFun/solana-kit)
 | Server code for scores, payouts or your own API    | Put a Cloudflare Worker in `server/`. [Server guide](docs/SERVER.md)                                    |
 | Replays, level files or content packs              | `xcore files` · [Project files](docs/COMMANDS.md#files)                                                 |
 | A backend you already host                         | `xcore backend use custom` · [Backend setup](docs/HOSTING.md#a-backend)                                 |
-| Announcements, settings or maintenance mode        | Use the creator console. [Live settings](docs/CLIENT.md#live-settings-gamesfunlive)                     |
+| Announcements, settings or maintenance mode        | Your console's Live tab. [Live settings](docs/CLIENT.md#live-settings-gamesfunlive)                     |
 | Shops, loot boxes, staking or rewards              | `xcore loot add` · [Solana economy](docs/ECONOMY.md)                                                    |
 | Payout and key checks                              | `xcore review` scans your code for known mistakes. [Review limits](docs/ECONOMY.md#review-xcore-review) |
 | Your own site or domain                            | `xcore embed` or `xcore domain` · [Hosting](docs/HOSTING.md#embedding)                                  |
@@ -73,6 +73,9 @@ program. [solana-kit source](https://github.com/XGamesFun/solana-kit)
 
 Run `xcore --help` for the command list or `xcore <command> --help` for options. Use `--json` in scripts.
 [Command reference and exit codes](docs/COMMANDS.md)
+
+A live server's errors and logs, rolling back to an earlier version, unpublishing and pausing for maintenance are on
+your console, not in the CLI. [What only the console does](docs/COMMANDS.md#what-only-the-console-does)
 
 ## Hosting rules and limits
 

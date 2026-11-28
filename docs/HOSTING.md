@@ -43,7 +43,7 @@ The host serves static files as they are (GET and HEAD).
 ### Where it is served
 
 - Once published: at the root of the game's own origin (the link `xcore publish` prints).
-- In xgames.fun Studio's preview: under a folder.
+- In the preview of xgames.fun's Studio (its game builder, which is invite only): under a folder.
 - In `xcore dev`: under `/game/`.
 
 Use relative URLs (`./assets/x.js`, not `/assets/x.js`) so the game works in all three.
@@ -419,7 +419,7 @@ xcore domain                           # where the game plays, the sites that em
   server and the economy work there as they do on its xgames.fun link.
 - Sign-in still opens a small xgames.fun window, on a phone too. Your domain is a different site from xgames.fun, so a
   returning player clicks Sign in once per visit there, and a reload keeps the sign-in for the hour.
-- Studio stays on xgames.fun, and a post on X still uses the xgames.fun link.
+- Your console stays on xgames.fun, and a post on X still uses the xgames.fun link.
 - A bare domain (`mygame.com`) needs your DNS provider's CNAME flattening or an ALIAS record. Otherwise use `www.` or
   `play.` and redirect.
 - The page must load `gamesfun.js` 1.2.0 or later, which asks the play edge which game it is on when it runs on a host

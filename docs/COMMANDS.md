@@ -10,6 +10,7 @@ The unscoped `xcore` package on npm is a different package. Always use `@xgamesf
 Contents:
 
 - [Every command](#every-command)
+- [What only the console does](#what-only-the-console-does): server logs, rolling back, unpublishing, pausing
 - [adopt](#adopt): the game's record, and the list of what to fix
 - [check](#check): the page check, and the first session
 - [dev](#dev): the game on your machine, as xgames.fun hosts it
@@ -60,6 +61,28 @@ Commands with subcommands (`files`, `secret`, `db`, `embed`, `domain`, `plan`, `
 
 `xcore --version` (or `-v`) prints the installed version. `xcore help` and `xcore -h` print the command list, the same
 as `xcore --help`.
+
+## What only the console does
+
+Some of a published game's controls have no command. They are on your console, at xgames.fun/console, where you sign
+in with the same account as `xcore login`. Open the game there; a coding agent cannot do these for you, so it should
+send you there:
+
+- **The server's errors and logs**: the game's Logs tab. It shows the errors of the last 24 hours, and the recent
+  requests with what the server logged (`console.log`), from Cloudflare's Workers Logs, kept 7 days. A server last
+  published before logs were turned on logs nothing until it is published again.
+- **Rolling back**: on the Overview tab, under "Link and versions", **Make live** on an earlier version puts it back at
+  the link. Publishing an earlier copy of the folder with `xcore publish` makes a new version instead.
+- **Unpublishing**: **Unpublish** on the same card. The link shows "not found" until you publish again, and the server
+  stops within five minutes. What it stored is kept for 30 days.
+- **Archiving** a game you no longer need, once it is unpublished, so it stops counting toward your account's games.
+- **Pausing for maintenance, announcements and remote settings**: the Live tab
+  ([CLIENT.md](CLIENT.md#live-settings-gamesfunlive)).
+- **Players and boards**: ban a player or hide them from the boards (Players tab); review flagged scores and blocked
+  words (Boards tab).
+- **Activity**: every change to the game's database, files, players and boards, from xcore, GitHub Actions and the
+  console, written down before it acts.
+- **A team**, the **plan and billing** (the Plans page), and the repository that may publish from GitHub Actions.
 
 ## adopt
 
@@ -366,7 +389,7 @@ longer need on your console, or, on Free, buy a Creator account (`--json`: `code
 - Publishing a folder that is already linked to its game (`.gamesfun/publish.json`) updates that game with no question.
   `--new` makes another game, and asks again.
 - A GitHub Actions job signed in with its OIDC token is not asked: it publishes only the game its repository was linked
-  to in Studio.
+  to on your console.
 
 The steps of every publish:
 
@@ -381,7 +404,7 @@ The steps of every publish:
 4. **Its server code** (`server/`, a Worker under the `gf-server-v1` contract): bundled into one file and checked. It
    must build, contain no code generated from text, use no Node built-in a Worker lacks, contain no secrets, export
    its Durable Objects, and be at most 5 MB. `server/` and `gamesfun.json` are never public files.
-5. **The check**: a game whose check fails is saved as a private draft (a version in your xgames.fun Studio, with no
+5. **The check**: a game whose check fails is saved as a private draft (a version on your console, with no
    public link), and you are told which checks failed. A pass is remembered for exactly these files.
 6. **Upload**: only the files xgames.fun does not already have.
 7. **The link**: unlisted, and the same across every update. Publishing the folder again makes the next version.
@@ -409,7 +432,7 @@ The limits a publish is held to are in [HOSTING.md](HOSTING.md#limits).
 ### From GitHub Actions, no key stored
 
 The job's own OIDC token signs the publish in place of a login. xgames.fun accepts it for the repository and branch you
-linked to the game once in Studio.
+linked to the game once on your console.
 
 ```yaml
 # .github/workflows/publish.yml
@@ -555,7 +578,7 @@ Exit codes:
 
 | Variable                        | Effect                                                                                                                                                                                                                                                                                                                                    |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GAMESFUN_STUDIO=<origin>`      | publishes to another xgames.fun (a Studio on your own machine while developing it)                                                                                                                                                                                                                                                        |
+| `GAMESFUN_STUDIO=<origin>`      | publishes to another xgames.fun (one on your own machine while developing it)                                                                                                                                                                                                                                                             |
 | `GAMESFUN_CREDENTIALS=file`     | always keeps the publish token in the file ([login and logout](#login-and-logout))                                                                                                                                                                                                                                                        |
 | `XSOLANA_RPC_URL`               | a Solana RPC of your own. In `.env`: for `xcore dev`'s `/loot/v1/rpc` and for going live ([ECONOMY.md](ECONOMY.md#going-live)). When set, it is also the RPC a coin launch uses ([ECONOMY.md](ECONOMY.md#a-coin-that-trades-xcore-coin)). In `.dev.vars` or as a secret: the game's own RPC ([SERVER.md](SERVER.md#the-economys-own-rpc)) |
 | `GAMESFUN_SERVER_DEPS=<folder>` | a Miniflare installed elsewhere ([SERVER.md](SERVER.md#running-it-locally))                                                                                                                                                                                                                                                               |
