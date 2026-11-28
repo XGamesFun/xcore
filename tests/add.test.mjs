@@ -1353,3 +1353,33 @@ test('add vouchers keeps .dev.vars out of a repository the game sits in, not onl
   assert.doesNotMatch(staged, /\.dev\.vars/);
   assert.match(staged, /games\/mine\/\.gitignore/);
 });
+
+test('add signin on a Godot or Unity web export leaves the engine’s index.html alone and names the project instead', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  for (const [engine, files] of [
+    ['Godot', ['index.pck', 'index.wasm']],
+    ['Unity', ['Build/web.loader.js']],
+  ]) {
+    const dir = path.join(tmp.dir, engine);
+    const html = '<!doctype html><html><head><title>exported</title></head><body></body></html>';
+    await mkdir(path.join(dir, 'Build'), { recursive: true });
+    await writeFile(path.join(dir, 'index.html'), html);
+    for (const f of files) await writeFile(path.join(dir, f), 'x');
+    await assert.rejects(addSignin(dir), e => {
+      assert.equal(e.code, 'web-export', engine);
+      assert.match(e.message, new RegExp(`is a ${engine} web export: its index\\.html is ${engine}'s own`));
+      assert.match(
+        e.message,
+        new RegExp(`Sign-in goes into the ${engine} project instead: .* add signin <the project's folder>`),
+      );
+      return true;
+    });
+    assert.equal(
+      await readFile(path.join(dir, 'index.html'), 'utf8'),
+      html,
+      `${engine}: index.html as the engine wrote it`,
+    );
+    assert.equal(existsSync(path.join(dir, 'gamesfun.js')), false, engine);
+  }
+});
