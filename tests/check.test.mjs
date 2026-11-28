@@ -430,9 +430,7 @@ test(
     assert.equal(w.steps[0].playing, false);
     assert.equal(w.firstWallet, null);
     assert.ok(
-      w.tell.includes(
-        'At tap 1 the walk tapped “Sign in”, a sign-in with X; no wallet was asked for in the first 1 tap.',
-      ),
+      w.tell.includes('At tap 1 the walk tapped “Sign in”, a sign-in with X; no wallet was asked for in its one tap.'),
       w.tell.join('\n'),
     );
   },
