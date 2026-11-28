@@ -202,8 +202,9 @@ async function seatedPair() {
   );
   for (const ws of sockets) await room.webSocketMessage(ws, JSON.stringify({ t: 'hello' }));
   const [a, b] = sockets;
+  const welcome = a.sent.find(m => m.t === 'welcome');
   a.sent.length = b.sent.length = 0;
-  return { server: room, a, b, to: b.attachment.id };
+  return { server: room, a, b, to: b.attachment.id, welcome };
 }
 
 /**
@@ -224,11 +225,9 @@ async function joined() {
       }, 0);
     }
     send(m) {
+      // the room's own welcome to `a`, as server/rooms.js said it
       if (typeof m === 'string' && m.startsWith('{"t":"hello"'))
-        return setTimeout(
-          () => this.onmessage({ data: JSON.stringify({ t: 'welcome', id: 1, host: 1, code: 'ROOM42', peers: [] }) }),
-          0,
-        );
+        return setTimeout(() => this.onmessage({ data: JSON.stringify(pair.welcome) }), 0);
       wire.push(typeof m === 'string' ? Buffer.byteLength(m) : m.byteLength);
       pair.server.webSocketMessage(pair.a, m);
     }
@@ -260,6 +259,30 @@ test('large room messages sent in one frame all arrive: each frame the client se
     `frames of ${wire.join(', ')} bytes`,
   );
   assert.equal(wire.length, 3, 'two of 40 KB never share a frame');
+});
+
+test('a room whose owner lowered ROOM.messageBytes: its welcome says so, and every frame is kept to it', async () => {
+  const saved = { ...ROOM };
+  try {
+    ROOM.messageBytes = 16 * 1024;
+    const { room, wire, a, b, welcome } = await joined();
+    assert.equal(welcome.messageBytes, 16 * 1024);
+    for (let n = 1; n <= 20; n++) room.send({ n, state: 'x'.repeat(1000) });
+    await moment();
+    assert.deepEqual(
+      messages(b).map(m => m.n ?? m),
+      Array.from({ length: 20 }, (_, i) => i + 1),
+      'all twenty, in order',
+    );
+    assert.deepEqual(messages(a), [], 'the room refused nothing');
+    assert.ok(
+      wire.every(n => n <= ROOM.messageBytes),
+      `frames of ${wire.join(', ')} bytes`,
+    );
+    assert.ok(wire.length >= 2, 'more than one frame');
+  } finally {
+    Object.assign(ROOM, saved);
+  }
 });
 
 test('a message is counted by its bytes on the wire, not its characters', async () => {

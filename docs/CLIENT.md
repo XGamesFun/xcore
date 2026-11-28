@@ -54,9 +54,10 @@ No call throws. Where xgames.fun is not available, the game keeps running and th
   never the wallet.
 - `wallet` is the wallet linked to the account, or empty when there is none.
 
-**Test sign-in with `xcore dev`.** It works as a published game does: a guest's saves stay in the browser, and
-posting a score needs sign-in. A plain local server and `xcore check` keep every save and score in browser storage,
-signed in or not.
+**Test sign-in with `xcore dev`.** Its `/game/` page works as the game does on its own link: a guest's saves stay in
+the browser, and posting a score needs sign-in. Its `/play/` page shows the game in a frame, as xgames.fun's play page
+does, and signs the player in from the page above. A plain local server and `xcore check` keep every save and score in
+browser storage, signed in or not.
 
 ## Sign-in
 
@@ -65,7 +66,9 @@ signed in or not.
 #### In xgames.fun's play page
 
 The play page (`xgames.fun/play/<name>`) shows the game in a frame. The play page signs the player in and passes the
-game a token. The game sends no sign-in requests of its own.
+game a token. The game sends no sign-in requests of its own. `GamesFun.ready` resolves once the play page has said who
+is signed in (up to 1.5 s), so a signed-in player is already set when the game reads its save. A save read or written
+before `ready` resolves waits for it, and so goes to the account of a player the page names.
 
 #### On its own host, as the whole tab
 
@@ -154,6 +157,9 @@ Under `xcore dev`:
 - the dev server answers the three xgames.fun addresses above for this one game. Sign in sends the tab through the dev
   server's stand-in for X and back, as on the game's own host. `GamesFun.signIn({name: 'Ana'})` signs in a named dev
   player immediately.
+- `/play/` shows the game framed as xgames.fun's play page frames it: the same sandbox, and a bar with Sign in and Sign
+  out that stand in for the play page's own. Test there what the game does at `GamesFun.ready` and with its first save
+  when the play page has already signed the player in.
 
 ### One sign-in for every place the game can be
 
@@ -192,10 +198,12 @@ host that serves this one game (its xgames.fun link, its own domain, `xcore dev`
 by several games, and never in a frame. A game's own code can always read the token it was given; the token is never
 stored where another game's page could read it.
 
-**A newer sign-in client, where the host provides one.** `gamesfun.js` includes its own sign-in code. When the page
-loads as the top window, it also requests a sign-in client from its own host at `/platform/v1/signin/v1.js`
-(`xcore dev` serves the client of the `xcore` version that runs it). A frame does not request it and uses the built-in
-one.
+**A newer sign-in client, where the host provides one.** `gamesfun.js` includes its own sign-in code. Under
+`xcore dev`, when the page loads as the top window, it also requests a sign-in client from the dev server at
+`/platform/v1/signin/v1.js` (the client of the `xcore` version that runs it). xgames.fun does not serve that address
+yet, so on the game's own link and its own domain nothing is requested and the built-in client runs. A frame never
+requests it. A host that does serve it can have the page ask for it there too: set
+`globalThis.GAMESFUN_SIGNIN_SHARED = true` before loading `gamesfun.js`.
 
 - If the hosted client arrives in time, it runs. If the address returns nothing, or not in time, the built-in client
   runs and the game behaves the same.
@@ -242,10 +250,18 @@ to remove one.
 true}`. A guest keeps their progress without signing in, but only in that browser: another device, or clearing site
 data, loses it. Saves are written by the player's own page, so a server that pays out never trusts one.
 
+- **Inside a post on X** the game is a frame under x.com, and the browser keeps that frame's storage apart from the
+  game's own link. A guest who plays in the post and then opens the game's link, in the same browser, starts from
+  nothing there. Signing in keeps progress in both.
+- **Where the browser keeps nothing** (storage blocked, as in a frame on another site with third-party storage off, or
+  full), a guest's `put` returns `code: 'no-storage'` (status 0) and an error, not `ok`. `saves.guest.kept()` says
+  ahead of time whether this browser keeps a guest's saves. Ask the player to sign in to keep their progress.
+
 Each game chooses what guests get:
 
-- **No guest saves:** add `data-guest-saves="off"` to the `<script>` tag (or set `GamesFun.saves.guests = false`).
-  A guest's save then returns `Sign in first.` (status 401).
+- **No guest saves:** add `data-guest-saves="off"` to the `<script>` tag, set `GamesFun.saves.guests = false`, or set
+  `globalThis.GAMESFUN_GUEST_SAVES = false` before loading `gamesfun.js`. A guest's save then returns `Sign in first.`
+  (status 401).
 - **At sign-in:** guest saves stay in the browser until the game moves them. `saves.guest.list()` and
   `saves.guest.get(key)` read them, `saves.guest.move(key)` copies one into the account (replacing a save with the
   same key) and removes it from the browser, and `saves.guest.delete(key)` drops it. The game can carry everything
@@ -257,9 +273,16 @@ Each game chooses what guests get:
 GamesFun.onChange(async player => {
   if (!player) return;
   const { data: kept } = await GamesFun.saves.guest.list();
-  for (const { key } of kept) await GamesFun.saves.guest.move(key); // this game carries guest progress over
+  for (const { key } of kept) {
+    // carry guest progress over, but never over the account's own save of that key
+    const { status } = await GamesFun.saves.get(key);
+    if (status === 404) await GamesFun.saves.guest.move(key);
+  }
 });
 ```
+
+`move` replaces the account's save of the same key, so check first, as above: a player who played signed in on
+another device, or in xgames.fun's play page, may already have progress there.
 
 ## Leaderboards
 
@@ -364,8 +387,13 @@ fallback locally, and the wallet app on xgames.fun.
 ## Live settings: `GamesFun.live`
 
 Announcements, remote config and maintenance mode, without republishing. On xgames.fun/console, a game's **Live** tab
-sets three things. Players get changes within about 35 seconds. xgames.fun's play edge serves them from one cached
-record per game.
+sets three things. xgames.fun's play edge serves them from one cached record per game:
+
+- **Players who open the game** get a change within about 35 seconds.
+- **Players already in the game** get it when `gamesfun.js` asks again: about a minute later when the game listens
+  with `GamesFun.live.onChange`, and up to about five and a half minutes later when only the banner asks (every five
+  minutes, plus the caches). `GamesFun.live.refresh()` asks at once. A pause shows sooner: the game's next call to
+  its server, saves or leaderboards answers `maintenance`, and the banner says so.
 
 - **Announcement**: a short line of plain text (up to 280 characters), `info` or `warning`, with an optional start and
   end time.
@@ -375,7 +403,7 @@ record per game.
   - Players who open the game get a plain holding page from xgames.fun instead.
   - The server's `api/*` (WebSockets included) and the page's saves and leaderboards return `503` with code
     `maintenance`. The server's code does not run.
-  - Turning it off brings the game back within about 35 seconds (up to a minute).
+  - Turning it off brings the game back within about 35 seconds (up to a minute) for players who open it.
   - Anything already running (an open WebSocket, an alarm) is not stopped.
 
 `gamesfun.js` reads them (since 1.5.0):

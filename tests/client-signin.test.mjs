@@ -236,7 +236,7 @@ after(async () => (await launched)?.close());
  * A browser of its own (cookies, storage) and a stand-in. `remembered`: xgames.fun's cookie is in it already. `stay`:
  * the game asks that a sign-in never leave its page (GAMESFUN_SIGNIN_STAY), so it signs in by the window.
  */
-async function world(t, options = {}, { remembered = true, noWindow = false, stay = false } = {}) {
+async function world(t, options = {}, { remembered = true, noWindow = false, stay = false, asks = false } = {}) {
   const g = await standIn(options);
   t.after(g.close);
   const ctx = await (await chrome()).newContext();
@@ -252,6 +252,11 @@ async function world(t, options = {}, { remembered = true, noWindow = false, sta
   if (stay)
     await ctx.addInitScript(() => {
       window.GAMESFUN_SIGNIN_STAY = true;
+    });
+  // a host that serves the sign-in client's address (only xcore dev does so far): the page asks it
+  if (asks)
+    await ctx.addInitScript(() => {
+      window.GAMESFUN_SIGNIN_SHARED = true;
     });
   const own = `http://moth-play.xgames.test:${g.port}/`;
   const open = async (url = own) => {
@@ -328,7 +333,9 @@ test(
     });
     assert.equal(tabs(ctx), 2, 'no window opened');
     assert.deepEqual(s.requests, [], 'and no sign-in request: the click went to X and back');
-    assert.deepEqual(await tab.evaluate(() => GamesFun.signInClient), { version: '1.1.0', shared: true });
+    // xgames.fun does not serve the sign-in client's address: the carried client runs, and it is never asked
+    assert.deepEqual(await tab.evaluate(() => GamesFun.signInClient), { version: '1.1.0', shared: false });
+    assert.ok(!s.seen.some(l => l.endsWith(SIGNIN_PATH)), s.seen.join('\n'));
   },
 );
 
@@ -337,7 +344,7 @@ test(
   { skip, timeout: 60_000 },
   async t => {
     // the client's address answers after 3 s: the page starts with the client it carries, a second in
-    const { s, open } = await world(t, { sharedWait: 3000 });
+    const { s, open } = await world(t, { sharedWait: 3000 }, { asks: true });
     s.clicked.add('moth');
     const page = await open();
     assert.equal((await page.evaluate(() => GamesFun.ready)).id, 'x:42', 'the player xgames.fun names');
@@ -641,7 +648,7 @@ for (const [name, options] of Object.entries(VARIANTS))
     `the client's address answers ${name}: the carried client runs, the same`,
     { skip, timeout: 60_000 },
     async t => {
-      const { s, open } = await world(t, options);
+      const { s, open } = await world(t, options, { asks: true });
       const page = await open();
       assert.equal(await page.evaluate(() => GamesFun.ready), null);
       await page.waitForFunction(() => GamesFun.signInClient);
@@ -669,7 +676,7 @@ test(
     // a later version of the client, served at the address: the game was not published again
     const later = SHARED.replace("var VERSION = '1.1.0';", "var VERSION = '9.9.9';");
     assert.notEqual(later, SHARED);
-    const { s, open, g } = await world(t, { shared: later, csp: true });
+    const { s, open, g } = await world(t, { shared: later, csp: true }, { asks: true });
     const page = await open();
     assert.equal(await page.evaluate(() => GamesFun.ready), null);
     await page.waitForFunction(() => GamesFun.signInClient);
