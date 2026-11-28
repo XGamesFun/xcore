@@ -135,6 +135,19 @@ test('plan activate and deactivate exit 2 with the per-account words, and ask xg
   assert.doesNotMatch(plan.usage, /activate|paid slot|free slot/i, 'the help names neither, nor a slot to move');
 });
 
+test("plan's help names both ways to pay for Creator: a card renews by itself, a prepaid period does not", () => {
+  const flat = plan.usage.replace(/\s+/g, ' ');
+  assert.match(
+    flat,
+    /by card: it renews automatically every 30 days, charging the card, until you cancel it in Manage billing/,
+  );
+  assert.match(flat, /prepaid in SOL or USDC, 1 to 12 periods at a time: it does not renew by itself/);
+  // use past the included: on the card's invoice up to the spending cap, or from usage credit when prepaid
+  assert.match(flat, /paid by card, it goes on the card's invoice, up to the monthly spending cap you set/);
+  assert.match(flat, /prepaid, usage credit \(bought in SOL or USDC\) pays for it/);
+  assert.doesNotMatch(flat, /\$15 per 30 days, prepaid in SOL or USDC/, 'never SOL or USDC as the only way');
+});
+
 test('plan in words: the tier, the month, the limits, capped and the slots (an xgames.fun without accounts)', () => {
   const words = describeGame({
     game: { title: 'Moth' },
