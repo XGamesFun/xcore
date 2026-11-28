@@ -1,7 +1,7 @@
 // `xcore review [game] [--live [origin]]`: the pattern-based payout and key review of a brought game (../lib/review.mjs): its economy by
 // @xgamesfun/solana's own review, its server and page by this package's reading, and with --live the published game
 // asked as a stranger. The record goes in <game>/evidence/review-N/; any high finding exits 1.
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, folderArg, tooMany } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { readLinks } from '../lib/publish/index.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
@@ -11,7 +11,7 @@ import { plural } from '../lib/util.mjs';
 import { ASK_HEADING, TELL_HEADING } from '../lib/review/record.mjs';
 import { liveWords } from '../lib/review/live.mjs';
 
-const usage = `Usage: xcore review [game] [--live [origin]] [--out <dir>] [--verbose] [--json]
+const usage = `Usage: xcore review [game | --dir <game>] [--live [origin]] [--out <dir>] [--verbose] [--json]
 
 A pattern-based check of a game's economy and server code for payout and key-handling mistakes, read the way a
 cheater would: what a script can get without playing, and what to fix first. It is not a security audit.
@@ -89,8 +89,13 @@ export default {
   run: args =>
     guard(async () => {
       const { rest, live } = liveFlag(args);
-      const { values, positionals } = parse(rest, { out: { type: 'string' }, verbose: { type: 'boolean' } }, usage);
-      const dir = await resolveGame(positionals[0]);
+      const { values, positionals } = parse(
+        rest,
+        { out: { type: 'string' }, verbose: { type: 'boolean' }, dir: { type: 'string' } },
+        usage,
+      );
+      if (positionals.length > 1) throw new UsageError(`${tooMany(positionals.slice(1))}\n\n${usage}`);
+      const dir = await resolveGame(folderArg(values.dir, positionals[0], usage));
       let base = null,
         liveWhy = `not asked for (${CMD} review --live)`;
       if (typeof live === 'string') {

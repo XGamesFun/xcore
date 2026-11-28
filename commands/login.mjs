@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline/promises';
-import { guard, parse, printJson } from '../lib/cli.mjs';
+import { guard, parse, printJson, tooMany, UsageError } from '../lib/cli.mjs';
 import { openUrl } from '../lib/open.mjs';
 import { call, signInState, studioOrigin } from '../lib/publish/client.mjs';
 import { currentReach, loginWithReach, loginWords, reachWords } from '../lib/login-reach.mjs';
@@ -55,7 +55,8 @@ export default {
   usage,
   run: args =>
     guard(async () => {
-      const { values } = parse(args, { code: { type: 'boolean' }, status: { type: 'boolean' } }, usage);
+      const { values, positionals } = parse(args, { code: { type: 'boolean' }, status: { type: 'boolean' } }, usage);
+      if (positionals.length) throw new UsageError(`${tooMany(positionals)}\n\n${usage}`);
       const origin = studioOrigin();
       if (values.status) {
         const { token, words, ...s } = await signInState(origin);

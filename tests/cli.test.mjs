@@ -78,6 +78,17 @@ test('a usage mistake is answered one way by every command: its words on stderr,
     [['loot', 'add', '.', 'extra'], /^Too many arguments: extra\./],
     [['secret', 'list', '.', 'extra'], /^Too many arguments: extra\./],
     [['secret', 'set', 'NAME', '.', 'extra'], /^Too many arguments: extra\./],
+    [['adopt', '.', 'extra'], /^Too many arguments: extra\./],
+    [['check', '.', 'extra'], /^Too many arguments: extra\./],
+    [['review', '.', 'extra'], /^Too many arguments: extra\./],
+    [['publish', '.', 'extra'], /^Too many arguments: extra\./],
+    [['login', 'extra'], /^Too many arguments: extra\./],
+    [['logout', 'extra'], /^Too many arguments: extra\./],
+    [['files', 'list', 'art/', 'extra'], /^Too many arguments: extra\./],
+    [['files', 'usage', 'extra'], /^Too many arguments: extra\./],
+    [['db', 'info', '.', 'extra'], /^Too many arguments: extra\./],
+    [['db', 'query', 'SELECT 1', '.', 'extra'], /^Too many arguments: extra\./],
+    [['check', '.', '--dir', 'other'], /^Give the game's folder once: \. or --dir other/],
     [['card', '.', '--dir', 'other'], /^Give the game's folder once: \. or --dir other/],
     [['adopt', '.', '--frob'], /^Unknown option '--frob'/], // no such flag
     [['dev', '.', '--port', 'eighty'], /^--port takes a port number/], // a value that is none
@@ -112,9 +123,13 @@ test('a usage mistake is answered one way by every command: its words on stderr,
     ['card', '--dir', 'nowhere'],
     ['loot', 'add', '--dir', 'nowhere'],
     ['backend', 'use', 'custom', '--dir', 'nowhere', '--url', 'https://api.game.example'],
+    ['check', '--dir', 'nowhere'],
+    ['review', '--dir', 'nowhere'],
+    ['publish', '--dir', 'nowhere', '--status'],
   ])
     assert.match(run(args, { cwd: away.dir }).stderr, /nowhere: no such folder/, args.join(' '));
   assert.match(run(['add', 'signin', '--dir', 'nowhere'], { cwd: away.dir }).stderr, /nowhere/);
+  assert.match(run(['adopt', '--dir', 'nowhere'], { cwd: away.dir }).stdout, /nowhere: no such folder/);
   // a refusal is not a usage mistake: exit code 1, and under --json always { ok: false, error, code }
   for (const [args, code] of [
     [['check', 'nowhere'], 'no-folder'],

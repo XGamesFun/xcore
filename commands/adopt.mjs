@@ -1,12 +1,12 @@
 // `xcore adopt [folder]`: bring a web game made anywhere, to check it, add an economy and publish it on xgames.fun
 // (../lib/publish/adopt.mjs; docs/COMMANDS.md).
-import { failureJson, guard, parse, printJson } from '../lib/cli.mjs';
+import { failureJson, guard, parse, printJson, folderArg, tooMany, UsageError } from '../lib/cli.mjs';
 import path from 'node:path';
 import { shown } from '../lib/games.mjs';
 import { adopt, adoptNext, reportLines } from '../lib/publish/adopt.mjs';
 import { CMD } from '../lib/command.mjs';
 
-const usage = `Usage: xcore adopt [folder] [--build "<command>"] [--out <dir>] [--static <dir>] [--no-build] [--json]
+const usage = `Usage: xcore adopt [folder | --dir <folder>] [--build "<command>"] [--out <dir>] [--static <dir>] [--no-build] [--json]
 
 Prepare a web game you already made for xgames.fun: record how it builds, and list what to fix before publishing.
 
@@ -54,10 +54,12 @@ export default {
           out: { type: 'string' },
           static: { type: 'string' },
           'no-build': { type: 'boolean' },
+          dir: { type: 'string' },
         },
         usage,
       );
-      const dir = path.resolve(positionals[0] ?? '.'); // this folder, as check and publish read it
+      if (positionals.length > 1) throw new UsageError(`${tooMany(positionals.slice(1))}\n\n${usage}`);
+      const dir = path.resolve(folderArg(values.dir, positionals[0], usage) ?? '.'); // this folder, as check and publish read it
       const r = await adopt(dir, {
         build: values.build ?? null,
         out: values.out ?? null,

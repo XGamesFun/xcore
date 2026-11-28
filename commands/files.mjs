@@ -2,7 +2,7 @@
 // serves) or, with --live, on xgames.fun (../lib/files.mjs).
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { guard, parse, printJson, UsageError, notOneOf, verbNamed } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, notOneOf, verbNamed, tooMany } from '../lib/cli.mjs';
 import { named, resolveGame } from '../lib/games.mjs';
 import {
   filesGet,
@@ -94,6 +94,8 @@ export default {
       if (!verb) throw new UsageError(`${notOneOf(word, verbs)}\n\n${usage}`);
       if (['put', 'get', 'remove'].includes(verb) && !a)
         throw new UsageError(`${verb} needs ${verb === 'put' ? 'a file' : 'a path'}\n\n${usage}`);
+      const most = { list: 2, put: 3, get: 2, remove: 2, usage: 1 }[verb];
+      if (positionals.length > most) throw new UsageError(`${tooMany(positionals.slice(most))}\n\n${usage}`);
       const dir = await resolveGame(values.dir);
       const live = !!values.live;
       const where = live ? 'on xgames.fun' : 'on this machine';

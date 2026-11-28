@@ -1,7 +1,7 @@
 // `xcore publish`: a game to xgames.fun at a link anyone can play (../lib/publish/index.mjs). publishCommand makes the
 // command: this package's own, which checks a game by the page check, and the kit's (@xgamesfun/kit), which passes its
 // six gates, its name, its upkeep and its own way of finding a game. A game the kit made goes to the kit's (../bin).
-import { guard, parse, printJson } from '../lib/cli.mjs';
+import { guard, parse, printJson, folderArg, tooMany, UsageError } from '../lib/cli.mjs';
 import { resolveGame as findGame, shown as showDir, named as nameOf } from '../lib/games.mjs';
 import { checkSummary, LABEL, pageCheck, preflight, publishGame, publishStatus } from '../lib/publish/index.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
@@ -14,7 +14,7 @@ import { cardPrinted, drawable } from '../lib/card.mjs';
 import { plural, sizeText } from '../lib/util.mjs';
 import { uploadWords } from '../lib/publish/tree.mjs';
 
-const usage = `Usage: xcore publish [dir] [--draft] [--new] [--title <name>] [--no-card] [--yes <code>] [--status] [--check [--verify [--port <n>]]] [--json]
+const usage = `Usage: xcore publish [dir | --dir <dir>] [--draft] [--new] [--title <name>] [--no-card] [--yes <code>] [--status] [--check [--verify [--port <n>]]] [--json]
 
 Publish a game to xgames.fun at a link anyone can play. xgames.fun hosts it; you do not need a server.
 
@@ -106,11 +106,13 @@ export function publishCommand({
             port: { type: 'string' },
             'no-card': { type: 'boolean' },
             yes: { type: 'string' },
+            dir: { type: 'string' },
           },
           usage,
         );
+        if (positionals.length > 1) throw new UsageError(`${tooMany(positionals.slice(1))}\n\n${usage}`);
         const askCard = card && !values['no-card'];
-        const dir = await resolveGame(positionals[0]);
+        const dir = await resolveGame(folderArg(values.dir, positionals[0], usage));
         const origin = studioOrigin();
         // a game that pays results through vouchers, changed since its last security review: one line, never a refusal
         const nudge = values.status || values.json ? null : reviewNudge(dir);

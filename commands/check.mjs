@@ -1,7 +1,7 @@
 // `xcore check [dir]`: the page check (../lib/check.mjs) on a game you brought: it builds, fits xgames.fun's hosting,
 // starts clean in Chrome as the play host serves it, and stays inside its origins. publish runs the same check first.
 import { rmSync } from 'node:fs';
-import { failureJson, guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { failureJson, guard, parse, printJson, UsageError, folderArg, tooMany } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { madeByKit } from '../lib/publish/index.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -11,7 +11,7 @@ import { SECTION } from '../lib/journey.mjs';
 /** How long the check watches each view of the page start (lib/check.mjs, GF_PAGE_SETTLE_MS), in seconds. */
 const SETTLE_S = Number(process.env.GF_PAGE_SETTLE_MS ?? 5000) / 1000;
 
-const usage = `Usage: xcore check [dir] [--no-build] [--out <dir>] [--port <n>] [--verbose] [--json]
+const usage = `Usage: xcore check [dir | --dir <dir>] [--no-build] [--out <dir>] [--port <n>] [--verbose] [--json]
 
 Check the game's page as xgames.fun hosts it. Run ${CMD} adopt <dir> first.
 
@@ -75,10 +75,12 @@ export default {
           out: { type: 'string' },
           port: { type: 'string' },
           verbose: { type: 'boolean' },
+          dir: { type: 'string' },
         },
         usage,
       );
-      const dir = await resolveGame(positionals[0]);
+      if (positionals.length > 1) throw new UsageError(`${tooMany(positionals.slice(1))}\n\n${usage}`);
+      const dir = await resolveGame(folderArg(values.dir, positionals[0], usage));
       if (madeByKit(dir))
         throw new Error(
           `${shown(dir)} was made with the game-making kit. Its check is the kit's own (\`${CMD} verify\`, six gates), which runs only where the kit is installed. The kit is not released yet.`,

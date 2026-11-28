@@ -1,4 +1,4 @@
-import { guard, parse, printJson } from '../lib/cli.mjs';
+import { guard, parse, printJson, tooMany, UsageError } from '../lib/cli.mjs';
 import { logout, signInsPage, studioOrigin } from '../lib/publish/client.mjs';
 import { forgetReach } from '../lib/login-reach.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -36,7 +36,8 @@ export default {
   usage,
   run: args =>
     guard(async () => {
-      const { values } = parse(args, { forget: { type: 'boolean' } }, usage);
+      const { values, positionals } = parse(args, { forget: { type: 'boolean' } }, usage);
+      if (positionals.length) throw new UsageError(`${tooMany(positionals)}\n\n${usage}`);
       const origin = studioOrigin();
       const r = await logout(origin, { forget: !!values.forget });
       const kept = !r.forgot && !!r.why;

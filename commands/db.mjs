@@ -1,6 +1,6 @@
 // `xcore db info|query|export|import|restore`: the game's own database (gamesfun.json → database), on this machine
 // (the one `xcore dev` runs) or, with --live, on xgames.fun (../lib/db.mjs).
-import { guard, parse, printJson, UsageError, notOneOf, folderArg, verbNamed } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, notOneOf, folderArg, verbNamed, tooMany } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { dbExport, dbImport, dbInfo, dbQuery, dbRestore, importOf, liveChange, queryProblem } from '../lib/db.mjs';
 import { consented } from '../lib/consent.mjs';
@@ -104,6 +104,8 @@ export default {
       const verb = verbNamed(word, verbs);
       if (!verb) throw new UsageError(`${notOneOf(word, verbs)}\n\n${usage}`);
       if (takes[verb] && !rest[0]) throw new UsageError(`${verb} needs ${takes[verb]}\n\n${usage}`);
+      const most = takes[verb] ? 2 : 1;
+      if (rest.length > most) throw new UsageError(`${tooMany(rest.slice(most))}\n\n${usage}`);
       const arg = takes[verb] ? rest[0] : null;
       const dir = await resolveGame(folderArg(values.dir, takes[verb] ? rest[1] : rest[0], usage));
       const live = !!values.live;
