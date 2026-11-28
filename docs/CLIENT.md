@@ -65,7 +65,9 @@ signed in or not.
 #### In xgames.fun's play page
 
 The play page (`xgames.fun/play/<name>`) shows the game in a frame. The play page signs the player in and passes the
-game a token. The game sends no sign-in requests of its own.
+game a token. The game sends no sign-in requests of its own. `GamesFun.ready` resolves once the play page has said who
+is signed in (up to 1.5 s), so a signed-in player is already set when the game reads its save. A save read or written
+before `ready` resolves waits for it, and so goes to the account of a player the page names.
 
 #### On its own host, as the whole tab
 
@@ -257,9 +259,16 @@ Each game chooses what guests get:
 GamesFun.onChange(async player => {
   if (!player) return;
   const { data: kept } = await GamesFun.saves.guest.list();
-  for (const { key } of kept) await GamesFun.saves.guest.move(key); // this game carries guest progress over
+  for (const { key } of kept) {
+    // carry guest progress over, but never over the account's own save of that key
+    const { status } = await GamesFun.saves.get(key);
+    if (status === 404) await GamesFun.saves.guest.move(key);
+  }
 });
 ```
+
+`move` replaces the account's save of the same key, so check first, as above: a player who played signed in on
+another device, or in xgames.fun's play page, may already have progress there.
 
 ## Leaderboards
 

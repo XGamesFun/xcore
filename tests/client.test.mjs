@@ -17,7 +17,12 @@ const CLIENT = readFileSync(path.join(ROOT, 'lib', 'client', 'gamesfun.js'), 'ut
 const GAME = `<!doctype html><html><head><script src="./gamesfun.js"></script></head><body>
 <button id="in" onclick="window.signedIn = GamesFun.signIn()">Sign in</button>
 <button id="wallet" onclick="window.walletAnswer = GamesFun.openWallet('solflare', { view: 'claim', href: 'https://xgames.fun/play/moth?claim=1' })">Open in your wallet app</button>
-<script>window.codes = []; GamesFun.onCode(c => codes.push(c)); window.changes = []; GamesFun.onChange(p => changes.push(p));</script>
+<script>window.codes = []; GamesFun.onCode(c => codes.push(c)); window.changes = []; GamesFun.onChange(p => changes.push(p));
+// ?boot: a game that reads its save as it boots, before gf.ready and once it answered
+if (new URLSearchParams(location.search).has('boot')) {
+  window.early = GamesFun.saves.get('main');
+  window.boot = GamesFun.ready.then(async p => ({ ready: p && p.id, token: !!GamesFun.token, at: performance.now(), save: await GamesFun.saves.get('main') }));
+}</script>
 </body></html>`;
 
 /** xgames.fun, in miniature: the play host's sign-in request, the platform's page calls, a game server's api/db. */
@@ -48,14 +53,26 @@ function standIn() {
       if (url.pathname === '/play/moth')
         return send(
           200,
-          `<iframe id="g" src="http://moth-play.xgames.test:${port}/"></iframe><script>
+          `<iframe id="g" src="http://moth-play.xgames.test:${port}/${url.search}" referrerpolicy="no-referrer"></iframe><script>
           window.asked = [];
           // ?wallet=1: this browser has no wallet and the page opens a wallet app when asked (?wallet=0: it will not)
           const offer = ${JSON.stringify(url.searchParams.has('wallet') ? url.searchParams.get('wallet') === '1' : null)};
+          // as xgames.fun's play page answers gf:host-ready (play-room.tsx hello): gf:host, gf:wallet, then gf:auth with
+          // the player it has signed in (?signed: one with the token tok-page; ?loading: its own sign-in read comes back
+          // a moment later; ?noauth: a page that sends no gf:auth)
+          const signed = ${url.searchParams.has('signed')}, loading = ${url.searchParams.has('loading')}, noauth = ${url.searchParams.has('noauth')};
+          const player = { type: 'gf:auth', v: 1, level: 3, wallet: '', x: { handle: 'page_fan' }, token: 'tok-page', expires: Date.now() + 3600e3, status: 'signed-in' };
+          const nobody = status => ({ type: 'gf:auth', v: 1, level: 0, wallet: '', x: null, token: '', expires: 0, status });
           window.host = extra => document.getElementById('g').contentWindow.postMessage({ type: 'gf:host', v: 1, auth: true, ...extra }, '*');
           window.walletAsked = [];
           addEventListener('message', e => {
-            if (e.data?.type === 'gf:host-ready') e.source.postMessage({ type: 'gf:host', v: 1, auth: true, ...(offer === null ? {} : { openWallet: offer }) }, '*');
+            if (e.data?.type === 'gf:host-ready') {
+              e.source.postMessage({ type: 'gf:host', v: 1, auth: true, ...(offer === null ? {} : { openWallet: offer }) }, '*');
+              e.source.postMessage({ type: 'gf:wallet', v: 1, wallets: [] }, '*');
+              if (noauth) return;
+              e.source.postMessage(loading ? nobody('loading') : signed ? player : nobody('none'), '*');
+              if (loading) setTimeout(() => e.source.postMessage(player, '*'), 300);
+            }
             if (e.data?.type === 'gf:wallet-need' || e.data?.type === 'gf:open-wallet')
               walletAsked.push({ ...e.data, tap: navigator.userActivation.isActive });
             if (e.data?.type === 'gf:fullscreen') { window.fullAsked = (window.fullAsked ?? []).concat(e.data.on);
@@ -70,7 +87,11 @@ function standIn() {
     // a post on X: another site frames the game alone (nobody answers it there)
     if (host === 'x.test' && url.pathname === '/xpost') {
       const port = req.headers.host.split(':')[1];
-      return send(200, `<iframe id="g" src="http://moth-play.xgames.test:${port}/"></iframe>`, 'text/html');
+      return send(
+        200,
+        `<iframe id="g" src="http://moth-play.xgames.test:${port}/${url.search}"></iframe>`,
+        'text/html',
+      );
     }
     // a site of the creator's own that embeds the game (xcore embed), and tries to hand it a sign-in: it may not
     if (host === 'evil.test' && url.pathname === '/frame') {
@@ -358,6 +379,98 @@ test(
     );
     assert.equal((await frame.evaluate(() => GamesFun.saves.put('main', 1))).error, null);
     assert.ok(g.s.seen.includes('PUT moth-play.xgames.test/platform/v1/saves/main (tok-page)'));
+  },
+);
+
+test(
+  "inside xgames.fun's play page, a player it has signed in is there when gf.ready answers, and the save read is the account's",
+  { skip, timeout: 60_000 },
+  async t => {
+    const g = await standIn();
+    t.after(g.close);
+    g.s.saves['x:43/main'] = { level: 42 }; // the player's progress in their account
+    const browser = await chrome();
+    t.after(() => browser.close());
+    const context = await browser.newContext();
+    // the same browser played as a guest on the game's own link before: a guest save of the same key
+    const own = await context.newPage();
+    await own.goto(`http://moth-play.xgames.test:${g.port}/`);
+    assert.deepEqual((await own.evaluate(() => GamesFun.saves.put('main', { level: 1 }))).data, {
+      ok: true,
+      guest: true,
+    });
+    await own.close();
+
+    const page = await context.newPage();
+    await page.goto(`http://xgames.test:${g.port}/play/moth?signed&boot`);
+    const frame = await (await page.waitForSelector('#g')).contentFrame();
+    await frame.waitForFunction(() => window.boot);
+    const boot = await frame.evaluate(() => window.boot);
+    assert.deepEqual([boot.ready, boot.token, boot.save.data], ['x:43', true, { level: 42 }], JSON.stringify(boot));
+    assert.deepEqual(
+      (await frame.evaluate(() => window.early)).data,
+      { level: 42 },
+      "a save read before gf.ready answered waits for it, and reads the account's",
+    );
+    assert.deepEqual(await frame.evaluate(() => window.changes.length), 1, 'signed in once');
+    // CLIENT.md's carry-over: a guest save moves only into a key the account does not have
+    const moved = await frame.evaluate(async () => {
+      const out = [];
+      const { data: kept } = await GamesFun.saves.guest.list();
+      for (const { key } of kept) {
+        const { status } = await GamesFun.saves.get(key);
+        if (status === 404) await GamesFun.saves.guest.move(key);
+        else out.push(key);
+      }
+      return out;
+    });
+    assert.deepEqual(moved, ['main'], 'kept as it is');
+    assert.deepEqual(g.s.saves['x:43/main'], { level: 42 });
+    assert.ok(!g.s.seen.some(l => /PUT .*\/saves\//.test(l)), g.s.seen.join('\n'));
+
+    // a page above still reading its own sign-in says 'loading' first: gf.ready waits for the gf:auth after it
+    const loading = await context.newPage();
+    await loading.goto(`http://xgames.test:${g.port}/play/moth?loading&boot`);
+    const f2 = await (await loading.waitForSelector('#g')).contentFrame();
+    await f2.waitForFunction(() => window.boot);
+    const b2 = await f2.evaluate(() => window.boot);
+    assert.deepEqual([b2.ready, b2.save.data], ['x:43', { level: 42 }]);
+
+    // nobody signed in on the page above: gf.ready answers null at once, and a guest's save is this browser's
+    const guest = await context.newPage();
+    await guest.goto(`http://xgames.test:${g.port}/play/moth?boot`);
+    const f3 = await (await guest.waitForSelector('#g')).contentFrame();
+    await f3.waitForFunction(() => window.boot);
+    const b3 = await f3.evaluate(() => window.boot);
+    assert.deepEqual([b3.ready, b3.token, b3.save.data], [null, false, { level: 1 }]);
+    assert.ok(b3.at < 1400, `ready waited ${b3.at} ms`);
+
+    // a page that offers sign-in and sends no gf:auth: gf.ready still answers, after the wait at most
+    const older = await context.newPage();
+    await older.goto(`http://xgames.test:${g.port}/play/moth?noauth&boot`);
+    const f4 = await (await older.waitForSelector('#g')).contentFrame();
+    await f4.waitForFunction(() => window.boot);
+    const b4 = await f4.evaluate(() => window.boot);
+    assert.deepEqual([b4.ready, b4.save.data], [null, { level: 1 }]);
+  },
+);
+
+test(
+  'inside a post on X, gf.ready answers without waiting for a play page the browser says is not there',
+  { skip, timeout: 60_000 },
+  async t => {
+    const g = await standIn();
+    t.after(g.close);
+    const browser = await chrome();
+    t.after(() => browser.close());
+    const page = await browser.newPage();
+    await page.goto(`http://x.test:${g.port}/xpost?boot`);
+    const frame = await (await page.waitForSelector('#g')).contentFrame();
+    await frame.waitForFunction(() => window.boot);
+    const boot = await frame.evaluate(() => window.boot);
+    assert.equal(boot.ready, null);
+    assert.ok(boot.at < 1000, `ready waited ${boot.at} ms`);
+    assert.deepEqual(await frame.evaluate(() => location.ancestorOrigins[0]), `http://x.test:${g.port}`);
   },
 );
 
