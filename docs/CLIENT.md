@@ -194,10 +194,11 @@ host that serves this one game (its xgames.fun link, its own domain, `xcore dev`
 by several games, and never in a frame. A game's own code can always read the token it was given; the token is never
 stored where another game's page could read it.
 
-**A newer sign-in client, where the host provides one.** `gamesfun.js` includes its own sign-in code. When the page
-loads as the top window, it also requests a sign-in client from its own host at `/platform/v1/signin/v1.js`
-(`xcore dev` serves the client of the `xcore` version that runs it). A frame does not request it and uses the built-in
-one.
+**A newer sign-in client, where the host provides one.** `gamesfun.js` includes its own sign-in code. Under
+`xcore dev`, when the page loads as the top window, it also requests a sign-in client from the dev server at
+`/platform/v1/signin/v1.js` (the client of the `xcore` version that runs it). xgames.fun does not serve that address
+yet, so on the game's own link and its own domain nothing is requested and the built-in client runs. A frame never
+requests it.
 
 - If the hosted client arrives in time, it runs. If the address returns nothing, or not in time, the built-in client
   runs and the game behaves the same.
