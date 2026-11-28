@@ -2583,4 +2583,11 @@ test("coin's cluster: --cluster when named; else the economy's, for reading wher
         e instanceof UsageError &&
         /economy is on mainnet .*--cluster mainnet \(real money\) or --cluster devnet/.test(e.message),
     );
+  // and the help says so: devnet is the default only where the economy is not on mainnet
+  const help = (await import('../commands/coin.mjs')).default.usage.replace(/\s+/g, ' ');
+  assert.match(
+    help,
+    /In a folder whose xsolana\.json is on mainnet, the status reads the mainnet coin, and launch and drop ask for --cluster/,
+  );
+  assert.doesNotMatch(help, /devnet \(the default\)/);
 });

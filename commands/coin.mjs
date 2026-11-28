@@ -44,7 +44,8 @@ The game's folder is the last word or --dir <folder> (default: the current direc
 Launch a tradable coin for a game published on xgames.fun.
 
 It runs on Solana devnet by default, for rehearsal, or on mainnet with --cluster mainnet (real money; only where
-xgames.fun has mainnet launches turned on). loot, the program behind a game's economy, does not run a market: a coin
+xgames.fun has mainnet launches turned on). In a folder whose xsolana.json is on mainnet, the status reads the mainnet
+coin, and launch and drop ask for --cluster. loot, the program behind a game's economy, does not run a market: a coin
 people can buy and sell is launched on a trading venue, and the economy then refers to it. Costs: see docs/FEES.md.
 
 Commands:
@@ -67,8 +68,9 @@ Launch options:
   --venue <venue>       meteora (the default) or pumpfun
   --pair <SYMBOL>       what it trades against (default: SOL)
   --keypair <keyfile>   the key file that signs and pays. The coin's creator fees belong to its address permanently.
-  --cluster <cluster>   devnet (the default) or mainnet. A game can have one coin on each; the mainnet coin is real
-                        money.
+  --cluster <cluster>   devnet or mainnet. A game can have one coin on each; the mainnet coin is real money. The
+                        default is devnet, or, where the folder's economy is on mainnet, mainnet for the status
+                        and no default for launch and drop.
 
 A game has one coin per cluster, and its name and ticker cannot change after launch. You can do the same from a
 browser wallet in the game's console (xgames.fun/console, Token tab). To use a coin made elsewhere in the economy,
