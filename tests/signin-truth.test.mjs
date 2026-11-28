@@ -83,21 +83,30 @@ test('a logout xgames.fun did not answer keeps the token to try again; --forget 
   const { g, env, cli } = await setup(t);
   await signIn(g, env);
   g.state.handle = (method, url) => (method === 'DELETE' && url === '/api/kit/token' ? [500, { error: 'down' }] : null);
-  assert.deepEqual(await logout(g.origin, { env }), { revoked: false, forgot: false, why: 'offline' });
+  assert.deepEqual(await logout(g.origin, { env }), { revoked: false, forgot: false, why: 'offline', status: 500 });
   assert.equal((await signInState(g.origin, { env })).state, 'signed-in', 'still signed in: it can be tried again');
   const kept = await runAsync(['logout'], cli);
   assert.equal(kept.status, 1);
   assert.match(
     kept.stdout,
-    /^Not signed out: .* did not answer, so the token could not be revoked\. It is kept on this computer so you can try again: .*logout\. To forget it here anyway: .*logout --forget .*\/console\?tab=sign-ins/,
+    /^Not signed out: .* answered with a server error \(500\), so the token could not be revoked\. It is kept on this computer so you can try again: .*logout\. To forget it here anyway: .*logout --forget .*\/console\?tab=sign-ins/,
   );
   const forgot = await runAsync(['logout', '--forget', '--json'], cli);
   assert.equal(forgot.status, 0, forgot.stderr);
-  assert.deepEqual(JSON.parse(forgot.stdout), { studio: g.origin, revoked: false, forgot: true, why: 'offline' });
+  assert.deepEqual(JSON.parse(forgot.stdout), {
+    studio: g.origin,
+    revoked: false,
+    forgot: true,
+    why: 'offline',
+    status: 500,
+  });
   assert.equal((await signInState(g.origin, { env })).state, 'signed-out');
   // xgames.fun answering again: a plain logout revokes, as before
   g.state.handle = null;
   await signIn(g, env);
+  // no answer at all: no status to give
+  const down = () => Promise.reject(new TypeError('fetch failed'));
+  assert.deepEqual(await logout(g.origin, { env, fetchImpl: down }), { revoked: false, forgot: false, why: 'offline' });
   assert.deepEqual(await logout(g.origin, { env }), { revoked: true, forgot: true });
 });
 
