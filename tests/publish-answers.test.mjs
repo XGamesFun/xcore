@@ -288,6 +288,26 @@ test('a published game prints the link that plays inside a post on X beside the 
   const j = JSON.parse((await runAsync(['publish', dir, '--no-card', '--json'], cli)).stdout);
   assert.equal(j.xPostUrl, 'http://x/play/dot-catch?card=player');
   assert.equal(j.database.sizeBytes, 200 * 1048576);
+  // a draft (asked for, or its checks failed) says it too: the database is the game's, whatever went up
+  g.state.handle = (method, url) =>
+    method === 'POST' && url === '/api/kit/publish/p1'
+      ? [
+          200,
+          {
+            projectId: 'g1',
+            version: { id: 'v', number: 2 },
+            draft: true,
+            published: null,
+            database: { name: 'd', applied: 1, sizeBytes: 200 * 1048576, cap: 100 * 1048576 },
+            studioUrl: 'http://x/console?game=g1',
+          },
+        ]
+      : null;
+  await remember();
+  const draft = await runAsync(['publish', dir, '--no-card', '--draft'], cli);
+  assert.equal(draft.status, 0, draft.stderr);
+  assert.match(draft.stdout, /Saved .* as a private draft \(version 2\): http:\/\/x\/console\?game=g1/);
+  assert.match(draft.stdout, /Worth fixing now: its database is 200(\.0)? MB/);
 });
 
 test('a path xgames.fun refuses (a backslash, a control character, over 512 characters) is refused before anything goes up', async t => {

@@ -22,7 +22,7 @@ Sign in first with ${CMD} login. In a GitHub Actions job with "permissions: id-t
 is used instead of a login.
 
 The first publish of a folder creates a new game on the account this computer is signed in to, and counts toward
-its games (2 on a Free account, one of its free slots; up to 10 on a Creator account). It first prints the account,
+its games (2 on a Free account; up to 10 on a Creator account). It first prints the account,
 the game's name and where it goes, and changes nothing; an account with no room for another game is told so before
 anything is uploaded. At a terminal, type "publish" to go on; otherwise run the same command again with --yes <code>,
 using the code it prints (it works once, within 15 minutes; with --json the command is in "confirm"). Publishing a
@@ -56,7 +56,7 @@ Preview picture:
   - X and chat apps cache cards, so a link shared earlier can show the old card for a while.
 
 Options:
-  --draft        publish a private version in your xgames.fun Studio, with no public link
+  --draft        publish a private version on your xgames.fun console, with no public link
   --new          publish as a new game (a new link), not as an update of this folder's game
   --title <name> the game's name on xgames.fun (default: its page title)
   --yes <code>   confirm the first publish of a folder (a new game on the account), with the code that was printed
@@ -370,7 +370,8 @@ function keptLines(where, r) {
       : r.liveBefore
         ? `  Version ${r.liveBefore.version} still plays at ${r.liveBefore.url}. Publish again once the reason above is fixed.`
         : '  Nothing plays at its link yet. Publish again once the reason above is fixed.',
-    ...(r.studioUrl ? [`  in your Studio: ${r.studioUrl}`] : []),
+    ...(r.studioUrl ? [`  on your console: ${r.studioUrl}`] : []),
+    ...(databaseLine(r.database) ? [databaseLine(r.database)] : []),
   ];
 }
 
@@ -394,6 +395,8 @@ function draftLines(where, r, folder = where) {
         `Fix them (${CMD} check ${folder}) and publish again.`,
     );
   }
+  const db = databaseLine(r.database);
+  if (db) lines.push(db);
   return lines;
 }
 
