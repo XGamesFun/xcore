@@ -2,6 +2,7 @@
 // writes backend.json with its URL and the origins the page talks to, so xgames.fun's play host lets the published page
 // reach them (its page policy opens to exactly those). Nothing is signed in to or deployed; its keys stay on its
 // server. A backend the kit connects for you (Supabase, Railway) is the kit's: `backend connect` with @xgamesfun/kit.
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
@@ -10,6 +11,7 @@ import { backendOrigins, BACKEND_FILE } from '../lib/publish/scan.mjs';
 import { pageRoots } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
 import { ownOrigins, studioOrigin } from '../lib/publish/client.mjs';
+import { readOwnJson } from '../lib/util.mjs';
 
 const usage = `Usage: xcore backend use custom [dir] --url <https://…> [--origin <wss://…>]… [--json]
 
@@ -52,26 +54,38 @@ export default {
       } catch {
         throw new UsageError(`--url ${values.url} is not an address (https://…)\n\n${usage}`);
       }
+      const home = roots.brought && roots.static ? roots.static : dir,
+        file = path.join(home, BACKEND_FILE);
+      // the file there now: one that does not read is refused, named, as every other command refuses it; its other
+      // origins (added by hand, or by an earlier --origin) are kept, and said
+      const before = readOwnJson(file, shown(file));
+      if (existsSync(file) && (before === null || typeof before !== 'object' || Array.isArray(before)))
+        throw Object.assign(new Error(`${shown(file)} is not a JSON object; fix it or delete it first`), {
+          code: 'not-json',
+        });
+      const had = Array.isArray(before?.origins) ? before.origins.filter(o => typeof o === 'string') : [];
       // an https backend's WebSocket twin comes with it (wss:// on the same host): a game that talks to its server often uses both
       const twin = main.startsWith('https:') ? main.replace(/^https:/, 'wss:') : null;
+      const asked = [...new Set([main, ...(twin ? [twin] : []), ...(values.origin ?? [])])];
       const config = {
+        ...(before ?? {}),
         version: 1,
         provider: 'custom',
         url: values.url,
-        origins: [...new Set([main, ...(twin ? [twin] : []), ...(values.origin ?? [])])],
+        origins: [...new Set([...asked, ...had])],
       };
       const checked = backendOrigins(config, { own: ownOrigins(studioOrigin()) });
       if (checked.problems.length)
         throw new Error(`backend.json would be refused:\n  - ${checked.problems.join('\n  - ')}`);
       config.origins = checked.origins;
-      const home = roots.brought && roots.static ? roots.static : dir,
-        file = path.join(home, BACKEND_FILE);
+      const askedOrigins = backendOrigins({ origins: asked }, { own: ownOrigins(studioOrigin()) }).origins;
+      const kept = config.origins.filter(o => !askedOrigins.includes(o));
       await mkdir(home, { recursive: true });
       await writeFile(file, JSON.stringify(config, null, 2) + '\n');
-      if (values.json) printJson({ file: shown(file), ...config });
+      if (values.json) printJson({ ok: true, file: shown(file), ...config, kept });
       else
         console.log(
-          `Wrote ${shown(file)}: the published page may reach ${config.origins.join(', ')}. Next: ${CMD} check ${typedDir(dir)}, which fails on a request to any other origin.`,
+          `Wrote ${shown(file)}: the published page may reach ${config.origins.join(', ')}.${kept.length ? ` (${kept.join(', ')} ${kept.length === 1 ? 'was' : 'were'} in it already and ${kept.length === 1 ? 'is' : 'are'} kept: take ${kept.length === 1 ? 'it' : 'them'} out of its "origins" if the page no longer needs ${kept.length === 1 ? 'it' : 'them'}.)` : ''} Next: ${CMD} check ${typedDir(dir)}, which fails on a request to any other origin.`,
         );
       return 0;
     }, args),

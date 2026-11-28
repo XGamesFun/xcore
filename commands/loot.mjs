@@ -129,6 +129,7 @@ export default {
         const r = await addLoot(dir);
         if (values.json)
           return printJson({
+            ok: true,
             game: shown(dir),
             home: shown(r.home),
             economy: r.economy,

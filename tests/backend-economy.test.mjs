@@ -455,3 +455,46 @@ test("xcore loot --help lists every command of the installed tools, and <command
   assert.match(one.stdout, /^Usage: xcore loot handover \[file\] --keypair <owner keyfile> --to <new owner keyfile>/);
   assert.match(run(['loot', 'add', '--help']).stdout, /^Usage: xcore loot add/);
 });
+
+test('loot add refuses an economy file that does not read, before anything is copied', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  await writeFile(path.join(dir, 'xsolana.json'), '{"grants": [');
+  const r = run(['loot', 'add', dir]);
+  assert.equal(r.status, 1, r.stdout);
+  assert.match(r.stderr, /xsolana\.json is not valid JSON/);
+  assert.equal(existsSync(path.join(dir, 'gf')), false, 'no page client copied');
+  await writeFile(path.join(dir, 'xsolana.json'), '[]');
+  const list = run(['loot', 'add', dir, '--json']);
+  assert.equal(list.status, 1);
+  assert.equal(JSON.parse(list.stdout).code, 'not-json');
+  assert.match(JSON.parse(list.stdout).error, /holds no economy/);
+});
+
+test('backend use custom keeps the origins backend.json had, says so, and refuses a file that does not read', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  const file = path.join(dir, 'backend.json');
+  await writeFile(file, JSON.stringify({ origins: ['https://api.orbit-example.net'] }));
+  const r = run(['backend', 'use', 'custom', dir, '--url', 'https://api.example.com', '--json']);
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.ok, true);
+  assert.deepEqual(out.kept, ['https://api.orbit-example.net']);
+  assert.deepEqual(JSON.parse(await readFile(file, 'utf8')).origins, [
+    'https://api.example.com',
+    'wss://api.example.com',
+    'https://api.orbit-example.net',
+  ]);
+  const words = run(['backend', 'use', 'custom', dir, '--url', 'https://api.example.com']);
+  assert.match(words.stdout, /https:\/\/api\.orbit-example\.net was in it already and is kept/);
+  for (const broken of ['{"origins": ["https://api.orbit-example.net"', '[]', 'null']) {
+    await writeFile(file, broken);
+    const b = run(['backend', 'use', 'custom', dir, '--url', 'https://api.example.com']);
+    assert.equal(b.status, 1, broken);
+    assert.match(b.stderr, /backend\.json (is not valid JSON|is not a JSON object)/, broken);
+    assert.equal(await readFile(file, 'utf8'), broken, 'left as it was');
+  }
+});
