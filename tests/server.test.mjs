@@ -140,6 +140,51 @@ test('the same, from a package the server bundles: the package is named', async 
   );
 });
 
+test('code made from text at run time counts only where the bundle still calls it: a problem in server/, a warning in a package', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const withPkg = async (code, pkgCode) => {
+    const dir = await game(tmp, `${code}\n${OK}`);
+    const pkg = path.join(dir, 'node_modules', 'tinypkg');
+    await mkdir(pkg, { recursive: true });
+    await writeFile(path.join(pkg, 'package.json'), JSON.stringify({ name: 'tinypkg', module: 'index.js' }));
+    await writeFile(path.join(pkg, 'index.js'), pkgCode);
+    return bundleServer(dir);
+  };
+  const made = r => [...r.problems, ...r.warnings].filter(p => /code made from text/.test(p));
+  // a package's export the game never uses: esbuild leaves it out, and nothing is said
+  const unused = await withPkg(
+    "import { add } from 'tinypkg';\nexport const s = () => add(1, 2);",
+    'export const add = (a, b) => a + b;\nexport const compile = src => new Function(src);\n',
+  );
+  assert.deepEqual(made(unused), []);
+  assert.equal(unused.ok, true, JSON.stringify(unused.problems));
+  // words in a template literal, a string or a comment are not a call
+  const words = await bundleServer(
+    await game(tmp, `export const why = x => \`cannot use eval() or new Function(\${x}) here\`; // eval(1)\n${OK}`),
+  );
+  assert.deepEqual(made(words), []);
+  assert.equal(words.ok, true, JSON.stringify(words.problems));
+  // a call in the game's own server/: refused, with its file and line
+  const own = await bundleServer(await game(tmp, `export const run = src => new Function(src)();\n${OK}`));
+  assert.deepEqual(own.problems, [
+    "server/index.js:1 uses new Function(): a game's server may not run code made from text at run time (the hosted runtime refuses it when it runs)",
+  ]);
+  // a package's code the bundle keeps: said as a warning, with its file and line
+  const kept = await withPkg(
+    "import { compile } from 'tinypkg';\nexport const s = src => compile(src);",
+    'export const compile = src => eval(src);\n',
+  );
+  assert.deepEqual(kept.problems, []);
+  assert.equal(
+    kept.warnings.filter(w =>
+      /^node_modules\/tinypkg\/index\.js:1 uses eval\(\), and the server bundle keeps it/.test(w),
+    ).length,
+    1,
+    JSON.stringify(kept.warnings),
+  );
+});
+
 // The host parses the bundle it is sent; the kit reads the same bundle with esbuild. A parse of the kit's own output
 // with another parser (acorn, which the dev tools carry) finds exactly what the kit refused, case by case.
 // Games whose server bundles a package, or has code esbuild leaves out, or imports in a shape of its own: for each, the
