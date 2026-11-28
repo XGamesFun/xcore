@@ -73,7 +73,9 @@ test('a secret of env answered or logged, through a name it was given; one chang
     'answered RPC_URL 1',
     'answered VOUCHER_SEED 1',
   ]);
-  assert.deepEqual(names("return Response.json({ rpc: env.RPC_URL ? env.RPC_URL : 'unset' });"), ['answered RPC_URL 1']);
+  assert.deepEqual(names("return Response.json({ rpc: env.RPC_URL ? env.RPC_URL : 'unset' });"), [
+    'answered RPC_URL 1',
+  ]);
 });
 
 test('a health route that says whether its secrets are set is no secret answered: the review still passes', async t => {

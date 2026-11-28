@@ -74,11 +74,26 @@ test('the wallet: written to the answer after it is made, spread into it, or rea
     r.unread.find(u => u.what === 'server/vouchers.js').why,
     /spreads into its answer \(globalThis\.PAYEE\)/,
   );
+  // a field spread in on a condition: each branch is read, and the words keep the code as written
+  r = await wallet(
+    "return { grant: 'found-whale', round: body.runId, amount: 'grant', ...(body.big ? { wallet: body.to } : {}) };",
+  );
+  assert.deepEqual(cases(r, 'payout-input'), ['request-names-wallet']);
+  r = await wallet(
+    "return { grant: 'found-whale', round: body.runId, amount: 'grant', ...(body.big ? globalThis.PAYEE : { memo: 'big' }) };",
+  );
+  assert.equal(r.verdict, 'INCONCLUSIVE');
+  assert.match(
+    r.unread.find(u => u.what === 'server/vouchers.js').why,
+    /spreads into its answer \(globalThis\.PAYEE\)/,
+  );
   // safe: the proven wallet by name, a round set afterwards, what the run row holds
   for (const body of [
     "const wallet = await walletOf(env, player);\n    return { grant: 'found-whale', round: body.runId, amount: 'grant', wallet };",
     "const out = { grant: 'found-whale', amount: 'grant' };\n    out.round = body.runId;\n    return out;",
     "return { grant: 'found-whale', round: body.runId, amount: 'grant', wallet: run.wallet };",
+    "const big = run.started_at > 0;\n    return { grant: 'found-whale', round: body.runId, amount: 'grant', ...(big ? { memo: 'big' } : {}) };",
+    "return { grant: 'found-whale', round: body.runId, amount: 'grant', ...(body.note && { memo: body.note }), ...(body.big ? null : { memo: 'small' }) };",
   ]) {
     r = await wallet(body, "import { walletOf } from './gf-wallets.js';");
     assert.deepEqual(high(r), [], body);
