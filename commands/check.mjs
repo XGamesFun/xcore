@@ -2,7 +2,7 @@
 // starts clean in Chrome as the play host serves it, and stays inside its origins. publish runs the same check first.
 import { rmSync } from 'node:fs';
 import { failureJson, guard, parse, printJson, UsageError, folderArg, tooMany } from '../lib/cli.mjs';
-import { resolveGame, shown } from '../lib/games.mjs';
+import { kitRecordWords, resolveGame, shown } from '../lib/games.mjs';
 import { madeByKit } from '../lib/publish/index.mjs';
 import { CMD } from '../lib/command.mjs';
 import { cardPrinted } from '../lib/card.mjs';
@@ -89,10 +89,7 @@ export default {
       );
       if (positionals.length > 1) throw new UsageError(`${tooMany(positionals.slice(1))}\n\n${usage}`);
       const dir = await resolveGame(folderArg(values.dir, positionals[0], usage));
-      if (madeByKit(dir))
-        throw new Error(
-          `${shown(dir)} was made with the game-making kit. Its check is the kit's own (\`${CMD} verify\`, six gates), which runs only where the kit is installed. The kit is not released yet.`,
-        );
+      if (madeByKit(dir)) throw new Error(kitRecordWords(dir, 'check'));
       const port = values.port === undefined ? 0 : Number(values.port);
       if (values.port !== undefined && !(Number.isInteger(port) && port >= 1 && port <= 65535))
         throw new UsageError(`--port takes a port number (1–65535)\n\n${usage}`);

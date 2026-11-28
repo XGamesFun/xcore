@@ -14,7 +14,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { guard, nearest, printJson, UsageError } from '../lib/cli.mjs';
 import { CMD } from '../lib/command.mjs';
 import { readJson } from '../lib/util.mjs';
-import { madeByKit } from '../lib/games.mjs';
+import { kitRecordWords, madeByKit } from '../lib/games.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const COMMANDS_DIR = path.join(HERE, '..', 'commands');
@@ -39,7 +39,7 @@ export function findKit({ cwd = process.cwd(), env = process.env, here = HERE } 
 // the flags of check, publish, dev and backend that take a value: their value is never the game's folder
 // (tests/states-cli.test.mjs holds this list to the flags those commands' usage names)
 const VALUE_FLAGS = Object.fromEntries(
-  ['out', 'port', 'plan', 'title', 'url', 'origin', 'yes'].map(f => [f, { type: 'string', multiple: true }]),
+  ['out', 'port', 'plan', 'title', 'url', 'origin', 'yes', 'dir'].map(f => [f, { type: 'string', multiple: true }]),
 );
 
 /** The kit's `backend` subcommands (its builder/commands/backend.mjs). */
@@ -49,15 +49,20 @@ const KIT_BACKEND = new Set(['agents', 'check', 'connect', 'disconnect', 'passwo
  *  (`connect`: the kit's own connect where there is a kit, this package's where there is none.) */
 export function kitsTurn(name, args) {
   if (name === 'connect') return true;
-  const { positionals } = parseArgs({ args, options: VALUE_FLAGS, strict: false, allowPositionals: true });
+  const { values, positionals } = parseArgs({ args, options: VALUE_FLAGS, strict: false, allowPositionals: true });
   // the kit's backend commands (connect, use supabase, check …); any other word is a usage mistake of ours
   if (name === 'backend')
     return KIT_BACKEND.has(positionals[0]) && !(positionals[0] === 'use' && positionals[1] === 'custom');
-  if (name === 'publish' || name === 'check' || name === 'dev') {
-    const dir = path.resolve(positionals[0] ?? '.');
-    return madeByKit(dir);
-  }
+  if (name === 'publish' || name === 'check' || name === 'dev') return madeByKit(gameFolder(values, positionals));
   return false;
+}
+/** The game's folder publish, check and dev name: --dir, else the first word, else this one. */
+const gameFolder = (values, positionals) => path.resolve(values.dir?.[0] ?? positionals[0] ?? '.');
+
+/** What publish, check and dev say of a folder with the kit's record, where there is no kit. */
+function kitRecordOf(name, args) {
+  const { values, positionals } = parseArgs({ args, options: VALUE_FLAGS, strict: false, allowPositionals: true });
+  return kitRecordWords(gameFolder(values, positionals), name);
 }
 
 async function loadCommands() {
@@ -185,14 +190,16 @@ export async function main(argv) {
       console.log(own.helpFor?.(args) ?? own.usage ?? own.summary);
       return 0;
     }
+    // a folder with the kit's record: said by that file, which may be a stray copy
+    const noKit = own && ['publish', 'check', 'dev'].includes(name) ? kitRecordOf(name, args) : NO_KIT;
     console.error(
-      own ? `${NO_KIT}\n\n${own.usage ?? ''}` : `${unknownCommand(name, commands)}\n\n${help(commands, null)}`,
+      own ? `${noKit}\n\n${own.usage ?? ''}` : `${unknownCommand(name, commands)}\n\n${help(commands, null)}`,
     );
     // --json: the same failure as JSON on stdout, as every command's own failures are (lib/cli.mjs guard)
     if (args.includes('--json'))
       printJson({
         ok: false,
-        error: (own ? NO_KIT : unknownCommand(name, commands)).replace(/\s*\n\s*/g, ' '),
+        error: (own ? noKit : unknownCommand(name, commands)).replace(/\s*\n\s*/g, ' '),
         code: own || KIT_COMMANDS.has(name) ? 'no-kit' : 'unknown-command',
       });
     // the kit's command with no kit here is a refusal (1); a name that is no command is a usage mistake (2)

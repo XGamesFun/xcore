@@ -1,7 +1,7 @@
 // `xcore dev [dir]`: the game as xgames.fun hosts it, on this machine, with its server, sign-in, saves, rooms and
 // economy RPC (../lib/dev/index.mjs). Runs until Ctrl+C.
 import { folderArg, guard, parse, printJson, tooMany, UsageError } from '../lib/cli.mjs';
-import { resolveGame, shown } from '../lib/games.mjs';
+import { kitRecordWords, resolveGame, shown } from '../lib/games.mjs';
 import { madeByKit } from '../lib/publish/index.mjs';
 import { CMD } from '../lib/command.mjs';
 import { PLAN_NAMES } from '../lib/dev/plans.mjs';
@@ -99,10 +99,7 @@ export default {
       if (!PLAN_NAMES.includes(plan))
         throw new UsageError(`--plan is ${PLAN_NAMES.slice(0, -1).join(', ')} or ${PLAN_NAMES.at(-1)}\n\n${usage}`);
       const dir = await resolveGame(folderArg(values.dir, positionals[0], usage));
-      if (madeByKit(dir))
-        throw new Error(
-          `${shown(dir)} was made with the game-making kit. Its dev server is the kit's own, which runs only where the kit is installed. The kit is not released yet.`,
-        );
+      if (madeByKit(dir)) throw new Error(kitRecordWords(dir, 'dev'));
       const say = values.json ? m => console.error(m) : m => console.log(m);
       const { startDev } = await import('../lib/dev/index.mjs');
       let dev;
