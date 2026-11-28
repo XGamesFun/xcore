@@ -1,7 +1,6 @@
 // `xcore files ls|put|get|rm|usage`: the game's project files (env.GF.files), on this machine (the ones `xcore dev`
 // serves) or, with --live, on xgames.fun (../lib/files.mjs).
-import { existsSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { guard, parse, printJson, UsageError, notOneOf, verbNamed } from '../lib/cli.mjs';
 import { named, resolveGame } from '../lib/games.mjs';
@@ -18,6 +17,8 @@ import {
 import { consented } from '../lib/consent.mjs';
 import { CMD, typedPath } from '../lib/command.mjs';
 import { sha256 } from '../lib/util.mjs';
+import { privateTarget, writePrivate } from '../lib/publish/private-file.mjs';
+import { stateFolder } from '../lib/state-folder.mjs';
 
 const usage = `Usage: xcore files list [prefix/] [--dir <game>] [--live] [--json]
        xcore files put <file> [path] [--public] [--type <mime>] [--dir <game>] [--live [--yes <code>]] [--json]
@@ -41,7 +42,9 @@ Commands:
                      --public serves it at https://<slug>.xgamesusercontent.com/<path>, a separate site (locally: the
                      files origin ${CMD} dev prints); without --public, only the game's server can read it.
                      --type <mime> sets its content type
-  get <path>         download a file to --out <file> (default: its name, in the current folder; --force overwrites)
+  get <path>         download a file to --out <file> (default: .gamesfun/downloads/<path> in the game's folder, never
+                     published; --force overwrites). A file among the game's published files is refused: the next
+                     publish would make it public. The file is readable by you only
   remove <path>      delete a file
   usage              show the bytes stored, against the game's cap (Free: 100 MB)
 
@@ -146,15 +149,24 @@ export default {
         return 0;
       }
       if (verb === 'get') {
+        // a download is the game's own file, often one only its server reads: kept where publish never takes it
+        const out = values.out ? path.resolve(values.out) : path.join(dir, '.gamesfun', 'downloads', ...a.split('/'));
+        const target = { dir, force: !!values.force, what: 'this project file' };
+        if (!(json && !values.out))
+          try {
+            privateTarget(out, target);
+          } catch (e) {
+            if (e.code === 'exists')
+              throw new UsageError(`${out} is there already: --force writes over it, or --out <file>\n\n${usage}`);
+            throw e;
+          }
         const r = await filesGet(dir, a, { live });
-        const out = path.resolve(values.out ?? path.basename(a));
         if (json && !values.out) {
           const { body, ...facts } = r;
           return json({ ...facts, base64: body.toString('base64') });
         }
-        if (existsSync(out) && !values.force)
-          throw new UsageError(`${out} is there already: --force writes over it, or --out <file>\n\n${usage}`);
-        await writeFile(out, r.body);
+        if (!values.out) await stateFolder(dir);
+        await writePrivate(out, r.body, { ...target, force: true });
         const { body: _body, ...facts } = r;
         if (json) return json({ ...facts, file: out });
         console.log(

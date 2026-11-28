@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { request } from 'node:http';
 import path from 'node:path';
 import { FILES, STUDIO_BODY_BYTES, filePathProblem, servedType, usesFiles } from '../lib/server/contract.mjs';
@@ -14,6 +14,7 @@ import { createFileStore, FILE_HEADERS, serveFiles } from '../lib/dev/files.mjs'
 import { createPlatformStore } from '../lib/dev/platform.mjs';
 import { DEFAULT_LIMITS, pageHeaders } from '../lib/publish/hosting.mjs';
 import { adopt } from '../lib/publish/adopt.mjs';
+import { leftOutOfPublish } from '../lib/publish/tree.mjs';
 import { publishGame } from '../lib/publish/index.mjs';
 import { sizeText as filesSizeText } from '../lib/files.mjs';
 import { plural, sizeText } from '../lib/util.mjs';
@@ -338,6 +339,27 @@ test('xcore files on this machine: put, ls, get, rm, usage', async t => {
   assert.equal(await readFile(path.join(tmp.dir, 'back.json'), 'utf8'), '{"tiles":[1,2]}');
   r = await xc(['get', 'levels/forest-3.json', '--out', path.join(tmp.dir, 'back.json')]);
   assert.equal(r.status, 2, 'it does not write over a file without --force');
+  // by default a download goes where publish never takes it, readable by this user only; a file among the published
+  // files is refused, since the next publish would make a private file public
+  r = await xc(['get', 'levels/forest-3.json']);
+  assert.equal(r.status, 0, r.stderr);
+  const kept = path.join(dir, '.gamesfun', 'downloads', 'levels', 'forest-3.json');
+  assert.equal(await readFile(kept, 'utf8'), '{"tiles":[1,2]}');
+  if (process.platform !== 'win32') assert.equal((await stat(kept)).mode & 0o777, 0o600);
+  assert.equal(leftOutOfPublish('.gamesfun/downloads/levels/forest-3.json'), true);
+  r = await xc(['get', 'levels/forest-3.json', '--out', path.join(dir, 'forest-3.json')]);
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /is among the game's published files \(forest-3\.json\), so the next publish would put this project file up as a public page file/,
+  );
+  assert.equal(existsSync(path.join(dir, 'forest-3.json')), false);
+  // --force over a file that was there: its mode becomes this user's only too
+  const loose = path.join(tmp.dir, 'loose.json');
+  await writeFile(loose, 'old', { mode: 0o644 });
+  r = await xc(['get', 'levels/forest-3.json', '--out', loose, '--force']);
+  assert.equal(r.status, 0, r.stderr);
+  if (process.platform !== 'win32') assert.equal((await stat(loose)).mode & 0o777, 0o600);
   r = await xc(['usage', '--json']);
   assert.deepEqual(JSON.parse(r.stdout), { live: false, ok: true, bytes: 15, files: 1, cap: FILES.capBytes });
   r = await xc(['put', 'level.json', 'a/../b.json']);

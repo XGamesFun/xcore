@@ -12,7 +12,7 @@ import { plural, sizeText } from '../lib/util.mjs';
 
 const usage = `Usage: xcore db info [dir] [--live] [--json]
        xcore db query "<sql>" [dir] [--params '<json list>'] [--write] [--live [--yes <code>]] [--json]
-       xcore db export [dir] [--out <file>] [--live] [--json]
+       xcore db export [dir] [--out <file> [--force]] [--live] [--json]
        xcore db import <file.sql> [dir] [--live [--yes <code>]] [--json]
        xcore db restore <time> [dir] --live [--yes <code>] [--json]
 
@@ -31,7 +31,10 @@ Commands:
   query "<sql>"      run one statement. It is read-only (SELECT, EXPLAIN, PRAGMA table_info or table_list) unless you
                      pass --write. --params '["moon", 3]' fills its ? placeholders
   export             write the whole database as SQL to --out <file> or to .gamesfun/exports/ (a hidden folder, never
-                     published). The file holds your players' data: keep it out of git and off shared drives
+                     published). The file holds your players' data: it is readable by you only, a file among the
+                     game's published files is refused, and an existing one is written over only with --force; keep it
+                     out of git and off shared drives. Live, while it runs the database answers nothing else (players'
+                     calls wait or fail): best when few are playing
   import <file.sql>  run a file of SQL statements, all or none; at most ${sizeText(DATABASE_LIMITS.importBytes)} (live, ${sizeText(STUDIO_BODY_BYTES)} as sent). A dump from
                      export (local, live, or D1's own) loads over the existing data or into an empty database: tables
                      are kept, each row is updated by its key, and no row is deleted
@@ -88,6 +91,7 @@ export default {
           write: { type: 'boolean' },
           params: { type: 'string' },
           out: { type: 'string' },
+          force: { type: 'boolean' },
           yes: { type: 'string' },
           dir: { type: 'string' },
         },
@@ -164,7 +168,12 @@ export default {
         return 0;
       }
       if (verb === 'export') {
-        const r = await dbExport(dir, { live, out: values.out ?? null, log });
+        // the server's rule (creator-studio lib/game-database.mjs): while an export runs, nothing else is answered
+        if (live && !values.json)
+          console.error(
+            `Exporting ${where}. While it runs (seconds for a small database, minutes for a large one) the database answers nothing else, so players' calls to the game's server wait or fail: best when few are playing.`,
+          );
+        const r = await dbExport(dir, { live, out: values.out ?? null, force: !!values.force, log });
         if (values.json) return printJson(r);
         console.log(`Exported ${where} (${kb(r.bytes)}) to ${r.file}. It holds your players' data: keep it private.`);
         if (r.note) console.log(`  ${r.note}`);
@@ -218,7 +227,7 @@ export default {
       const go = await asked({
         change,
         lines: [
-          `${where} ${onGame(change)} would go back to how it was at ${at}${p.preview?.bookmark ? ` (bookmark ${p.preview.bookmark})` : ''}. Everything written after that is lost; ${CMD} db export --live keeps a copy first.`,
+          `${where[0].toUpperCase()}${where.slice(1)} ${onGame(change)} would go back to how it was at ${at}${p.preview?.bookmark ? ` (bookmark ${p.preview.bookmark})` : ''}. Everything written after that is lost; ${CMD} db export --live keeps a copy first.`,
           ...(undone.length
             ? [
                 `It rolls back ${plural(undone.length, 'migration')} applied after that time: ${undone.map(m => `${m.name}${m.at ? ` (${m.at})` : ''}`).join(', ')}.`,

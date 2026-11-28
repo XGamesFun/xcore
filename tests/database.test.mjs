@@ -1288,6 +1288,20 @@ test('db export --live picks up an export-pending with its bookmark; a CI creden
   assert.equal(r.note, NOTE);
   assert.match(said[0], /still running on D1; asking again .*answers nothing else/);
   assert.equal(await readFile(r.file, 'utf8'), 'SELECT 1;\n');
+  // an --out among the game's published files is refused before the export starts on D1
+  const before = asked.length;
+  await assert.rejects(
+    dbExport(dir, { live: true, origin: g.origin, env, wait: 1, out: path.join(dir, 'dump.sql') }),
+    e => e.code === 'published-path',
+  );
+  assert.equal(asked.length, before, 'the live export did not start');
+  // the command says what a live export does to the game before it starts
+  const cli = await runAsync(['db', 'export', dir, '--live'], { env: { ...env, GAMESFUN_STUDIO: g.origin } });
+  assert.equal(cli.status, 0, cli.stderr);
+  assert.match(
+    cli.stderr,
+    /^Exporting .* While it runs .* the database answers nothing else, so players' calls to the game's server wait or fail/,
+  );
   // still pending after the last try: said, with how to pick it up
   pending = 9;
   await assert.rejects(
