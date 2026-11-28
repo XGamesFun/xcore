@@ -498,6 +498,8 @@ Open the picture and look at it before you publish.
   `gamesfun.json` makes that permanent, so the game is not asked again.
 - After a publish with a picture, xcore prints the card's address, `https://xgames.fun/play/<slug>/card.png`. A link
   shared earlier can keep its old card for a while, because X and chat apps cache it.
+- The card belongs to the game's link, `https://xgames.fun/play/<slug>`: a tap on it opens the play page, not the
+  game's own host ([where players land](HOSTING.md#inside-the-play-page)).
 
 ## connect
 

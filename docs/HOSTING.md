@@ -88,6 +88,16 @@ Sign-in, the wallet and full screen go through `gamesfun.js`, and the play page 
 the game in this frame, and fails a page that tries any of these while it loads. Test each flow inside the play page,
 not only in the bare game.
 
+**Where players land.** The link `xcore publish` prints is this play page, `https://xgames.fun/play/<slug>`. Shared in
+a post on X, it shows the game's picture, and a tap opens the play page in X's own browser. The same link ending in
+`?card=player` plays the game inside the post instead, on X's website and Android app (X's iPhone app shows it as a
+bare link until the post is opened). That player runs the game on its own host, `https://<slug>-play.xgames.fun/`.
+
+**A tap on Sign in here reloads the game**, unless this browser already has the player signed in to xgames.fun. The
+play page sends the whole tab to X (or Google) and back, so the game restarts and loses what it held in memory.
+`GamesFun.signIn({stay: true})` does not change that on the play page. Ask for sign-in before a run starts, or save
+the run first ([CLIENT.md](CLIENT.md#sign-in)).
+
 ### Its server, if any
 
 A game can have a server: `server/` plus `gamesfun.json` → `server`. It is a Cloudflare Worker that answers the game's

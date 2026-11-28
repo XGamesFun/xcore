@@ -309,3 +309,17 @@ test('the Creator plan is paid by card, renewing, or prepaid in SOL or USDC, whe
       if (/Renew manually|prepaid, SOL or USDC/.test(line)) problems.push(`${rel(file)}: ${line.trim()}`);
   assert.deepEqual(problems, []);
 });
+
+test('the hosting guide says where a post on X lands, and that Sign in there reloads the game', () => {
+  assert.deepEqual(
+    said(
+      'docs/HOSTING.md',
+      '### Inside the play page',
+      /xgames\.fun\/play\/<slug>/,
+      /card=player/,
+      /Sign\s+in[^.]*reloads\s+the\s+game/,
+      /stay:\s*true[^.]*does\s+not/,
+    ),
+    [],
+  );
+});
