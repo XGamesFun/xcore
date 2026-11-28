@@ -515,6 +515,38 @@ test('backend use custom keeps the origins backend.json had, says so, and refuse
   }
 });
 
+test('backend use custom with a new --url replaces the backend it named, and an over-full file names its own origins', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  const file = path.join(dir, 'backend.json');
+  const origins = async () => JSON.parse(await readFile(file, 'utf8')).origins;
+  assert.equal(
+    run(['backend', 'use', 'custom', dir, '--url', 'https://a.example.com', '--origin', 'https://cdn.example.org'])
+      .status,
+    0,
+  );
+  for (const host of ['b', 'c', 'd', 'e', 'f']) {
+    const r = run(['backend', 'use', 'custom', dir, '--url', `https://${host}.example.com/api`]);
+    assert.equal(r.status, 0, r.stderr);
+  }
+  assert.deepEqual(await origins(), ['https://f.example.com', 'wss://f.example.com', 'https://cdn.example.org']);
+  // the same url again keeps it as it is
+  run(['backend', 'use', 'custom', dir, '--url', 'https://f.example.com']);
+  assert.deepEqual(await origins(), ['https://f.example.com', 'wss://f.example.com', 'https://cdn.example.org']);
+  // over the cap with the file's own origins: they are named, and the file is left as it was
+  const many = Array.from({ length: 7 }, (_, i) => `https://h${i}.example.net`);
+  await writeFile(file, JSON.stringify({ url: 'https://f.example.com', origins: many }));
+  const over = run(['backend', 'use', 'custom', dir, '--url', 'https://g.example.com']);
+  assert.equal(over.status, 1);
+  assert.match(over.stderr, /at most 8/);
+  assert.match(
+    over.stderr,
+    /has https:\/\/h0\.example\.net, .*https:\/\/h6\.example\.net already, and they are kept: take the ones/,
+  );
+  assert.deepEqual(await origins(), many);
+});
+
 test('loot with a command the tools do not have, and --json: a usage refusal as JSON on stdout', () => {
   const r = run(['loot', 'bogus', '--json']);
   assert.equal(r.status, 2, r.stderr);

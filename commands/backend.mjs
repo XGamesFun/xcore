@@ -20,7 +20,8 @@ Let the published game call a backend you already run. The game's folder is the 
 
 This writes backend.json with the origin of the backend's public URL, its wss:// counterpart, and every other origin
 the page connects to (--origin; at most 8 origins in all). The published page may reach these origins and no other
-site.
+site. Run again with another --url, it replaces the backend the file named (its origin and wss:// counterpart); the
+file's other origins are kept, and said.
 
   - Keep the backend's keys on the backend. A game may only contain keys that are meant to be public.
   - The backend must answer CORS requests from the game's origin (https://<slug>-play.xgames.fun once published).
@@ -65,10 +66,19 @@ export default {
         throw Object.assign(new Error(`${shown(file)} is not a JSON object; fix it or delete it first`), {
           code: 'not-json',
         });
-      const had = Array.isArray(before?.origins) ? before.origins.filter(o => typeof o === 'string') : [];
       // an https backend's WebSocket twin comes with it (wss:// on the same host): a game that talks to its server often uses both
-      const twin = main.startsWith('https:') ? main.replace(/^https:/, 'wss:') : null;
-      const asked = [...new Set([main, ...(twin ? [twin] : []), ...(values.origin ?? [])])];
+      const withTwin = origin => [origin, ...(origin.startsWith('https:') ? [origin.replace(/^https:/, 'wss:')] : [])];
+      // the backend the file named before is the one this replaces: its origin and its twin go with it
+      let was = [];
+      try {
+        if (typeof before?.url === 'string') was = withTwin(new URL(before.url).origin);
+      } catch {
+        // (a url that does not read names no origin to take out)
+      }
+      const had = Array.isArray(before?.origins)
+        ? before.origins.filter(o => typeof o === 'string' && !was.includes(o))
+        : [];
+      const asked = [...new Set([...withTwin(main), ...(values.origin ?? [])])];
       const config = {
         ...(before ?? {}),
         version: 1,
@@ -77,8 +87,12 @@ export default {
         origins: [...new Set([...asked, ...had])],
       };
       const checked = backendOrigins(config, { own: ownOrigins(studioOrigin()) });
-      if (checked.problems.length)
-        throw new Error(`backend.json would be refused:\n  - ${checked.problems.join('\n  - ')}`);
+      if (checked.problems.length) {
+        const fromFile = had.filter(o => !asked.includes(o));
+        throw new Error(
+          `backend.json would be refused:\n  - ${checked.problems.join('\n  - ')}${fromFile.length ? `\n${shown(file)} has ${fromFile.join(', ')} already, and they are kept: take the ones the page no longer needs out of its "origins", then run this again.` : ''}`,
+        );
+      }
       config.origins = checked.origins;
       const askedOrigins = backendOrigins({ origins: asked }, { own: ownOrigins(studioOrigin()) }).origins;
       const kept = config.origins.filter(o => !askedOrigins.includes(o));
