@@ -356,7 +356,14 @@ test('a check screenshot makes the preview picture only from a run that passed o
   assert.equal(await shotProblem(dir, shot), null);
   // what publish leaves out cannot change the page: the maker's notes, server/, hidden files, a later run's evidence
   const later = new Date(Date.now() + 60_000);
-  for (const rel of ['NOTES.md', 'README.md', 'FRICTION.md', 'server/index.js', '.git/HEAD', 'evidence/verify-2/x.png']) {
+  for (const rel of [
+    'NOTES.md',
+    'README.md',
+    'FRICTION.md',
+    'server/index.js',
+    '.git/HEAD',
+    'evidence/verify-2/x.png',
+  ]) {
     const file = path.join(dir, ...rel.split('/'));
     await mkdir(path.dirname(file), { recursive: true });
     await writeFile(file, 'later');
