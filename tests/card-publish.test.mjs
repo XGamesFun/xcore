@@ -534,6 +534,16 @@ test(
   },
 );
 
+test("publish's help says which link shows which card", async () => {
+  const { default: publish } = await import('../commands/publish.mjs');
+  const help = publish.usage.replace(/\s+/g, ' ');
+  assert.match(
+    help,
+    /A plain link .* shows a wide 1200×628 card: .* top and bottom cut away\. A \?card=player link shows the 960×960 square card/,
+  );
+  assert.match(help, /card-wide\.png/);
+});
+
 test('a failed check does not promise its screenshot as the preview picture', async () => {
   const { noCardLine } = await import('../commands/check.mjs');
   assert.match(noCardLine(true, '.'), /^warning: no preview picture\. Publish makes one from this check's screenshot/);

@@ -44,11 +44,12 @@ What happens:
     version at the same link.
 
 Preview picture:
-  A link to the game shared on X or in a chat shows a square card with the game's picture behind its title. The
-  picture is assets/card.jpg (or assets/card.png) in the published files: a JPEG or PNG with the matching extension,
-  at most 1,500,000 bytes, ideally 960×960.
-  - With no picture, publish makes one from the newest ${CMD} check screenshot (evidence/verify-N/), says so, and goes
-    on. Replace it with ${CMD} card [dir] --force.
+  A plain link to the game shared on X or in a chat shows a wide 1200×628 card: the game's picture behind its title,
+  with the picture's top and bottom cut away. A ?card=player link shows the 960×960 square card. ${CMD} card shows
+  you both (the wide one in .gamesfun/card-wide.png). The picture is assets/card.jpg (or assets/card.png) in the
+  published files: a JPEG or PNG with the matching extension, at most 1,500,000 bytes, ideally 960×960.
+  - With no picture, publish makes one from the newest ${CMD} check screenshot (evidence/verify-N/) of a check that
+    passed on the files as they are, says so, and goes on. Replace it with ${CMD} card [dir] --force.
   - Publish stops before uploading anything if there is no picture and no screenshot, or xgames.fun cannot draw the
     picture (too big, not a JPEG or PNG, the wrong extension, truncated, or a JPEG variant it does not support). Make
     one with ${CMD} card [dir], or publish without one with --no-card (or "card": false in gamesfun.json).
