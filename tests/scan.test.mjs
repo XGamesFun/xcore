@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as scan from '../lib/publish/scan.mjs';
-import { MAX_MATCH, SECRET_PATTERNS as ALL_PATTERNS } from '../lib/secret-patterns.mjs';
+import { isSplitSeed, MAX_MATCH, SECRET_PATTERNS as ALL_PATTERNS } from '../lib/secret-patterns.mjs';
 
 // a namespace, so this file also runs (and fails, rather than not load) on a scan without the newer exports
 const {
@@ -158,6 +158,12 @@ test('a seed split in pieces or written as base64 is refused by a key’s name; 
   // under no key's name, base64 and pieces are not refused (review reads them as possible keys)
   assert.deepEqual(kinds('game.js', `const tile = '${Buffer.from(pseudoRandom(32, 9)).toString('base64')}';`), []);
   assert.deepEqual(kinds('game.js', `const colors = '${hex.slice(0, 32)}' + '${hex.slice(32)}';`), []);
+  // the count is exported beside the pattern, so a scanner that reads SECRET_PATTERNS refuses what publish refuses
+  const split = ALL_PATTERNS.find(([kind]) => kind === 'signing key seed (hex, split)')[1];
+  const matched = text => split.exec(text)?.[0] ?? '';
+  assert.equal(isSplitSeed(matched(`const SECRET = '${hex.slice(0, 32)}' + "${hex.slice(32)}";`)), true);
+  assert.equal(isSplitSeed(matched(`const seed = '${hex.slice(0, 24)}' + '${hex.slice(24, 48)}';`)), false);
+  assert.equal(isSplitSeed(matched(`const seed = '${'ab'.repeat(16)}' + '${'ab'.repeat(16)}';`)), false, 'two letters');
 });
 
 test('no pattern goes untried: the scan refuses a key of every kind lib/secret-patterns.mjs lists', () => {
