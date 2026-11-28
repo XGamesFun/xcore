@@ -265,7 +265,7 @@ throws.
 | `GF.verifyPlayer(token)`                                                                                                                                                                                       | `{ok, sub, wallet, x, lvl, exp, banned}`: who the player is, from the sign-in token the page sends. There is no display name: show `x.handle` when the player signed in with X, otherwise a name the page sends, cleaned. `banned` is the creator's ban from the console (`{kind: 'ban' \| 'hide', until}`, or null; always null in `xcore dev`). A token issued before a ban still verifies for its hour, so refuse `kind: 'ban'` yourself.                                                       |
 | `GF.saves.get(player, key = 'main')`, `.put(player, key, value)`, `.delete(player, key)`, `.list(player)`                                                                                                      | A player's saves: any JSON value, up to 64 KB each and 16 per player.                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | `GF.scores.submit(board, player, score, {name, order, writer})`, `.setup(board, {order, writer})`, `.top(board, {limit, offset})`, `.best(board, player)`, `.remove(board, player)`, `.drop(board)`, `.list()` | Leaderboards. A player's best score is kept. `order` is `"high"` (default) or `"low"`. `writer: "server"` means only the server writes the board (or every board a pattern matches: `daily-*`, `*`). `drop` deletes the board and frees its place in the plan's board count. `list` returns every board (`made`: `"server"`, or `"page"` with the `player` who made it; its `writer` and `entries`), every rule, and the plan's `limit` (`boards`, and `page`: how many of them pages may create). |
-| `GF.loot.report({round, endedAt, winners})`, `GF.loot.status()`                                                                                                                                                | A result that pays prizes by place. xgames.fun's keeper signs it with the game's host key (set up by the owner in Studio). For amounts your server calculates, use your own key (see [Paying a result](#paying-a-result-xgamesfuns-keeper-or-a-voucher-key-of-your-own)).                                                                                                                                                                                                                          |
+| `GF.loot.report({round, endedAt, winners})`, `GF.loot.status()`                                                                                                                                                | A result that pays prizes by place. xgames.fun's keeper signs it with the game's host key (set up by the owner in Studio, xgames.fun's game builder, which is invite only). For amounts your server calculates, use your own key (see [Paying a result](#paying-a-result-xgamesfuns-keeper-or-a-voucher-key-of-your-own)).                                                                                                                                                                         |
 | `GF.info()`                                                                                                                                                                                                    | `{ok, contract, gameId, slug}`                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `GF.files.put(path, body, {type, public, length})`, `.get(path)`, `.head(path)`, `.list({prefix, after})`, `.delete(path)`, `.usage()`                                                                         | The game's project files (see [Project files](#project-files-envgffiles)): replays, levels, content packs. Public files are served from the files site.                                                                                                                                                                                                                                                                                                                                            |
 
@@ -381,7 +381,8 @@ xcore secret remove VOUCHER_SEED
 ### The economy's own RPC
 
 The shared relay uses `/loot/v1/rpc` on devnet. On mainnet it uses `/loot/v1/rpc?cluster=mainnet` and requires player sign-in.
-100,000 calls use $1 of the included allowance or $2 of Creator credit. At one call every five seconds,
+On mainnet, 100,000 calls use $1 of the included allowance or $2 of Creator credit; a devnet page's calls are not
+billed to the game ([FEES.md](FEES.md#hosting)). At one call every five seconds,
 $1 of allowance covers about 140 player-hours. Relay calls alone cannot trigger a hosting cap. [Hosting fees](FEES.md#hosting)
 
 To use your own RPC, choose an endpoint for your economy’s network and run these commands.
@@ -663,7 +664,9 @@ const { voucher } = await voucherFor(env, { grant: 'clear', wallet, round: match
 `xcore add database` gives the game **one D1 database** (SQLite, run by Cloudflare). xgames.fun creates it on the
 first publish that includes it, and keeps it between publishes. The server reads it as `env.DB`. It holds all of the
 game's own data: its records (guilds, match history, shop stock), a player's state with rules (runs left today, gold),
-and, for a game with no server, the documents its page saves.
+and, for a game with no server, the documents its page saves. Its size is held to the game's plan: 100 MB on Free,
+2 GB on Creator, 10 GB on Scale. Past it, the game is capped and its server stopped until the database is smaller
+([HOSTING.md](HOSTING.md#when-a-game-is-capped)).
 
 ```json
 {
@@ -879,15 +882,16 @@ my-vault: 278 files, 10 MB, nothing refused. Left out: .gamesfun/, .gitignore, g
 Once hosted, the game's server is at `https://<slug>-play.xgames.fun/api/…`. A blocked or over-limit server returns
 `{error, message}` with status 451, 429, 404, 503 or 502 instead of the server's own response.
 
-**A game that is unpublished, taken down or capped** (over its plan's money for the month: see
-[HOSTING.md](HOSTING.md#plans-xcore-plan)) has its server switched off: every `api/*` request answers `451 {"error":
-"stopped", "reason": "unpublished" | "taken-down" | "capped", "message"}`, its Durable Objects' alarms lapse and their
-sockets close.
+**A game that is unpublished, taken down or capped** (over its plan's money for the month, or its database over its
+plan's size: see [HOSTING.md](HOSTING.md#plans-xcore-plan)) has its server switched off: every `api/*` request answers
+`451 {"error": "stopped", "reason": "unpublished" | "taken-down" | "capped", "message"}`, its Durable Objects' alarms
+lapse and their sockets close.
 
 - A running room stops within about five minutes.
 - Its rooms' data and its secrets are kept.
 - The server comes back on its own when the game is published again (within 30 days, to be sure its data is kept) or
-  when its cap lifts (the start of the next month, a Creator account, or usage credit).
+  when its cap lifts (the start of the next month, a Creator account, usage credit or a higher card spending cap, or
+  a database made smaller).
 - A version published while the game is capped goes live with its pages, and its server waits.
 - The page keeps loading in the meantime, so a game whose server can be off should tell players so when `api/`
   returns 451.

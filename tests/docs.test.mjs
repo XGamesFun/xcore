@@ -12,6 +12,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { backendOrigin } from '../lib/publish/scan.mjs';
+import { PLAN_LIMITS } from '../lib/server/contract.mjs';
 import { ROOT } from './helpers.mjs';
 
 const SKILL_DIR = path.join(ROOT, 'skills', 'bring-your-own-game');
@@ -275,4 +276,172 @@ test('every npx example names this version (scripts/pin-version.mjs pins them at
     for (const [m] of read(path.join(ROOT, rel)).matchAll(NPX))
       if (m !== `npx -y @xgamesfun/xcore@${version}`) stale.push(`${rel}: ${m}`);
   assert.deepEqual(stale, [], `run: node scripts/pin-version.mjs`);
+});
+
+/**
+ * A fact a document must state, where a reader looks for it: the file, the part of it (from the heading or text that
+ * starts it to the next heading of that level or higher, or the whole file), and what that part must say.
+ */
+function partOf(file, starts) {
+  const text = read(path.join(ROOT, file));
+  if (!starts) return text;
+  const at = text.indexOf(starts);
+  assert.ok(at >= 0, `${file} has "${starts}"`);
+  const level = /^(#+) /.exec(starts)?.[1].length ?? 6;
+  const rest = text.slice(at + starts.length);
+  const end = rest.search(new RegExp(`\\n#{1,${level}} `));
+  return starts + (end < 0 ? rest : rest.slice(0, end));
+}
+const said = (file, starts, ...patterns) => {
+  const part = partOf(file, starts);
+  return patterns.filter(p => !p.test(part)).map(p => `${file}${starts ? ` (${starts})` : ''} does not say ${p}`);
+};
+
+test('the Creator plan is paid by card, renewing, or prepaid in SOL or USDC, wherever its payment is described', () => {
+  const both = [/by\s+card[^.]*\brenews\b/i, /SOL\s+or\s+USDC/, /spending\s+cap/i];
+  const problems = [
+    ...said('README.md', '## Costs', ...both),
+    ...said('docs/FEES.md', '## Hosting', ...both, /Manage\s+billing/),
+    ...said('docs/HOSTING.md', '### Paying for a Creator account and usage', ...both, /Manage\s+billing/),
+  ];
+  // and nothing says the plan is only ever prepaid and renewed by hand
+  for (const file of REFERENCE)
+    for (const line of read(file).split('\n'))
+      if (/Renew manually|prepaid, SOL or USDC/.test(line)) problems.push(`${rel(file)}: ${line.trim()}`);
+  assert.deepEqual(problems, []);
+});
+
+test('the hosting guide says where a post on X lands, and that Sign in there reloads the game', () => {
+  assert.deepEqual(
+    said(
+      'docs/HOSTING.md',
+      '### Inside the play page',
+      /xgames\.fun\/play\/<slug>/,
+      /card=player/,
+      /Sign\s+in[^.]*reloads\s+the\s+game/,
+      /stay:\s*true[^.]*does\s+not/,
+    ),
+    [],
+  );
+});
+
+/**
+ * The database's size on each plan: the contract's, once it states one, else xgames.fun's plan table (creator-studio
+ * lib/plans.mjs, database.bytes), which caps a game past it.
+ */
+const DATABASE_BYTES = { free: 100 * 2 ** 20, creator: 2 * 2 ** 30, scale: 10 * 2 ** 30 };
+const sizeWords = bytes => (bytes >= 2 ** 30 ? `${bytes / 2 ** 30} GB` : `${bytes / 2 ** 20} MB`);
+
+test("each plan's database size is stated, and that a database past it stops the game's server", () => {
+  const sizes = Object.keys(PLAN_LIMITS).map(plan =>
+    sizeWords(PLAN_LIMITS[plan].database?.bytes ?? DATABASE_BYTES[plan]),
+  );
+  const row = (file, starts, name) =>
+    partOf(file, starts)
+      .split('\n')
+      .find(line => line.startsWith(`| ${name}`) && /database/i.test(line)) ?? '';
+  const problems = [];
+  const hosting = row('docs/HOSTING.md', '## Plans: `xcore plan`', 'Database');
+  if (!sizes.every(size => hosting.includes(size)))
+    problems.push(`HOSTING.md's plan table: ${hosting || 'no Database row'}`);
+  for (const [plan, size] of Object.keys(PLAN_LIMITS).map((p, i) => [p, sizes[i]])) {
+    const line = row('docs/FEES.md', '## Hosting', plan[0].toUpperCase() + plan.slice(1) + ' ');
+    if (!line.includes(`${size} database`)) problems.push(`FEES.md's ${plan} row: ${line}`);
+  }
+  problems.push(
+    ...said('docs/HOSTING.md', '### When a game is capped', /database\s+is\s+past\s+its\s+plan's\s+size/),
+    ...said('docs/SERVER.md', "## The game's database", /server\s+stopped/),
+  );
+  // a lapsed account's games keep running, except one whose database is over Free's size
+  for (const file of REFERENCE)
+    for (const part of read(file).split('\n\n'))
+      if (/keeps? running at Free limits|moves? to Free limits/.test(part) && !/database/.test(part))
+        problems.push(`${rel(file)}: ${part.trim().slice(0, 100)}`);
+  assert.deepEqual(problems, []);
+});
+
+test('the console has one name, and the reference says what only the console does', () => {
+  const problems = said(
+    'docs/COMMANDS.md',
+    '## What only the console does',
+    /xgames\.fun\/console/,
+    /Logs\s+tab/,
+    /Make\s+live/,
+    /Unpublish/,
+    /Live\s+tab/,
+  );
+  problems.push(...said('README.md', '## Commands', /COMMANDS\.md#what-only-the-console-does/));
+  // the console is "your console" (xgames.fun/console); Studio is xgames.fun's game builder, a place apart
+  for (const file of REFERENCE)
+    for (const [m] of read(file).matchAll(/creator console|Studio is your|your xgames\.fun Studio|in Studio\.?$/gim))
+      problems.push(`${rel(file)}: "${m}"`);
+  assert.deepEqual(problems, []);
+});
+
+test('the economy guide says what moving to mainnet takes, and the fees say devnet relay calls are not billed', () => {
+  assert.deepEqual(
+    [
+      ...said(
+        'docs/ECONOMY.md',
+        '## Moving to mainnet',
+        /"network":\s*"mainnet"/,
+        /remove\s+the\s+`live`\s+section/i,
+        /"treasury"/,
+        /XSOLANA_RPC_URL/,
+        /secret\s+set\s+VOUCHER_SEED\s+--new-key/,
+        /loot\s+approve/,
+        /xcore\s+publish/,
+      ),
+      ...said('README.md', '## FAQ', /ECONOMY\.md#moving-to-mainnet/),
+      ...said('docs/FEES.md', '## Hosting', /devnet[^.]*not\s+billed\s+to\s+the\s+game/i),
+      ...said('docs/SERVER.md', "### The economy's own RPC", /devnet[^.]*not\s+billed\s+to\s+the\s+game/i),
+    ],
+    [],
+  );
+});
+
+test('the data guide names what has no export, and how far a list of project files goes', () => {
+  const part = partOf('docs/HOSTING.md', "## Your game's data, and getting it out");
+  const problems = said(
+    'docs/HOSTING.md',
+    "## Your game's data, and getting it out",
+    /Durable\s+Objects/,
+    /Secrets/,
+    /at\s+most\s+100\s+files/,
+  );
+  if (/each can be exported in full/.test(part)) problems.push('HOSTING.md says every place can be exported in full');
+  problems.push(...said('README.md', '## Your data', /Not exported/, /at\s+most\s+100\s+files/));
+  assert.deepEqual(problems, []);
+});
+
+test("every environment variable the command line reads is in COMMANDS.md's table of them", () => {
+  const sources = [];
+  const walk = dir => {
+    for (const f of readdirSync(dir, { withFileTypes: true }))
+      if (f.isDirectory()) walk(path.join(dir, f.name));
+      else if (/\.(mjs|js)$/.test(f.name)) sources.push(path.join(dir, f.name));
+  };
+  for (const dir of ['bin', 'commands', 'lib']) walk(path.join(ROOT, dir));
+  const used = new Set();
+  for (const file of sources)
+    for (const [, name] of read(file).matchAll(/\benv\??\.((?:GAMESFUN|XCORE|XSOLANA)_[A-Z0-9_]+)\b/g)) used.add(name);
+  assert.ok(used.has('GAMESFUN_STUDIO') && used.has('GAMESFUN_SECRET_STORE'), `the variables are read: ${[...used]}`);
+  const table = partOf('docs/COMMANDS.md', '## Environment variables');
+  const named = new Set([...table.matchAll(/`([A-Z][A-Z0-9_]+)(?:=[^`]*)?`/g)].map(m => m[1]));
+  assert.deepEqual(
+    [...used].filter(name => !named.has(name)),
+    [],
+    'a variable the table does not name',
+  );
+});
+
+test('the publish steps say a missing preview picture is made from the check screenshot, as publish --help does', () => {
+  assert.deepEqual(
+    said(
+      'docs/COMMANDS.md',
+      '### The first publish of a folder',
+      /preview\s+picture[^.]*\.\s+If\s+there\s+is\s+none,\s+it\s+makes\s+one\s+from\s+the\s+newest\s+page\s+check\s+screenshot/,
+    ),
+    [],
+  );
 });

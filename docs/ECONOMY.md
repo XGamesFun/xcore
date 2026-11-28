@@ -8,7 +8,7 @@ boxes, raffles and lotteries, prize pools, staking, crafting, perks for holders,
 
 - It runs on **devnet** by default.
 - It runs on **mainnet** only when its `xsolana.json` says `"network": "mainnet"`. Mainnet means real money, and loot
-  has not been independently audited.
+  has not been independently audited. [Moving to mainnet](#moving-to-mainnet) lists what else the switch takes.
 
 The tools ship with this package as `@xgamesfun/solana` ([`xsolana`](https://github.com/XGamesFun/solana-kit)), and
 `xcore loot` runs them. Before you build an economy, a draw or anything a player pays for, read
@@ -19,6 +19,7 @@ NFT fee, hosting), see [FEES.md](FEES.md).
 - [Tokens](#tokens)
 - [Adding it to a game: `xcore loot add`](#adding-it-to-a-game-xcore-loot-add)
 - [Going live](#going-live)
+- [Moving to mainnet](#moving-to-mainnet)
 - [When loot is upgraded](#when-loot-is-upgraded)
 - [What a page alone can pay safely](#what-a-page-alone-can-pay-safely)
 - [Paying a result: the keeper or your own key](#paying-a-result-the-keeper-or-your-own-key)
@@ -120,6 +121,32 @@ The economy's reads go through xgames.fun's shared relay. Going live does not: t
 transactions, and a setup also creates mints and token accounts. So `approve` sends through `XSOLANA_RPC_URL` when it is
 set, and through Solana's public devnet RPC otherwise. The public RPC limits each address, and some networks block it.
 If it refuses you, set `XSOLANA_RPC_URL` in `.env` to a devnet RPC of your own.
+
+## Moving to mainnet
+
+An economy tried on devnet goes to mainnet as a new setup: nothing on devnet carries over, and every step below moves
+real SOL. Changing `"network"` alone is not enough.
+
+1. Commit the devnet `xsolana.json` first, so git keeps the devnet setup.
+2. In `xsolana.json`, set `"network": "mainnet"` and **remove the `live` section**. That section names the devnet
+   addresses the economy went live at. Left in, it points the mainnet file at devnet's setup, and the game's page fails
+   when it loads the file.
+3. Set `"treasury": "wallet:<address>"` to a wallet you hold apart from the key file (a hardware wallet or a multisig).
+   Without it, what sales leave lands at the key that goes live, and the spec can no longer change that once live.
+   `xcore loot check` warns about it.
+4. Put a mainnet RPC of your own in `.env` as `XSOLANA_RPC_URL`. On mainnet, `approve` and `status` refuse without
+   one: Solana's public mainnet RPC does not serve what loot reads, and xgames.fun's mainnet relay answers only signed-in
+   players of a published game.
+5. If the game pays results with its own key ([`xcore add vouchers`](#paying-a-result-the-keeper-or-your-own-key)), run
+   `xcore secret set VOUCHER_SEED --new-key` again now that the file says mainnet. It makes a new live key and removes
+   the `.dev.vars` test key from the grants. Do not run `xcore add vouchers` again, which adds the test key back.
+6. Run `xcore loot check`, `xcore loot cost` (now in real SOL) and `xcore review`.
+7. Go live as [above](#going-live): `xcore loot approve`, then the same command with the `mainnet-` code it prints.
+   A browser wallet (`--browser`) is the safer signer for real money.
+8. Run `xcore publish`, so the page and the server read the mainnet file.
+
+On mainnet, xgames.fun's relay answers a player only once they are signed in to the game, so offer sign-in before
+anything the economy reads.
 
 ## When loot is upgraded
 
