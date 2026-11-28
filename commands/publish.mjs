@@ -7,7 +7,8 @@ import { checkSummary, LABEL, pageCheck, preflight, publishGame, publishStatus }
 import { studioOrigin } from '../lib/publish/client.mjs';
 import { gate } from '../lib/publish/gate.mjs';
 import { buildFailure, pageRoots, runBuild } from '../lib/publish/page.mjs';
-import { CMD } from '../lib/command.mjs';
+import { CMD, typedPath } from '../lib/command.mjs';
+import { rmSync } from 'node:fs';
 import { confirmFirstPublish, creatorCapWords, firstPublish, spentFirstPublish } from '../lib/publish/first.mjs';
 import { reviewNudge } from '../lib/review.mjs';
 import { cardPrinted, drawable } from '../lib/card.mjs';
@@ -87,7 +88,24 @@ export function publishCommand({
   shown = showDir,
   named = nameOf,
 } = {}) {
-  const own = { check, label, ...(prepare ? { prepare } : {}), ...(rpcFile ? { rpcFile } : {}) };
+  // Ctrl-C: publish stopped, said as that, and a page check it was running half way leaves no record (onOut: where
+  // this package's check writes it; a kit's own check is told too)
+  let checking = null;
+  const watched = async (d, o) => {
+    try {
+      return await check(d, { ...o, onOut: out => (checking = out) });
+    } finally {
+      checking = null;
+    }
+  };
+  const own = { check: watched, label, ...(prepare ? { prepare } : {}), ...(rpcFile ? { rpcFile } : {}) };
+  const stopped = dir => () => {
+    if (checking) rmSync(checking, { recursive: true, force: true });
+    console.error(
+      `\npublish: stopped (Ctrl-C)${checking ? '; the page check it was running is not recorded' : ''}. ${CMD} publish${shown(dir) === '.' ? '' : ` ${typedPath(shown(dir))}`} --status says what xgames.fun has.`,
+    );
+    process.exit(130);
+  };
   return {
     name: 'publish',
     summary: 'publish the game to xgames.fun at an unlisted link anyone can play',
@@ -154,14 +172,16 @@ export function publishCommand({
           const ok = !p.problems.length && !p.secrets && !p.names;
           const out = checkSummary(p);
           if (ok && values.verify) {
+            const stop = stopped(dir);
+            process.once('SIGINT', stop);
             const g = await gate(dir, {
-              check,
+              check: watched,
               run: true,
               kit: label,
               onLine: values.json ? () => {} : l => console.error(`  ${l}`),
               args: [...(roots.build ? ['--no-build'] : []), ...(values.port ? [`--port=${values.port}`] : [])],
               ...(roots.build ? { built: true } : {}),
-            });
+            }).finally(() => process.off('SIGINT', stop));
             out.verify = { ...g.report, reused: g.reused, changedDuring: g.changedDuring };
             out.ok = ok && g.report.pass;
           }
@@ -189,6 +209,8 @@ export function publishCommand({
           const go = await confirmFirstPublish(first, { args, values });
           if (go !== true) return go;
         }
+        const stop = stopped(dir);
+        process.once('SIGINT', stop);
         const r = await publishGame(dir, {
           ...own,
           origin,
@@ -199,28 +221,30 @@ export function publishCommand({
           card: askCard,
           ...(first && values.yes !== undefined ? { onMade: () => spentFirstPublish(first, values.yes) } : {}),
           progress: values.json ? () => {} : l => console.error(l),
-        }).catch(e => {
-          // A new game needs room on the account (xgames.fun's words say so): name what makes some.
-          // A Creator account at its cap (xgames.fun's 409 game-cap): the words of the check before uploading.
-          if (e?.code === 'game-cap')
-            throw Object.assign(
-              new Error(
-                creatorCapWords(Number(/up to (\d+) games?/.exec(e.message)?.[1]) || 10, {
-                  origin,
-                  then: 'No game was made.',
-                }),
-              ),
-              { status: e.status, code: e.code, next: `${CMD} plan --all` },
-            );
-          if (e?.code === 'no-free-slot')
-            throw Object.assign(
-              new Error(
-                `${e.message}\n  ${CMD} plan --all   your account and its games; archive one you no longer need on ${origin}/console\n  A Creator account runs every game you own, up to 10: your console → Plans`,
-              ),
-              { status: e.status, code: e.code },
-            );
-          throw e;
-        });
+        })
+          .catch(e => {
+            // A new game needs room on the account (xgames.fun's words say so): name what makes some.
+            // A Creator account at its cap (xgames.fun's 409 game-cap): the words of the check before uploading.
+            if (e?.code === 'game-cap')
+              throw Object.assign(
+                new Error(
+                  creatorCapWords(Number(/up to (\d+) games?/.exec(e.message)?.[1]) || 10, {
+                    origin,
+                    then: 'No game was made.',
+                  }),
+                ),
+                { status: e.status, code: e.code, next: `${CMD} plan --all` },
+              );
+            if (e?.code === 'no-free-slot')
+              throw Object.assign(
+                new Error(
+                  `${e.message}\n  ${CMD} plan --all   your account and its games; archive one you no longer need on ${origin}/console\n  A Creator account runs every game you own, up to 10: your console → Plans`,
+                ),
+                { status: e.status, code: e.code },
+              );
+            throw e;
+          })
+          .finally(() => process.off('SIGINT', stop));
         if (values.json) printJson(r.url ? { ...r, xPostUrl: playerCardUrl(r.url) } : r);
         else {
           console.log(

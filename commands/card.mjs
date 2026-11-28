@@ -90,6 +90,12 @@ export default {
       const dir = await resolveGame(folderArg(values.dir, positionals[0], usage));
       // its progress goes to stderr: stdout stays the command's own (the JSON of --json)
       const log = l => console.error(l);
+      // Ctrl-C: the card stopped, said as that (the picture is written only at its end, so none was)
+      const stop = () => {
+        console.error('\ncard: stopped (Ctrl-C), no picture was written.');
+        process.exit(130);
+      };
+      process.once('SIGINT', stop);
       const r = await makeCard(dir, {
         from: values.from ?? null,
         wait,
@@ -98,10 +104,12 @@ export default {
         force: values.force === true,
         noBuild: values['no-build'] === true,
         log,
-      }).catch(e => {
-        if (e.code === 'exists') throw Object.assign(e, { next: `${CMD} card ${typedPath(shown(dir))} --force` });
-        throw e;
-      });
+      })
+        .catch(e => {
+          if (e.code === 'exists') throw Object.assign(e, { next: `${CMD} card ${typedPath(shown(dir))} --force` });
+          throw e;
+        })
+        .finally(() => process.off('SIGINT', stop));
       const roots = pageRoots(dir);
       const rel = p => path.relative(roots.dir, p).split(path.sep).join('/') || '.';
       const verdict = cardVerdict({ path: CARD_FILE, bytes: r.bytes, head: await readFile(r.file) });

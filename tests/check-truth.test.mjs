@@ -2,7 +2,7 @@
 // drawn in one flat colour is nothing on screen, a page that leaves for another site is said as that, focus taken as it
 // loads is a note (Godot's export does it), an export older than its project is a warning (and no pass for publish
 // when it is plainly old: an autoload it lacks, or a change made well after it), and Ctrl-C is a check stopped, not a
-// page that failed. Skipped where there is no Chrome, Edge or Chromium.
+// page that failed (in publish and card too). Skipped where there is no Chrome, Edge or Chromium.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -228,5 +228,48 @@ test(
     assert.match(stderr, /check: stopped \(Ctrl-C\), nothing recorded\./);
     assert.doesNotMatch(stdout, /FAIL|Chrome could not run the page/);
     assert.equal(existsSync(verify), false, 'the half-made record is gone');
+  },
+);
+
+/** Runs xcore with `args` in its own process group, and sends the group Ctrl-C once `ready(stdout, stderr)` holds. */
+async function interrupted(args, ready, env = {}) {
+  const child = spawn(process.execPath, [BIN, ...args], {
+    detached: true,
+    env: { ...process.env, GAMESFUN_KIT: '', ...env },
+  });
+  let stdout = '',
+    stderr = '';
+  child.stdout.on('data', c => (stdout += c));
+  child.stderr.on('data', c => (stderr += c));
+  const done = new Promise(resolve => child.on('close', code => resolve(code)));
+  for (let i = 0; i < 300 && !ready(stdout, stderr); i++) await new Promise(r => setTimeout(r, 100));
+  await new Promise(r => setTimeout(r, 2000));
+  assert.ok(ready(stdout, stderr), stdout + stderr);
+  process.kill(-child.pid, 'SIGINT');
+  return { code: await done, stdout, stderr };
+}
+
+test(
+  'Ctrl-C during publish --check --verify and during card: "stopped", and no half-made record or picture',
+  { skip, timeout: 120_000 },
+  async t => {
+    const tmp = await tempDir();
+    t.after(tmp.cleanup);
+    const dir = await page(tmp, 'slow', '<p>A game</p>');
+    const verify = path.join(dir, 'evidence', 'verify-1');
+    const p = await interrupted(
+      ['publish', dir, '--check', '--verify'],
+      (out, err) => existsSync(verify) && /PASS 2 /.test(out + err),
+      {
+        GF_PAGE_SETTLE_MS: '20000',
+      },
+    );
+    assert.equal(p.code, 130, p.stdout + p.stderr);
+    assert.match(p.stderr, /publish: stopped \(Ctrl-C\); the page check it was running is not recorded\. .* --status/);
+    assert.equal(existsSync(verify), false, 'the half-made record is gone');
+    const c = await interrupted(['card', dir, '--wait', '60'], () => true);
+    assert.equal(c.code, 130, c.stdout + c.stderr);
+    assert.match(c.stderr, /card: stopped \(Ctrl-C\), no picture was written\./);
+    assert.equal(existsSync(path.join(dir, 'assets', 'card.jpg')), false);
   },
 );
