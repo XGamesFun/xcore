@@ -325,17 +325,11 @@ test('the hosting guide says where a post on X lands, and that Sign in there rel
   );
 });
 
-/**
- * The database's size on each plan: the contract's, once it states one, else xgames.fun's plan table (creator-studio
- * lib/plans.mjs, database.bytes), which caps a game past it.
- */
-const DATABASE_BYTES = { free: 100 * 2 ** 20, creator: 2 * 2 ** 30, scale: 10 * 2 ** 30 };
+/** The database's size on each plan (the contract's PLAN_LIMITS, as xgames.fun's plan table caps a game past it). */
 const sizeWords = bytes => (bytes >= 2 ** 30 ? `${bytes / 2 ** 30} GB` : `${bytes / 2 ** 20} MB`);
 
 test("each plan's database size is stated, and that a database past it stops the game's server", () => {
-  const sizes = Object.keys(PLAN_LIMITS).map(plan =>
-    sizeWords(PLAN_LIMITS[plan].database?.bytes ?? DATABASE_BYTES[plan]),
-  );
+  const sizes = Object.keys(PLAN_LIMITS).map(plan => sizeWords(PLAN_LIMITS[plan].database.bytes));
   const row = (file, starts, name) =>
     partOf(file, starts)
       .split('\n')

@@ -105,6 +105,8 @@ export interface PlanLimits {
   scores: { boards: number; rules: number; entriesPerBoard: number; submitsPerMinute: number };
   reads: { perMinute: number };
   files: { bytes: number; fileBytes: number };
+  /** the game's database (D1); past it, its server is stopped (every api/ request answers 451) */
+  database: { bytes: number };
 }
 
 /** `xcore adopt`: write the folder's record (gamesfun.json → page) and list what does not fit the hosting. */

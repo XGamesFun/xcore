@@ -40,9 +40,9 @@ The economy file is ${ECONOMY_FILE} (loot.json in games made before the rename).
 RPC:
   - Locally, the tools use XSOLANA_RPC_URL (from .env), else xgames.fun's shared devnet RPC.
   - Once published, the page uses xgames.fun's shared relay unless the game has its own RPC: ${CMD} add rpc
-    (docs/SERVER.md, "The economy's own RPC"). Relay calls are billed: they use up the included amount, counted at
-    cost ($10 a million), and past it are charged from usage credit at $20 a million. They never count toward the cap
-    that switches the game's server off.
+    (docs/SERVER.md, "The economy's own RPC"). On mainnet, relay calls are billed: they use up the included amount,
+    counted at cost ($10 a million), and past it are charged from usage credit at $20 a million. A devnet page's relay
+    calls are not billed to the game. They never count toward the cap that switches the game's server off.
   - Going live (approve) sends through XSOLANA_RPC_URL when it is set, else through Solana's public devnet RPC. The
     shared relay only passes loot's own transactions, and a setup also creates mints and token accounts. If the
     public RPC refuses your requests, set XSOLANA_RPC_URL to a devnet RPC of your own.`;
