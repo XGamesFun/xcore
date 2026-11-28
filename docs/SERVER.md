@@ -381,7 +381,8 @@ xcore secret remove VOUCHER_SEED
 ### The economy's own RPC
 
 The shared relay uses `/loot/v1/rpc` on devnet. On mainnet it uses `/loot/v1/rpc?cluster=mainnet` and requires player sign-in.
-100,000 calls use $1 of the included allowance or $2 of Creator credit. At one call every five seconds,
+On mainnet, 100,000 calls use $1 of the included allowance or $2 of Creator credit; a devnet page's calls are not
+billed to the game ([FEES.md](FEES.md#hosting)). At one call every five seconds,
 $1 of allowance covers about 140 player-hours. Relay calls alone cannot trigger a hosting cap. [Hosting fees](FEES.md#hosting)
 
 To use your own RPC, choose an endpoint for your economy’s network and run these commands.

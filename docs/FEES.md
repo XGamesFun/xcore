@@ -74,6 +74,10 @@ your own to each.
   relay calls also use the allowance, but cannot trigger the cap. For example, 100,000 relay calls use $1 of the
   allowance or $2 of Creator credit. With your own RPC, each call costs one server request plus your provider’s charge.
   [RPC setup](SERVER.md#the-economys-own-rpc)
+- **Relay calls on devnet are not billed to the game.** A devnet page sends its relay calls without the player's
+  sign-in, so xgames.fun cannot tell whose they are and pays for them itself. On mainnet, every call carries the
+  player's sign-in, and each one the relay does not answer from its cache is billed to the game. A call the game's own
+  server sends through the relay is billed to the game on either network.
 - **At the cap.** Pages stay up, the server returns HTTP 451, and saves and scores slow down until the month ends.
   Free games have individual caps. Creator games share one cap. To cover overage, buy usage credit under Plans, or,
   paying by card, raise the spending cap there.

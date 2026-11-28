@@ -377,3 +377,24 @@ test('the console has one name, and the reference says what only the console doe
       problems.push(`${rel(file)}: "${m}"`);
   assert.deepEqual(problems, []);
 });
+
+test('the economy guide says what moving to mainnet takes, and the fees say devnet relay calls are not billed', () => {
+  assert.deepEqual(
+    [
+      ...said(
+        'docs/ECONOMY.md',
+        '## Moving to mainnet',
+        /"network":\s*"mainnet"/,
+        /remove\s+the\s+`live`\s+section/i,
+        /"treasury"/,
+        /XSOLANA_RPC_URL/,
+        /secret\s+set\s+VOUCHER_SEED\s+--new-key/,
+        /loot\s+approve/,
+        /xcore\s+publish/,
+      ),
+      ...said('docs/FEES.md', '## Hosting', /devnet[^.]*not\s+billed\s+to\s+the\s+game/i),
+      ...said('docs/SERVER.md', "### The economy's own RPC", /devnet[^.]*not\s+billed\s+to\s+the\s+game/i),
+    ],
+    [],
+  );
+});

@@ -100,8 +100,8 @@ Buy it on your console's Plans tab (xgames.fun/console) in one of two ways: by c
 30 days until you cancel it, or prepaid in SOL or USDC for 1–12 periods, which you renew yourself.
 
 Server work, rooms and stored data count toward the hosting cap. Page requests and shared Solana relay calls
-also use the allowance, but cannot trigger a cap on their own. For example, 100,000 relay calls use $1 of the
-allowance or $2 of Creator overage credit. At the cap, pages stay up, the server stops, and saves and scores slow down.
+also use the allowance, but cannot trigger a cap on their own. For example, 100,000 mainnet relay calls use $1 of the
+allowance or $2 of Creator overage credit; a devnet page's relay calls are not billed to the game. At the cap, pages stay up, the server stops, and saves and scores slow down.
 Past the included use, Creator games use usage credit (paying in SOL or USDC) or go on the card invoice up to a spending
 cap you set (paying by card).
 
