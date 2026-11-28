@@ -677,7 +677,7 @@ test('every file of a game goes out with the play host’s headers: its type by 
     assert.equal(r.status, 200, p);
     assert.equal(sent('content-type'), type, p);
     assert.equal(sent('x-content-type-options'), 'nosniff', p);
-    assert.equal(sent('referrer-policy'), 'no-referrer', p);
+    assert.equal(sent('referrer-policy'), 'strict-origin', p);
     assert.equal(sent('cross-origin-resource-policy'), 'same-origin', p);
     assert.equal(sent('permissions-policy'), 'camera=(), microphone=(), geolocation=(), payment=(), usb=()', p);
     const policy = sent('content-security-policy').split('; ');
