@@ -126,3 +126,35 @@ test('a seed publish’s scan names is one finding, not two', async t => {
   await writeFile(path.join(dir, 'game.js'), `const VOUCHER_SEED = '${HEX}';\n${own}`);
   assert.deepEqual(custody(await review(dir)), ['high page game.js:1']);
 });
+
+test('a board the page writes is an info finding: any score is taken, unless the server makes the board its own', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'boards');
+  const game = path.join(dir, 'game.js');
+  const own = await readFile(game, 'utf8');
+  const boards = r => r.findings.filter(f => f.id === 'page-board');
+  await writeFile(game, `${own}\nGamesFun.scores.submit('best', 120);\nGamesFun.scores.submit("daily-1", 3);\n`);
+  let found = boards(await review(dir));
+  assert.equal(found.length, 1);
+  assert.equal(found[0].severity, 'info');
+  assert.match(
+    found[0].message,
+    /^page-written boards "best", "daily-1" \(game\.js\): any score a player sends is accepted/,
+  );
+  assert.match(found[0].fix, /GF\.scores\.setup\('best', \{writer: 'server'\}\)/);
+  // the server takes "daily-*" over: only "best" is the page's
+  const index = path.join(dir, 'server', 'index.js');
+  await writeFile(
+    index,
+    `${await readFile(index, 'utf8')}\nexport const boards = env => env.GF.scores.setup('daily-*', { writer: 'server' });\n`,
+  );
+  found = boards(await review(dir));
+  assert.match(found[0].message, /^page-written board "best" \(game\.js\)/);
+  // and every board: nothing to say
+  await writeFile(
+    index,
+    `${await readFile(index, 'utf8')}\nexport const all = env => env.GF.scores.setup("*", { writer: "server" });\n`,
+  );
+  assert.deepEqual(boards(await review(dir)), []);
+});
