@@ -276,3 +276,36 @@ test('every npx example names this version (scripts/pin-version.mjs pins them at
       if (m !== `npx -y @xgamesfun/xcore@${version}`) stale.push(`${rel}: ${m}`);
   assert.deepEqual(stale, [], `run: node scripts/pin-version.mjs`);
 });
+
+/**
+ * A fact a document must state, where a reader looks for it: the file, the part of it (from the heading or text that
+ * starts it to the next heading of that level or higher, or the whole file), and what that part must say.
+ */
+function partOf(file, starts) {
+  const text = read(path.join(ROOT, file));
+  if (!starts) return text;
+  const at = text.indexOf(starts);
+  assert.ok(at >= 0, `${file} has "${starts}"`);
+  const level = /^(#+) /.exec(starts)?.[1].length ?? 6;
+  const rest = text.slice(at + starts.length);
+  const end = rest.search(new RegExp(`\\n#{1,${level}} `));
+  return starts + (end < 0 ? rest : rest.slice(0, end));
+}
+const said = (file, starts, ...patterns) => {
+  const part = partOf(file, starts);
+  return patterns.filter(p => !p.test(part)).map(p => `${file}${starts ? ` (${starts})` : ''} does not say ${p}`);
+};
+
+test('the Creator plan is paid by card, renewing, or prepaid in SOL or USDC, wherever its payment is described', () => {
+  const both = [/by\s+card[^.]*\brenews\b/i, /SOL\s+or\s+USDC/, /spending\s+cap/i];
+  const problems = [
+    ...said('README.md', '## Costs', ...both),
+    ...said('docs/FEES.md', '## Hosting', ...both, /Manage\s+billing/),
+    ...said('docs/HOSTING.md', '### Paying for a Creator account and usage', ...both, /Manage\s+billing/),
+  ];
+  // and nothing says the plan is only ever prepaid and renewed by hand
+  for (const file of REFERENCE)
+    for (const line of read(file).split('\n'))
+      if (/Renew manually|prepaid, SOL or USDC/.test(line)) problems.push(`${rel(file)}: ${line.trim()}`);
+  assert.deepEqual(problems, []);
+});

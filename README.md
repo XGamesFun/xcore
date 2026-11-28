@@ -93,11 +93,14 @@ A game can include up to 3,000 files and 100 MiB. An account can publish 30 time
 
 Free accounts can host **2 games**, with $1 of backend use per game each month.
 Creator costs **$15 per account for 30 days** and covers up to **10 games**. Your games share $10 of monthly use.
-Prepay in SOL or USDC under Plans in the creator console. Renew manually.
+Buy it on your console's Plans tab (xgames.fun/console) in one of two ways: by card, a subscription that renews every
+30 days until you cancel it, or prepaid in SOL or USDC for 1–12 periods, which you renew yourself.
 
 Server work, rooms and stored data count toward the hosting cap. Page requests and shared Solana relay calls
 also use the allowance, but cannot trigger a cap on their own. For example, 100,000 relay calls use $1 of the
 allowance or $2 of Creator overage credit. At the cap, pages stay up, the server stops, and saves and scores slow down.
+Past the included use, Creator games use usage credit (paying in SOL or USDC) or go on the card invoice up to a spending
+cap you set (paying by card).
 
 Solana fees are separate. A mainnet player action costs 0.0005 SOL plus network fees. Minting a collectible adds
 about 0.0031 SOL including rent. Run `xcore loot cost` for your economy. A coin launch costs about 0.03 SOL.

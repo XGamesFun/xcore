@@ -220,9 +220,18 @@ A game's server gets a 429 with `scope` (`"player"` or `"game"`) and `plan` when
 
 ### Paying for a Creator account and usage
 
-- Prepay $15 per 30 days in SOL or USDC under Plans in the creator console. Buy 1–12 periods at a time and renew manually.
-- You have 7 days to renew after expiry. Then all games keep running at Free limits. To publish another, renew or bring the account below 2 games.
-- Creator games share $10 of monthly use and one cap. Buy usage credit to cover overage. Page files and shared relay calls count toward the bill but cannot trigger the cap.
+Buy it on your console's Plans tab (xgames.fun/console), one way at a time:
+
+- **By card**: a subscription of $15 every 30 days that renews by itself until you cancel it in Manage billing. A
+  cancelled plan runs to the end of the period you paid for. Use past what is included goes on the card invoice, up to
+  the monthly spending cap you set there ($0 until you set one).
+- **In SOL or USDC**: prepay $15 per 30 days, 1–12 periods at a time. It does not renew by itself. Use past what is
+  included is paid from usage credit, bought there too.
+
+Then:
+
+- When a prepaid period ends, a card payment fails or a cancelled card plan ends, you have 7 days to renew or pay. Then all games keep running at Free limits. To publish another, renew or bring the account below 2 games.
+- Creator games share $10 of monthly use and one cap. Usage credit, or the spending cap when paying by card, covers overage. Page files and shared relay calls count toward the bill but cannot trigger the cap.
 - Run `xcore plan --verbose` for current rates. [Unit prices](FEES.md#unit-prices)
 
 ### Seeing a plan
