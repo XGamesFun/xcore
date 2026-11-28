@@ -34,7 +34,8 @@ Plans (per game):
              capped together.
   Scale      Granted by xgames.fun to a game that needs more (a 10 GB database).
 
-A database past its plan's size stops the game's server (every api/ request answers 451) until it is under.
+On Free and Creator, a database past its plan's size stops the game's server (every api/ request answers 451)
+until it is under. A Scale game, or one whose plan xgames.fun granted, is not stopped for its database's size.
 
 Every plan lets your own sites embed the game (Free 3, Creator 10, Scale 25: ${CMD} embed). Creator and Scale also
 serve it on your own domains (1 and 5: ${CMD} domain). Prices: docs/FEES.md.

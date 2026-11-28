@@ -228,8 +228,9 @@ server comes back on by itself when the cap lifts ([SERVER.md](SERVER.md#publish
 an unpublished or taken-down game is switched off the same way. A Creator account's games share their included use,
 so they are capped together, and come back on together.
 
-A game whose database is past its plan's size (the table above; xgames.fun measures it each day) is capped the same
-way, on its own, until the database is smaller or its plan allows more. Usage credit does not lift it.
+A Free or Creator game whose database is past its plan's size (the table above; xgames.fun measures it each day) is
+capped the same way, on its own, until the database is smaller or its plan allows more. Usage credit does not lift it.
+A Scale game, or one whose plan xgames.fun granted, is not capped for its database's size.
 `xcore db info --live` shows its size; delete rows with `xcore db query "<sql>" --write --live` to bring it back.
 
 A game's server gets a 429 with `scope` (`"player"` or `"game"`) and `plan` when it goes past a rate limit.

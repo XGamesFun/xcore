@@ -105,7 +105,10 @@ export interface PlanLimits {
   scores: { boards: number; rules: number; entriesPerBoard: number; submitsPerMinute: number };
   reads: { perMinute: number };
   files: { bytes: number; fileBytes: number };
-  /** the game's database (D1); past it, its server is stopped (every api/ request answers 451) */
+  /**
+   * the game's database (D1). On Free and Creator, past it, its server is stopped (every api/ request answers 451);
+   * a Scale game, or one whose plan xgames.fun granted, is not stopped for its size.
+   */
   database: { bytes: number };
 }
 

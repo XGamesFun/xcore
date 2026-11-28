@@ -81,9 +81,10 @@ your own to each.
 - **At the cap.** Pages stay up, the server returns HTTP 451, and saves and scores slow down until the month ends.
   Free games have individual caps. Creator games share one cap. To cover overage, buy usage credit under Plans, or,
   paying by card, raise the spending cap there.
-- **A database past its plan's size** (100 MB on Free, 2 GB on Creator, 10 GB on Scale) caps its game the same way,
-  until the database is smaller or the plan allows more. xgames.fun measures the size each day. Credit and the
-  spending cap do not lift this cap: delete rows, or move the game to a plan that allows more.
+- **A database past its plan's size** (100 MB on Free, 2 GB on Creator) caps its game the same way, until the database
+  is smaller or the plan allows more. xgames.fun measures the size each day. Credit and the spending cap do not lift
+  this cap: delete rows, or move the game to a plan that allows more. Scale's 10 GB is its size with no automatic
+  stop: a Scale game, or one whose plan xgames.fun granted, is not capped for its database.
 - **Daily account limits.** 30 publishes and 1 GB of new files.
 
 `xcore plan` shows your account and a game's plan and this month's use; `xcore plan --all` shows every game, and

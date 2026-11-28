@@ -347,6 +347,17 @@ test("each plan's database size is stated, and that a database past it stops the
     ...said('docs/HOSTING.md', '### When a game is capped', /database\s+is\s+past\s+its\s+plan's\s+size/),
     ...said('docs/SERVER.md', "## The game's database", /server\s+stopped/),
   );
+  // xgames.fun caps a Free or Creator game for its database's size, never a Scale or granted one
+  for (const [file, starts] of [
+    ['docs/HOSTING.md', '### When a game is capped'],
+    ['docs/SERVER.md', "## The game's database"],
+    ['docs/FEES.md', '## Hosting'],
+  ])
+    problems.push(
+      ...said(file, starts, /Scale\s+game,\s+or\s+one\s+whose\s+plan\s+xgames\.fun\s+granted,\s+is\s+not\s+capped/),
+    );
+  if (/(?:^|\n)A database past its plan's size stops/.test(read('commands/plan.mjs')))
+    problems.push("plan's help: a database past its size stops every plan's server");
   // a lapsed account's games keep running, except one whose database is over Free's size
   for (const file of REFERENCE)
     for (const part of read(file).split('\n\n'))
