@@ -40,8 +40,11 @@ test('backend use custom: backend.json in the folder the build copies, its origi
     'https://api.orbit-example.net',
     'wss://api.orbit-example.net',
   ]);
-  // xgames.fun's own hosts: its publish route refuses them, so xcore does too (the game reaches its own host anyway)
-  const own = run(['backend', 'use', 'custom', dir, '--url', 'https://play.xgames.fun/loot/v1/health']);
+  // xgames.fun's own hosts: its publish route refuses them, so xcore does too (the game reaches its own host anyway).
+  // Which hosts are its own follows GAMESFUN_STUDIO, so the run names xgames.fun (nothing here reaches it)
+  const own = run(['backend', 'use', 'custom', dir, '--url', 'https://play.xgames.fun/loot/v1/health'], {
+    env: { GAMESFUN_STUDIO: 'https://xgames.fun' },
+  });
   assert.equal(own.status, 1);
   assert.match(own.stderr, /play\.xgames\.fun" is xgames\.fun itself/);
   for (const bad of ['http://localhost:3000', 'https://10.0.0.1'])
