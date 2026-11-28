@@ -138,7 +138,10 @@ export function publishCommand({
         if (nudge) console.error(nudge);
         if (values.status) {
           const s = await publishStatus(dir, { origin });
-          if (values.json) printJson({ ok: true, ...s });
+          // the page's sign-in client in this folder, against this xcore's (a published copy is what went up from here)
+          const { staleClient } = await import('../lib/add.mjs');
+          const stale = await staleClient(dir).catch(() => []);
+          if (values.json) printJson({ ok: true, ...s, staleClient: stale });
           else {
             console.log(
               s.signedIn
@@ -152,6 +155,10 @@ export function publishCommand({
                       : `Not signed in to ${origin} (${CMD} login).`,
             );
             console.log(statusLine(named(dir), origin, s));
+            if (stale.length)
+              console.log(
+                `  this game's sign-in client (${stale.join(', ')}) is older than this xcore's: ${CMD} add signin${shown(dir) === '.' ? '' : ` ${typedPath(shown(dir))}`} brings it up to date, then publish again`,
+              );
           }
           return 0;
         }

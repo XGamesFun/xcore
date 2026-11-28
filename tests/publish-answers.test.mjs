@@ -211,7 +211,8 @@ test('a version xgames.fun kept but could not put live is said as that, and the 
     url === '/api/kit/games/g1'
       ? [200, { published: true, slug: 'dot-catch', url: 'http://x/play/dot-catch', version: { number: 1 } }]
       : null;
-  assert.equal(JSON.parse((await runAsync(['publish', dir, '--status', '--json'], cli)).stdout).ok, true);
+  const status = JSON.parse((await runAsync(['publish', dir, '--status', '--json'], cli)).stdout);
+  assert.deepEqual([status.ok, status.staleClient], [true, []]);
   const st = await runAsync(['publish', dir, '--status'], cli);
   assert.match(
     st.stdout,
@@ -551,4 +552,18 @@ test('the example migration add database writes is refused until it is the game�
   await rm(path.join(dir, '.gamesfun', 'publish.json'));
   await writeFile(path.join(dir, 'server', 'migrations', '0001_init.sql'), example.split('\n').slice(1).join('\n'));
   assert.ok(!(await preflight(dir)).problems.some(p => /example migration/.test(p)));
+});
+
+test('publish --status says when the folder’s sign-in client is older than this xcore’s', async t => {
+  const { dir, cli } = await ready(t);
+  await writeFile(path.join(dir, 'gamesfun.js'), '/*! gamesfun.js 1.2.0 */\n// an older client');
+  const words = await runAsync(['publish', dir, '--status'], cli);
+  assert.equal(words.status, 0, words.stderr);
+  assert.match(
+    words.stdout,
+    /this game's sign-in client \(gamesfun\.js\) is older than this xcore's: .* add signin .* then publish again/,
+  );
+  assert.deepEqual(JSON.parse((await runAsync(['publish', dir, '--status', '--json'], cli)).stdout).staleClient, [
+    'gamesfun.js',
+  ]);
 });
