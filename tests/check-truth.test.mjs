@@ -1,7 +1,8 @@
 // What the page check says is what it saw: an error the first-session walk met is printed and warned of, a canvas
 // drawn in one flat colour is nothing on screen, a page that leaves for another site is said as that, focus taken as it
-// loads is a note (Godot's export does it), an export older than its project is a warning (and no pass for publish),
-// and Ctrl-C is a check stopped, not a page that failed. Skipped where there is no Chrome, Edge or Chromium.
+// loads is a note (Godot's export does it), an export older than its project is a warning (and no pass for publish
+// when it is plainly old: an autoload it lacks, or a change made well after it), and Ctrl-C is a check stopped, not a
+// page that failed. Skipped where there is no Chrome, Edge or Chromium.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -9,7 +10,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, utimes, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { findChrome, playwrightChromium } from '../lib/browser.mjs';
-import { pageVerify } from '../lib/check.mjs';
+import { missingAutoloads, pageVerify } from '../lib/check.mjs';
 import { BIN, run, tempDir } from './helpers.mjs';
 
 const browser = findChrome() ?? ((await playwrightChromium()).installed ? true : null);
@@ -148,8 +149,56 @@ test(
     r = await pageVerify(dir, { quick: true, out: path.join(tmp.dir, 'again') });
     assert.equal(r.pass, true, JSON.stringify(r.checks));
     assert.equal(r.warnings, undefined);
+    // seconds apart, as a clone or a copy writes them: a note and a warning, never a failure under publish's gate
+    const clone = new Date(Date.now() - 5_000);
+    await utimes(path.join(web, 'index.pck'), clone, clone);
+    await utimes(path.join(dir, 'project.godot'), new Date(), new Date());
+    r = await pageVerify(dir, { quick: true, out: path.join(tmp.dir, 'clone') });
+    assert.equal(r.pass, true, JSON.stringify(r.checks));
+    assert.equal(r.checks[0].ok, null);
+    assert.match(r.checks[0].detail, /; project\.godot changed after it was exported$/);
+    assert.equal(r.warnings.length, 1);
+    // seconds apart, but the export has nothing of an autoload project.godot names: it is old, whatever the times say
+    await writeFile(
+      path.join(dir, 'project.godot'),
+      '[application]\nconfig/name="Old export"\n\n[autoload]\n\nGamesFun="*res://addons/gamesfun/gamesfun.gd"\nAudio="*res://scripts/audio.gd"\n',
+    );
+    await writeFile(path.join(web, 'index.pck'), 'GDPC project.binary scripts/audio.gd.remap scripts/audio.gdc');
+    await utimes(path.join(web, 'index.pck'), clone, clone);
+    r = await pageVerify(dir, { quick: true, out: path.join(tmp.dir, 'lacks') });
+    assert.equal(r.pass, false);
+    assert.deepEqual(
+      [r.checks[0].ok, r.checks[0].detail],
+      [
+        false,
+        "the engine's web export in build/web has nothing of GamesFun (addons/gamesfun/gamesfun.gd), which project.godot autoloads: it was exported before that was added: export again, then publish",
+      ],
+    );
   },
 );
+
+test('the autoloads an export has nothing of; an export whose list of files is not plain says nothing', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const web = path.join(tmp.dir, 'build', 'web');
+  await mkdir(web, { recursive: true });
+  await writeFile(
+    path.join(tmp.dir, 'project.godot'),
+    '[autoload]\n\nGamesFun="*res://addons/gamesfun/gamesfun.gd"\nHud="res://ui/hud.tscn"\n\n[display]\nwindow/x=1\n',
+  );
+  const pck = path.join(web, 'index.pck');
+  // a piece boundary of the read falls inside a path: still found
+  await writeFile(
+    pck,
+    Buffer.concat([Buffer.from('project.binary'), Buffer.alloc((4 << 20) - 20), Buffer.from('ui/hud.tscn.remap')]),
+  );
+  assert.deepEqual(await missingAutoloads(tmp.dir, web), [{ name: 'GamesFun', path: 'addons/gamesfun/gamesfun.gd' }]);
+  await writeFile(pck, 'project.binary addons/gamesfun/gamesfun.gdc ui/hud.tscn.remap');
+  assert.deepEqual(await missingAutoloads(tmp.dir, web), []);
+  // encrypted: no plain project.binary, so it can't be told
+  await writeFile(pck, 'GDPC \x01\x02 nothing plain');
+  assert.deepEqual(await missingAutoloads(tmp.dir, web), []);
+});
 
 test(
   'Ctrl-C during a check: "stopped", nothing recorded, no FAIL line for a page that did not fail',
