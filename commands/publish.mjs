@@ -192,7 +192,8 @@ export function publishCommand({
           origin,
           draft: values.draft,
           newGame: values.new,
-          title: values.title ?? null,
+          // a first publish makes the game its printout named (a build run since may give the page another title)
+          title: values.title ?? first?.plan.game ?? null,
           card: askCard,
           ...(first && values.yes !== undefined ? { onMade: () => spentFirstPublish(first, values.yes) } : {}),
           progress: values.json ? () => {} : l => console.error(l),

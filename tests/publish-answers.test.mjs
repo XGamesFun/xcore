@@ -116,6 +116,36 @@ test('the game a first publish confirms is the game it makes: one name, from the
   assert.match(r.stderr, /Publishing “Dot Catch”/);
 });
 
+test('a built game’s first publish makes the game its printout named, though the build gives the page another title', async t => {
+  const { g, tmp, cli } = await ready(t, { adopted: false });
+  const dir = path.join(tmp.dir, 'built');
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, 'gamesfun.json'), JSON.stringify({ page: { build: 'node build.mjs', out: 'dist' } }));
+  await writeFile(path.join(dir, 'package.json'), JSON.stringify({ name: 'moth-dash', private: true }));
+  await writeFile(
+    path.join(dir, 'build.mjs'),
+    `import { mkdirSync, writeFileSync } from 'node:fs';
+mkdirSync('dist', { recursive: true });
+writeFileSync('dist/index.html', '<!doctype html><title>Moth Dash Deluxe</title><body><canvas></canvas><script>document.title = document.title</script></body>');
+`,
+  );
+  // a remembered pass for the files the build makes, then no build output yet, as in a fresh clone
+  const { spawnSync } = await import('node:child_process');
+  spawnSync(process.execPath, ['build.mjs'], { cwd: dir });
+  const report = { pass: true, quick: true, passed: 4, ran: 4, failed: [], at: new Date().toISOString(), run: 'v' };
+  await mkdir(path.join(dir, '.gamesfun'), { recursive: true });
+  await writeFile(
+    path.join(dir, '.gamesfun', 'gate.json'),
+    JSON.stringify({ fingerprint: (await buildTree(dir)).fingerprint, report }),
+  );
+  await rm(path.join(dir, 'dist'), { recursive: true });
+  const planned = JSON.parse((await runAsync(['publish', dir, '--no-card', '--json'], cli)).stdout);
+  assert.equal(planned.plan.game, 'moth-dash');
+  const r = await runAsync(['publish', dir, '--no-card', '--yes', planned.code], cli);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(g.state.published.title, 'moth-dash', 'begin names the game the printout named');
+});
+
 test('an update of a game an earlier first publish left without a version: the 409 says what to do', async t => {
   const { g, env, dir } = await ready(t);
   await mkdir(path.join(dir, '.gamesfun'), { recursive: true });
