@@ -163,6 +163,14 @@ test(
     assert.equal(r.checks[0].ok, null);
     assert.match(r.checks[0].detail, /; project\.godot changed after it was exported$/);
     assert.equal(r.warnings.length, 1);
+    // publish's own check says the warning too
+    const { pageCheck } = await import('../lib/publish/index.mjs');
+    const said = [];
+    await pageCheck(dir, { onLine: l => said.push(l) });
+    assert.ok(
+      said.some(l => /^warning: .*web export in build\/web/.test(l)),
+      said.join('\n'),
+    );
     // seconds apart, but the export has nothing of an autoload project.godot names: it is old, whatever the times say
     await writeFile(
       path.join(dir, 'project.godot'),
