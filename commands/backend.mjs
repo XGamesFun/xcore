@@ -5,7 +5,7 @@
 import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { folderArg, guard, parse, printJson, tooMany, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown, typedDir } from '../lib/games.mjs';
 import { backendOrigins, BACKEND_FILE } from '../lib/publish/scan.mjs';
 import { pageRoots } from '../lib/publish/page.mjs';
@@ -15,7 +15,8 @@ import { readOwnJson } from '../lib/util.mjs';
 
 const usage = `Usage: xcore backend use custom [dir] --url <https://…> [--origin <wss://…>]… [--json]
 
-Let the published game call a backend you already run.
+Let the published game call a backend you already run. The game's folder is the word after custom, or --dir <folder>
+(default: the current directory).
 
 This writes backend.json with the origin of the backend's public URL, its wss:// counterpart, and every other origin
 the page connects to (--origin; at most 8 origins in all). The published page may reach these origins and no other
@@ -34,7 +35,7 @@ export default {
     guard(async () => {
       const { values, positionals } = parse(
         args,
-        { url: { type: 'string' }, origin: { type: 'string', multiple: true } },
+        { url: { type: 'string' }, origin: { type: 'string', multiple: true }, dir: { type: 'string' } },
         usage,
       );
       if (positionals[0] !== 'use' || positionals[1] !== 'custom')
@@ -42,7 +43,8 @@ export default {
           `${positionals.length ? `"backend ${positionals.slice(0, 2).join(' ')}" is not a command here` : 'Name a command'}: xcore has "backend use custom".\n\n${usage}`,
         );
       if (!values.url) throw new UsageError(`backend use custom needs --url <https://…>\n\n${usage}`);
-      const dir = await resolveGame(positionals[2]);
+      if (positionals.length > 3) throw new UsageError(`${tooMany(positionals.slice(3))}\n\n${usage}`);
+      const dir = await resolveGame(folderArg(values.dir, positionals[2], usage));
       const roots = pageRoots(dir);
       if (roots.brought && roots.build && !roots.static)
         throw new Error(

@@ -2,7 +2,7 @@
 // picture of the game as it plays, or of a picture the person has, written as assets/card.jpg where publish takes it.
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { guard, parse, printJson, UsageError, tooMany } from '../lib/cli.mjs';
+import { folderArg, guard, parse, printJson, UsageError, tooMany } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { sizeText } from '../lib/util.mjs';
 import {
@@ -24,7 +24,8 @@ import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore card [dir] [--wait <seconds>] [--tap] [--path <path-and-query>] [--from <picture>] [--force] [--no-build] [--json]
 
-Make the game's preview picture: what a link to the game shows when it is shared (in a post on X, or in a chat).
+Make the game's preview picture: what a link to the game shows when it is shared (in a post on X, or in a chat). The
+game's folder is the word or --dir <folder> (default: the current directory).
 
 xgames.fun draws two cards from this picture:
   - a plain link (X's large-picture card, chat apps) shows it wide, ${WIDE_CARD.width}×${WIDE_CARD.height}: the picture
@@ -74,6 +75,7 @@ export default {
           from: { type: 'string' },
           force: { type: 'boolean' },
           'no-build': { type: 'boolean' },
+          dir: { type: 'string' },
         },
         usage,
       );
@@ -85,7 +87,7 @@ export default {
         throw new UsageError(
           `--from makes the picture from a file: --wait, --tap and --path are for the game's page\n\n${usage}`,
         );
-      const dir = await resolveGame(positionals[0]);
+      const dir = await resolveGame(folderArg(values.dir, positionals[0], usage));
       // its progress goes to stderr: stdout stays the command's own (the JSON of --json)
       const log = l => console.error(l);
       const r = await makeCard(dir, {

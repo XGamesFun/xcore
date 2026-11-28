@@ -1,7 +1,7 @@
 // `xcore secret set|list|delete`: a game server's own secrets on xgames.fun (../lib/publish/secrets.mjs).
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { guard, parse, printJson, UsageError, notOneOf, folderArg, verbNamed } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, notOneOf, folderArg, tooMany, verbNamed } from '../lib/cli.mjs';
 import { resolveGame, shown, typedDir } from '../lib/games.mjs';
 import { deleteSecret, listSecrets, setSecret } from '../lib/publish/secrets.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
@@ -146,6 +146,8 @@ export default {
       const needsName = verb === 'set' || verb === 'remove';
       if (needsName && !rest[0]) throw new UsageError(`${word} needs a NAME\n\n${usage}`);
       const name = needsName ? rest[0] : null;
+      const extra = rest.slice(needsName ? 2 : 1);
+      if (extra.length) throw new UsageError(`${tooMany(extra)}\n\n${usage}`);
       const dir = await resolveGame(folderArg(values.dir, needsName ? rest[1] : rest[0], usage));
       const out = values.json ? printJson : null;
       if (verb === 'list') {

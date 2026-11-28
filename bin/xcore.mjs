@@ -162,6 +162,12 @@ export async function main(argv) {
         `${name ? `No command before ${name}: xcore <command> [options].\n\n` : ''}${help(commands, kit)}`,
       );
     }, argv);
+  // `xcore help <command>`: that command's help, as `xcore <command> --help` gives it
+  const asked = name === 'help' && args[0] ? commands.get(args[0]) : null;
+  if (asked) {
+    console.log(asked.helpFor?.(args.slice(1)) ?? asked.usage ?? asked.summary);
+    return 0;
+  }
   const own = commands.get(name);
   const wantsHelp = args.includes('--help') || args.includes('-h');
   // `connect` with no kit here is this package's own; every other kit's turn without the kit says how to get it

@@ -8,7 +8,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { guard, notOneOf, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { folderArg, guard, notOneOf, parse, printJson, tooMany, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { ECONOMY_FILE, NO_SOLANA, solanaCommand, solanaHas, solanaRoot } from '../lib/economy.mjs';
 import { addLoot } from '../lib/loot-add.mjs';
@@ -47,7 +47,7 @@ RPC:
     shared relay only passes loot's own transactions, and a setup also creates mints and token accounts. If the
     public RPC refuses your requests, set XSOLANA_RPC_URL to a devnet RPC of your own.`;
 
-const ADD_USAGE = `Usage: xcore loot add [game] [--verbose] [--json]
+const ADD_USAGE = `Usage: xcore loot add [game] [--dir <folder>] [--verbose] [--json]
 
 Show where the game's economy file (${ECONOMY_FILE}) goes. Once the file exists, copy the economy's page client next
 to it (gf/loot/: the client bundled and minified, play/index.js and chain/rpc.js, with wallets.js). It is a managed
@@ -124,8 +124,13 @@ export default {
       }, args);
     if (args[0] === 'add')
       return guard(async () => {
-        const { values, positionals } = parse(args.slice(1), { verbose: { type: 'boolean' } }, ADD_USAGE);
-        const dir = await resolveGame(positionals[0]);
+        const { values, positionals } = parse(
+          args.slice(1),
+          { verbose: { type: 'boolean' }, dir: { type: 'string' } },
+          ADD_USAGE,
+        );
+        if (positionals.length > 1) throw new UsageError(`${tooMany(positionals.slice(1))}\n\n${ADD_USAGE}`);
+        const dir = await resolveGame(folderArg(values.dir, positionals[0], ADD_USAGE));
         const r = await addLoot(dir);
         if (values.json)
           return printJson({
