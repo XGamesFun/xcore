@@ -347,19 +347,20 @@ test('secret set XSOLANA_RPC_URL waits for backend.json’s origin to be publish
   const url = 'https://devnet.rpc.example.com/?api-key=k';
   await writeFile(path.join(dir, 'rpc.txt'), url);
   const xc = args => runAsync(['secret', 'set', ...args], { env, cwd: dir });
-  // --json: done as asked (the origin added), not a failure; the secret is not set yet
+  // nothing set: a failure (a script's `&& xcore publish` stops), with both steps left, each one that runs as written
   let r = await xc(['XSOLANA_RPC_URL', '--from-file', 'rpc.txt', '--json']);
-  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.status, 1, r.stderr);
   const waits = JSON.parse(r.stdout);
-  assert.deepEqual([waits.ok, waits.set, waits.state], [true, false, 'origin-added']);
-  // and the help says how to tell it from a set secret
-  const help = (await import('../commands/secret.mjs')).default.usage.replace(/\s+/g, ' ');
-  assert.match(help, /\{ok: true, set: false, state: "origin-added", added, file, next\}: check set, not ok alone/);
+  assert.deepEqual([waits.ok, waits.code, waits.set], [false, 'not-set', false]);
   assert.match(waits.next, / publish$/);
+  assert.deepEqual(waits.steps, [waits.next, waits.next.replace(/ publish$/, ' secret set XSOLANA_RPC_URL')]);
+  // and the help says so
+  const help = (await import('../commands/secret.mjs')).default.usage.replace(/\s+/g, ' ');
+  assert.match(help, /\{ok: false, code: "not-set", set: false, added, file, next, steps\}/);
   await rm(path.join(dir, 'backend.json'));
   r = await xc(['XSOLANA_RPC_URL', '--from-file', 'rpc.txt']);
-  assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /Not set yet/);
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stdout, /Not set yet: .*Two steps are left: publish .*then set it again with the same value/);
   assert.equal(names.has('XSOLANA_RPC_URL'), false);
   assert.deepEqual(JSON.parse(await readFile(path.join(dir, 'backend.json'), 'utf8')).origins, [
     'https://devnet.rpc.example.com',
@@ -418,4 +419,28 @@ test('an economy file that is not valid JSON refuses a new voucher key before th
   }
   assert.deepEqual(puts, [], 'the key the live server has is not replaced');
   assert.ok(!existsSync(path.join(dir, '.gamesfun', 'vouchers.json')), 'and no address is kept');
+});
+
+test('a game in the current folder is named by its folder in secret’s lines, never "."', async t => {
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = {
+    GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'),
+    GAMESFUN_CREDENTIALS: 'file',
+    GAMESFUN_STUDIO: g.origin,
+  };
+  await signIn(g, env);
+  const dir = path.join(tmp.dir, 'moth');
+  await mkdir(path.join(dir, '.gamesfun'), { recursive: true });
+  await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>moth</title>');
+  await writeFile(path.join(dir, '.gamesfun', 'publish.json'), JSON.stringify({ [g.origin]: { projectId: 'g-1' } }));
+  g.state.handle = (method, url) =>
+    url.startsWith('/api/kit/games/g-1/secrets') ? [200, { ok: true, game: 'g-1', names: [] }] : null;
+  const r = await runAsync(['secret', 'list'], { env, cwd: dir });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^moth's server has no secrets yet/);
 });

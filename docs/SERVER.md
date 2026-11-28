@@ -409,8 +409,9 @@ xcore secret set XSOLANA_RPC_URL         # the RPC's URL with its key: the serve
 - The server's entry, where `api/rpc` runs, may call only `backend.json`'s origins. `xcore add rpc` adds the RPC's
   origin (`https://host` only, never the key) when `XSOLANA_RPC_URL` is in `.dev.vars` or `.env`, and publish warns
   when it is missing. `xcore secret set XSOLANA_RPC_URL` checks it too: if the origin is not listed yet, it adds the
-  origin and does not set the URL. Run `xcore publish`, then run the command again. (Setting it earlier would make the
-  page send its calls to a server that may not be allowed to make them.)
+  origin, does not set the URL, and exits 1 (code `not-set` with `--json`). Run `xcore publish`, then set it again
+  with the same value. (Setting it earlier would make the page send its calls to a server that may not be allowed to
+  make them.)
 - Solana's public `https://api.devnet.solana.com` refuses calls from Cloudflare ("Your IP or provider is blocked").
   Use a provider's URL.
 - Under `xcore dev`, put `XSOLANA_RPC_URL` in `.dev.vars` to test this path. In `.env` it configures the dev server's
