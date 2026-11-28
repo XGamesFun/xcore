@@ -386,3 +386,21 @@ test('a mainnet economy whose grant or issuer is the .dev.vars test voucher key 
   );
   assert.match(said, /secret set VOUCHER_SEED --new-key/);
 });
+
+test('a first publish’s code is used up when the game is made, not by a refusal that made nothing', async t => {
+  const { g, dir, cli, remember } = await ready(t);
+  await remember();
+  const { code } = JSON.parse((await runAsync(['publish', dir, '--json'], cli)).stdout);
+  // refused for its preview picture before anything was made: the code is still good
+  const refused = await runAsync(['publish', dir, '--yes', code], cli);
+  assert.equal(refused.status, 1);
+  assert.match(refused.stderr, /no preview picture/);
+  assert.equal(g.state.published, undefined);
+  const made = await runAsync(['publish', dir, '--no-card', '--yes', code], cli);
+  assert.equal(made.status, 0, made.stderr);
+  // made: the code went with it, so another new game needs its own printout
+  await remember();
+  const again = await runAsync(['publish', dir, '--no-card', '--new', '--yes', code], cli);
+  assert.equal(again.status, 1);
+  assert.match(again.stderr, /That code is not for this change/);
+});

@@ -542,11 +542,8 @@ test('xcore files rm --live: a file xgames.fun has is deleted only with the code
   const code = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
   r = await xc(['rm', 'art/hero.png', '--json']);
   const planned = JSON.parse(r.stdout);
-  assert.deepEqual(
-    [r.status, planned.ok, planned.planned, planned.code],
-    [0, true, true, code],
-    'the same change, the same code',
-  );
+  assert.deepEqual([r.status, planned.ok, planned.planned], [0, true, true]);
+  assert.notEqual(planned.code, code, 'each printout its own code');
   assert.deepEqual(planned.plan, {
     action: 'delete',
     origin: g.origin,
@@ -556,7 +553,7 @@ test('xcore files rm --live: a file xgames.fun has is deleted only with the code
     public: true,
     bytes: 4,
   });
-  assert.match(planned.next, new RegExp(`files rm art/hero\\.png --live --yes ${code}$`));
+  assert.match(planned.confirm, new RegExp(`files rm art/hero\\.png --live --yes ${planned.code}$`));
   // a code printed for another file, a made-up one and a bare --yes are all refused
   for (const args of [
     ['rm', 'art/old.png', '--yes', code],
@@ -611,7 +608,7 @@ test('xcore files put --live over a file xgames.fun has: written over only with 
   const code = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
   r = await put('--json');
   const planned = JSON.parse(r.stdout);
-  assert.equal(planned.code, code);
+  assert.notEqual(planned.code, code, 'each printout its own code');
   assert.deepEqual(planned.plan, {
     action: 'replace',
     origin: g.origin,

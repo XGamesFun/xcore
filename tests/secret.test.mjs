@@ -1,5 +1,6 @@
 // `xcore secret` (lib/publish/secrets.mjs, lib/server/secrets.mjs): xgames.fun's name and value rules checked first, the
 // folder's own game and the saved sign-in, the routes and bodies xgames.fun takes, and the value never in an answer.
+import { spawn } from 'node:child_process';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
@@ -11,7 +12,7 @@ import { deleteSecret, listSecrets, setSecret } from '../lib/publish/secrets.mjs
 import { secretNameProblem, secretValueProblem, SECRET_LIMITS } from '../lib/server/secrets.mjs';
 import { readDevVars } from '../lib/dev/server.mjs';
 import { newVoucherKey, seedAddress } from '../lib/add.mjs';
-import { run, runAsync, signIn, standIn, tempDir } from './helpers.mjs';
+import { BIN, run, runAsync, signIn, standIn, tempDir } from './helpers.mjs';
 
 const ORIGIN = 'https://studio.example';
 
@@ -191,10 +192,11 @@ test('replacing or deleting a live secret prints what changes (never a value) wi
   r = await xc(['set', 'API_KEY', '--from-file', path.join(tmp.dir, 'two.txt'), '--json']);
   const planned = JSON.parse(r.stdout);
   assert.equal(planned.planned, true);
-  assert.equal(planned.code, code);
+  assert.notEqual(planned.code, code, 'each printout its own code');
   assert.equal(planned.plan.action, 'replace');
   assert.equal(planned.plan.name, 'API_KEY');
-  assert.match(planned.next, new RegExp(`--yes ${code}$`));
+  assert.match(planned.confirm, new RegExp(`--yes ${planned.code}$`));
+  assert.equal('next' in planned, false);
   assert.doesNotMatch(r.stdout, /second-value/);
   // a code for another change (another source) is refused
   r = await xc(['set', 'API_KEY', '--from-file', path.join(tmp.dir, 'one.txt'), '--yes', code]);
@@ -204,6 +206,31 @@ test('replacing or deleting a live secret prints what changes (never a value) wi
   r = await xc(['set', 'API_KEY', '--from-file', path.join(tmp.dir, 'two.txt'), '--yes', code]);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(names.get('API_KEY'), 'second-value');
+  // a piped value binds the code too, though it is never printed: a code printed for one value never sets another
+  const piped = (input, args) =>
+    new Promise(resolve => {
+      const child = spawn(process.execPath, [BIN, 'secret', ...args], {
+        cwd: dir,
+        env: { ...process.env, GAMESFUN_KIT: '', ...env },
+      });
+      let stdout = '',
+        stderr = '';
+      child.stdout.on('data', c => (stdout += c));
+      child.stderr.on('data', c => (stderr += c));
+      child.stdin.end(input);
+      child.on('close', status => resolve({ status, stdout, stderr }));
+    });
+  r = await piped('third-value\n', ['set', 'API_KEY']);
+  assert.equal(r.status, 0, r.stderr);
+  const pipedCode = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
+  assert.doesNotMatch(r.stdout, /third-value/);
+  r = await piped('another-value\n', ['set', 'API_KEY', '--yes', pipedCode]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /That code is not for this change/);
+  assert.equal(names.get('API_KEY'), 'second-value');
+  r = await piped('third-value\n', ['set', 'API_KEY', '--yes', pipedCode]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(names.get('API_KEY'), 'third-value');
 
   // a new voucher key over one the server has: says the old key is gone for good and what that breaks
   names.set('VOUCHER_SEED', 'a'.repeat(64));

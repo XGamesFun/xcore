@@ -47,7 +47,9 @@ Confirming changes:
   A new name is set immediately. Replacing a name the server already has, or deleting one, cannot be undone:
   xgames.fun never shows a value, so nothing can bring the old one back. So these first print what would be replaced
   or removed (never the value), with a code, and change nothing. Run the command again with --yes <code> to apply
-  it. With --json, the printout is {planned: true, code, plan, next}.
+  it. A code works once, within 15 minutes, and only for the change it was printed with (a value piped in or read
+  from a file is part of it). With --json, the printout is {planned: true, code, plan, confirm}: confirm is the
+  command to run once the person has said yes.
 
 Limits: names use A–Z, 0–9 and _, start with a letter, and cannot be GF or GF_*; values are up to 5,120 bytes; up to
 32 secrets per game.`;
@@ -92,9 +94,10 @@ async function hidden(question) {
   });
 }
 /**
- * Replacing or deleting a secret the live server has, asked first (../lib/consent.mjs consented). The code is over the
- * game, the name and where the new value comes from, never the value itself. It goes on with the code only: there is
- * no word to type at a terminal.
+ * Replacing or deleting a secret the live server has, asked first (../lib/consent.mjs consented). The plan printed is
+ * the game, the name and where the new value comes from, never the value itself; a value read before the question (a
+ * file, .dev.vars, piped in) binds the code without being printed. It goes on with the code only: there is no word to
+ * type at a terminal.
  */
 const asked = change => consented({ sub: 'secret', ...change });
 
@@ -193,12 +196,15 @@ export default {
       // the economy file is read for these (a voucher key's address is written into it, an RPC is held to its cluster):
       // one that does not read refuses here, before the value the live server has is replaced
       if (['VOUCHER_SEED', 'XSOLANA_RPC_URL', 'LOOT_RPC_URL'].includes(name)) readEconomy(dir);
-      // what this machine can refuse is refused before xgames.fun is asked: the name, and a value read from a file
+      // what this machine can refuse is refused before xgames.fun is asked: the name, and a value read from a file or
+      // piped in (read now, so a code printed for one value never sets another)
       const early = values['from-dev-vars']
         ? await fromDevVars(dir, name)
         : values['from-file']
           ? (await readFile(values['from-file'], 'utf8')).replace(/\r?\n$/, '')
-          : null;
+          : !values['new-key'] && !process.stdin.isTTY
+            ? await piped()
+            : null;
       const problem =
         secretNameProblem(name) ??
         (early === null ? null : (secretValueProblem(early) ?? rpcProblem(dir, name, early)));
@@ -209,6 +215,8 @@ export default {
         const key = !!values['new-key'];
         const go = await asked({
           plan: { action: 'replace', origin: studioOrigin(), game, name, from: sourceOf(values) },
+          // the code is for this value too, never printed (a value typed at a terminal is asked after the yes)
+          bind: early,
           lines: [
             `${shown(dir)}'s server on xgames.fun (game ${game}) has ${name} already. This replaces its value with ${sourceOf(values)}, from the server's next request.`,
             key

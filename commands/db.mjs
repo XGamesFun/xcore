@@ -46,8 +46,9 @@ Confirming live changes:
   A change to the live database (query --write --live, import --live, restore) first prints exactly what it would
   change, with a code, and changes nothing. The printout names the game and the statement and its params; or the
   file's name, size and SHA-256; or the time it goes back to. Run the command again with --yes <code> to apply it,
-  or, at a terminal, type the confirmation word (write, import, restore). A code printed for a different change is
-  refused. With --json, the printout is {planned: true, code, plan, next}.`;
+  or, at a terminal, type the confirmation word (write, import, restore). A code works once, within 15 minutes,
+  and only for the change it was printed with. With --json, the printout is {planned: true, code, plan, confirm}:
+  confirm is the command to run once the person has said yes.`;
 
 /** A size as the person reads it (../lib/util.mjs sizeText, the one every command prints sizes with). */
 const kb = sizeText;

@@ -8,7 +8,7 @@ import { studioOrigin } from '../lib/publish/client.mjs';
 import { gate } from '../lib/publish/gate.mjs';
 import { buildFailure, pageRoots, runBuild } from '../lib/publish/page.mjs';
 import { CMD } from '../lib/command.mjs';
-import { confirmFirstPublish, creatorCapWords, firstPublish } from '../lib/publish/first.mjs';
+import { confirmFirstPublish, creatorCapWords, firstPublish, spentFirstPublish } from '../lib/publish/first.mjs';
 import { reviewNudge } from '../lib/review.mjs';
 import { cardPrinted, drawable } from '../lib/card.mjs';
 import { plural, sizeText } from '../lib/util.mjs';
@@ -25,7 +25,8 @@ The first publish of a folder creates a new game on the account this computer is
 its games (2 on a Free account, one of its free slots; up to 10 on a Creator account). It first prints the account,
 the game's name and where it goes, and changes nothing; an account with no room for another game is told so before
 anything is uploaded. At a terminal, type "publish" to go on; otherwise run the same command again with --yes <code>,
-using the code it prints. Publishing a folder that is already linked to a game updates that game without asking.
+using the code it prints (it works once, within 15 minutes; with --json the command is in "confirm"). Publishing a
+folder that is already linked to a game updates that game without asking.
 
 What happens:
   - A game you adopted (${CMD} adopt) is built first if it has a build. Its published folder (gamesfun.json
@@ -193,6 +194,7 @@ export function publishCommand({
           newGame: values.new,
           title: values.title ?? null,
           card: askCard,
+          ...(first && values.yes !== undefined ? { onMade: () => spentFirstPublish(first, values.yes) } : {}),
           progress: values.json ? () => {} : l => console.error(l),
         }).catch(e => {
           // A new game needs room on the account (xgames.fun's words say so): name what makes some.

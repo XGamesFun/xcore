@@ -57,8 +57,9 @@ Confirming live changes:
   A new path is uploaded immediately. Overwriting a file xgames.fun already has (put --live) or deleting one
   (remove --live) cannot be undone: xgames.fun keeps one copy of each file and no earlier versions. So these first print
   what would be replaced or deleted, with a code, and change nothing. Run the command again with --yes <code> to
-  apply it. A code printed for a different change is refused. With --json, the printout is
-  {planned: true, code, plan, next}. Local files change immediately.`;
+  apply it. A code works once, within 15 minutes, and only for the change it was printed with. With --json, the
+  printout is {planned: true, code, plan, confirm}: confirm is the command to run once the person has said yes.
+  Local files change immediately.`;
 
 /** A file xgames.fun has, in the words of a printout: "1.2 MB, public, image/png". */
 const facts = f =>

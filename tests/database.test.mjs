@@ -1072,7 +1072,8 @@ test('xcore db --live goes through the owner routes; a live change prints itself
   r = await xc(['query', 'DELETE FROM players WHERE id = ?', '--params', '["p1"]', '--live', '--write', '--json']);
   let planned = JSON.parse(r.stdout);
   assert.equal(planned.planned, true);
-  assert.equal(planned.code, code, 'the same change, the same code');
+  assert.match(planned.code, /^[0-9a-f]{8}$/);
+  assert.notEqual(planned.code, code, 'each printout its own code: a code is not worked out from the change');
   assert.deepEqual(planned.plan, {
     action: 'write',
     origin: g.origin,
@@ -1080,7 +1081,8 @@ test('xcore db --live goes through the owner routes; a live change prints itself
     statement: 'DELETE FROM players WHERE id = ?',
     params: ['p1'],
   });
-  assert.match(planned.next, new RegExp(`--yes ${code}$`));
+  assert.match(planned.confirm, new RegExp(`--yes ${planned.code}$`));
+  assert.equal('next' in planned, false, 'the command that goes on is no `next` to run unasked');
   // another statement or other params: another change, so the code is refused and nothing is sent
   for (const other of [
     ['query', 'DELETE FROM players', '--live', '--write', '--yes', code],
@@ -1108,6 +1110,12 @@ test('xcore db --live goes through the owner routes; a live change prints itself
   ]);
   assert.equal(JSON.parse(r.stdout).ok, true, r.stderr);
   assert.equal(seen.at(-1)[2].write, true);
+  // a code goes on once: the same write again needs a new printout
+  const wrote = seen.length;
+  r = await xc(['query', 'DELETE FROM players WHERE id = ?', '--params', '["p1"]', '--live', '--write', '--yes', code]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /That code is not for this change: .*used already/);
+  assert.equal(seen.length, wrote, 'nothing was sent');
   // a write here (not live) needs no yes
   assert.equal((await xc(['query', 'SELECT 1; SELECT 2', '--live', '--write'])).status, 1, 'refused first, unasked');
   // export downloads the dump into .gamesfun/exports/ (hidden: never published)
@@ -1183,7 +1191,7 @@ test('xcore db --live goes through the owner routes; a live change prints itself
   const restore = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
   r = await xc(['restore', '2026-11-08T10:00:00Z', '--live', '--json']);
   planned = JSON.parse(r.stdout);
-  assert.equal(planned.code, restore);
+  assert.notEqual(planned.code, restore, 'each printout its own code');
   assert.equal(planned.plan.at, '2026-11-08T10:00:00.000Z');
   assert.equal(planned.plan.bookmark, 'bm1');
   assert.deepEqual(planned.plan.migrations, ['0002_guilds.sql']);
@@ -1202,9 +1210,14 @@ test('xcore db --live goes through the owner routes; a live change prints itself
   );
   assert.match(r.stderr, /not rolled back/);
   assert.deepEqual(seen.at(-1)[2], { timestamp: '2026-11-08T10:00:00.000Z', confirm: true });
+  // a code goes on once: that restore again needs a new printout (the --json one's code went with it)
+  r = await xc(['restore', '2026-11-08T10:00:00Z', '--live', '--yes', planned.code]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /used already/);
   // unix seconds go up as the same ISO time: xgames.fun reads a bare number as milliseconds
-  // unix seconds name the same time, so the same change and the same code
-  r = await xc(['restore', '1794132000', '--live', '--yes', restore]);
+  // unix seconds name the same time, so the same change: a code printed for the ISO time goes on with them
+  const again = JSON.parse((await xc(['restore', '2026-11-08T10:00:00Z', '--live', '--json'])).stdout).code;
+  r = await xc(['restore', '1794132000', '--live', '--yes', again]);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(seen.at(-1)[2], { timestamp: '2026-11-08T10:00:00.000Z', confirm: true });
   r = await xc(['restore', 'yesterday', '--live', '--yes', restore]);
