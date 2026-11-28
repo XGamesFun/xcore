@@ -2,7 +2,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { guard, parse, printJson, UsageError, notOneOf, folderArg, verbNamed } from '../lib/cli.mjs';
-import { resolveGame, shown } from '../lib/games.mjs';
+import { named, resolveGame } from '../lib/games.mjs';
 import { deleteSecret, listSecrets, setSecret } from '../lib/publish/secrets.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -121,7 +121,7 @@ async function piped() {
 async function fromDevVars(dir, name) {
   const { readDevVars, DEV_VARS } = await import('../lib/dev/server.mjs');
   const { secrets } = await readDevVars(dir);
-  if (!secrets[name]) throw new UsageError(`${DEV_VARS} in ${shown(dir)} has no ${name}`);
+  if (!secrets[name]) throw new UsageError(`${DEV_VARS} in ${named(dir)} has no ${name}`);
   return secrets[name];
 }
 
@@ -157,8 +157,8 @@ export default {
         else
           console.log(
             r.names.length
-              ? `${shown(dir)}'s server has ${r.names.length} secret${r.names.length === 1 ? '' : 's'}: ${r.names.join(', ')}`
-              : `${shown(dir)}'s server has no secrets yet (${CMD} secret set <NAME>).`,
+              ? `${named(dir)}'s server has ${r.names.length} secret${r.names.length === 1 ? '' : 's'}: ${r.names.join(', ')}`
+              : `${named(dir)}'s server has no secrets yet (${CMD} secret set <NAME>).`,
           );
         return 0;
       }
@@ -174,7 +174,7 @@ export default {
         const go = await asked({
           plan: { action: 'delete', origin: studioOrigin(), game, name },
           lines: [
-            `This deletes ${name} from ${shown(dir)}'s server on xgames.fun (game ${game}). From its next request the server has no env.${name}, and the value is gone for good: xgames.fun never shows a secret, so nothing can bring it back.`,
+            `This deletes ${name} from ${named(dir)}'s server on xgames.fun (game ${game}). From its next request the server has no env.${name}, and the value is gone for good: xgames.fun never shows a secret, so nothing can bring it back.`,
           ],
           nothing: 'Nothing was deleted',
           values,
@@ -218,7 +218,7 @@ export default {
           // the code is for this value too, never printed (a value typed at a terminal is asked after the yes)
           bind: early,
           lines: [
-            `${shown(dir)}'s server on xgames.fun (game ${game}) has ${name} already. This replaces its value with ${sourceOf(values)}, from the server's next request.`,
+            `${named(dir)}'s server on xgames.fun (game ${game}) has ${name} already. This replaces its value with ${sourceOf(values)}, from the server's next request.`,
             key
               ? `The key in ${name} now is gone for good: it was kept only on xgames.fun, which never shows it, so nothing restores it. The grants the server pays are pointed at the new key in xsolana.json as it is made; what the server signs with it is refused on chain until that change goes live (${CMD} loot approve, signed by the key file that owns the economy), and from then vouchers the old key signed that nobody redeemed yet stop paying.`
               : `The value it has now is gone for good: xgames.fun never shows a secret, so nothing brings it back. Anything that still needs the old value (a voucher key's address in a grant, an outside service's old key) stops working with this server.`,
@@ -243,12 +243,25 @@ export default {
         const { file, added } = await allowOrigin(dir, origin);
         if (added) {
           const where = path.relative(process.cwd(), file) || file;
-          if (out) out({ ok: false, game, name, set: false, added: origin, file: where, next: `${CMD} publish` });
+          // nothing was set: a failure to a script (`secret set … && …` stops), with both steps still to do
+          const steps = [`${CMD} publish`, `${CMD} secret set ${name} (with the same value again)`];
+          if (out)
+            out({
+              ok: false,
+              code: 'not-set',
+              game,
+              name,
+              set: false,
+              added: origin,
+              file: where,
+              next: steps[0],
+              steps,
+            });
           else
             console.log(
-              `Not set yet: the game's server may call only the origins in ${where}, and ${origin} was not one. It is now: publish (${CMD} publish), then run this again, and the server takes the URL with leave to call it.`,
+              `Not set yet: the game's server may call only the origins in ${where}, and ${origin} was not one. It is now. Two steps are left: publish (${steps[0]}), then set it again (${CMD} secret set ${name}), and the server takes the URL with leave to call it.`,
             );
-          return 0;
+          return 1;
         }
       }
       const r = await setSecret(dir, name, value);
@@ -260,7 +273,7 @@ export default {
       if (out) out(live ? { ...r, address: live.address, ...(pointed ? { economy: pointed } : {}) } : r);
       else {
         console.log(
-          `Set ${name} on ${shown(dir)}'s server: env.${name} from its next request. (${plural(r.names.length, 'secret')}.)`,
+          `Set ${name} on ${named(dir)}'s server: env.${name} from its next request. (${plural(r.names.length, 'secret')}.)`,
         );
         if (made)
           console.log(`It is a new key, made here and kept only on xgames.fun's server. Its address: ${made.address}`);
