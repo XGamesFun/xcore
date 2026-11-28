@@ -462,7 +462,7 @@ test('signin for a web game: gamesfun.js beside the page and loaded first; again
   assert.ok(copy.length < source.length / 2, `${copy.length} of ${source.length}`);
   assert.match(
     copy,
-    /^\/\*! gamesfun\.js \d+\.\d+\.\d+, minified by xcore; readable source, every call listed at its top: https:\/\/github\.com\/XGamesFun\/xcore\/blob\/main\/lib\/client\/gamesfun\.js \(MIT\) \*\/\n/,
+    /^\/\*! gamesfun\.js \d+\.\d+\.\d+, minified by xcore; readable source, every call listed at its top: https:\/\/github\.com\/XGamesFun\/xcore\/blob\/v\d+\.\d+\.\d+\/lib\/client\/gamesfun\.js \(MIT\) \*\/\n/,
   );
   assert.match(copy, /globalThis\.GamesFun/, 'it sets the same global');
   assert.match(
@@ -764,6 +764,23 @@ test('a client copy from an older xcore is named, and add signin brings it up to
   );
   await writeFile(gd, unminified);
   assert.deepEqual(await staleClient(godot), []);
+  // the banner names the release that wrote the copy: the same code from another release is current
+  const { clientSource } = await import('../lib/add.mjs');
+  const fromOther = clientSource().replace(/blob\/v[\d.]+\//, 'blob/v0.1.0/');
+  assert.notEqual(fromOther, clientSource());
+  await writeFile(path.join(web, 'gamesfun.js'), fromOther);
+  assert.deepEqual(await staleClient(web), []);
+  await writeFile(
+    gd,
+    (await readFile(path.join(ROOT, 'lib/client/godot/gamesfun.gd'), 'utf8')).replace(
+      '__GAMESFUN_SOURCE_B64__',
+      Buffer.from(fromOther).toString('base64'),
+    ),
+  );
+  assert.deepEqual(await staleClient(godot), []);
+  // and other code under a current banner is not
+  await writeFile(path.join(web, 'gamesfun.js'), clientSource().replace(/\n[\s\S]*$/, '\n// other code'));
+  assert.deepEqual(await staleClient(web), ['gamesfun.js']);
 });
 
 test('a Godot project with no Web export gets a single-threaded Web preset, once', async t => {
