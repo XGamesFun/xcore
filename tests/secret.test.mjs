@@ -325,6 +325,9 @@ test('secret set XSOLANA_RPC_URL waits for backend.json’s origin to be publish
   assert.equal(r.status, 0, r.stderr);
   const waits = JSON.parse(r.stdout);
   assert.deepEqual([waits.ok, waits.set, waits.state], [true, false, 'origin-added']);
+  // and the help says how to tell it from a set secret
+  const help = (await import('../commands/secret.mjs')).default.usage.replace(/\s+/g, ' ');
+  assert.match(help, /\{ok: true, set: false, state: "origin-added", added, file, next\}: check set, not ok alone/);
   assert.match(waits.next, / publish$/);
   await rm(path.join(dir, 'backend.json'));
   r = await xc(['XSOLANA_RPC_URL', '--from-file', 'rpc.txt']);

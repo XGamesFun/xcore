@@ -43,6 +43,10 @@ Commands:
   list               list the names (values are never shown)
   remove <NAME>      remove a secret
 
+An RPC URL (XSOLANA_RPC_URL, LOOT_RPC_URL) whose origin backend.json does not list yet is not set: the origin is added
+to backend.json, and the URL waits for the publish that sends it; run set again after it. With --json that answer is
+{ok: true, set: false, state: "origin-added", added, file, next}: check set, not ok alone.
+
 Confirming changes:
   A new name is set immediately. Replacing a name the server already has, or deleting one, cannot be undone:
   xgames.fun never shows a value, so nothing can bring the old one back. So these first print what would be replaced
