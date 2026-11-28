@@ -241,6 +241,25 @@ test('the account in words: Creator with its games, period, shared use and credi
   assert.doesNotMatch(creator, /slot/i);
   assert.doesNotMatch(creator, /per million/, 'unit prices with --verbose only');
 
+  // paid by card: it renews by itself, and use past what is included goes on the card invoice up to the cap
+  const card = describeAccount(
+    { ok: true, payments: PAYMENTS, monthCents: 0, capCents: 2500, games: [], account: { ...CREATOR, method: 'card' } },
+    { verbose: true },
+  );
+  assert.match(
+    card,
+    /\n {2}renews: by card on 2026-12-20; change the card or cancel in your console → Plans → Manage billing\n/,
+  );
+  assert.doesNotMatch(card, /does not renew by itself|usage credit pays/);
+  assert.match(
+    card,
+    /Past what is included, use goes on your card invoice at these prices, up to your spending cap \(\$25\.00\):/,
+  );
+  assert.match(
+    describeAccount({ games: [], account: { ...CREATOR, method: 'card' } }, { verbose: true }),
+    /up to your spending cap \(none set\):/,
+  );
+
   const free = describeAccount({ ok: true, payments: PAYMENTS, monthCents: 42, games: [], account: FREE });
   assert.match(
     free,
