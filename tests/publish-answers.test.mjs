@@ -396,6 +396,30 @@ test('a check screenshot makes the preview picture only from a run that passed o
   assert.match(await shotProblem(dir, shot), /changed after that check ran \(game\.js, for one\)/);
 });
 
+test('a check that saved the published files’ fingerprint keeps its screenshot good while their contents stay the same', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  const run = path.join(dir, 'evidence', 'verify-1');
+  await mkdir(run, { recursive: true });
+  const shot = path.join(run, 'desktop.png');
+  await writeFile(shot, '');
+  const { filesFingerprint } = await buildTree(dir);
+  await writeFile(
+    path.join(run, 'record.json'),
+    JSON.stringify({ pass: true, started: new Date().toISOString(), seconds: 1, filesFingerprint }),
+  );
+  // a checkout or a copy touches every file's time and changes nothing in them
+  const later = new Date(Date.now() + 60_000);
+  await utimes(path.join(dir, 'game.js'), later, later);
+  assert.equal(await shotProblem(dir, shot), null);
+  // a change to what goes up makes it stale, whatever the times say
+  await writeFile(path.join(dir, 'game.js'), '// another page\n');
+  const before = new Date(Date.now() - 60 * 60_000);
+  await utimes(path.join(dir, 'game.js'), before, before);
+  assert.match(await shotProblem(dir, shot), /changed after that check ran/);
+});
+
 test('a built game’s check screenshot stays good over a build run again, not over a changed source', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);

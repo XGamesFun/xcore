@@ -534,6 +534,15 @@ test(
   },
 );
 
+test('a failed check does not promise its screenshot as the preview picture', async () => {
+  const { noCardLine } = await import('../commands/check.mjs');
+  assert.match(noCardLine(true, '.'), /^warning: no preview picture\. Publish makes one from this check's screenshot/);
+  assert.match(
+    noCardLine(false, '.'),
+    /^warning: no preview picture\. Fix the check, then publish makes one from its screenshot \(or make your own: .* card\)$/,
+  );
+});
+
 test(
   'xcore check reports the picture: missing and blurry are warnings, never a failed check',
   { skip: noBrowser, timeout: 180_000 },

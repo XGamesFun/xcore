@@ -404,7 +404,11 @@ test(
     assert.equal(w.tell[0], 'The game screen changed on tap 1, with no sign-in or wallet.');
     assert.ok(w.tell.length >= 2 && w.tell.length <= 4, w.tell.join('\n'));
     for (const shot of w.screenshots) assert.ok(existsSync(path.join(out, shot)), shot);
-    assert.deepEqual(JSON.parse(await readFile(path.join(out, 'record.json'), 'utf8')).firstSession.tell, w.tell);
+    const saved = JSON.parse(await readFile(path.join(out, 'record.json'), 'utf8'));
+    assert.deepEqual(saved.firstSession.tell, w.tell);
+    // the files that go up, as checked: publish judges the screenshot's freshness by them
+    const { buildTree } = await import('../lib/publish/tree.mjs');
+    assert.equal(saved.filesFingerprint, (await buildTree(dir)).filesFingerprint);
     const at = lines.indexOf('First session (as a first-time player on a phone, in the play frame):');
     assert.ok(at > 0, lines.join('\n'));
     assert.ok(lines.slice(at).includes('  In short:'), lines.slice(at).join('\n'));

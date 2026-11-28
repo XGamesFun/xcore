@@ -62,6 +62,14 @@ export function checkCounts(checks) {
   return parts.join(', ');
 }
 
+/** check's line for a game with no preview picture: publish makes one from a passing check's screenshot only. */
+export function noCardLine(pass, dir) {
+  const card = `${CMD} card${shown(dir) === '.' ? '' : ` ${shown(dir)}`}`;
+  return pass
+    ? `warning: no preview picture. Publish makes one from this check's screenshot, or make your own: ${card}`
+    : `warning: no preview picture. Fix the check, then publish makes one from its screenshot (or make your own: ${card})`;
+}
+
 export default {
   name: 'check',
   summary: 'check the page as xgames.fun hosts it: build, hosting rules, a clean start in Chrome',
@@ -141,7 +149,7 @@ export default {
         if (r.card)
           console.log(
             !values.verbose && r.card.level === 'stop' && r.card.missing
-              ? `warning: no preview picture. Publish makes one from this check's screenshot, or make your own: ${CMD} card${shown(dir) === '.' ? '' : ` ${shown(dir)}`}`
+              ? noCardLine(r.pass, dir)
               : cardPrinted(r.card),
           );
         for (const w of r.warnings ?? []) console.log(`warning: ${w}`);
