@@ -797,6 +797,8 @@ test('a Godot project with no Web export gets a single-threaded Web preset, once
   const cfg = await readFile(path.join(tmp.dir, 'export_presets.cfg'), 'utf8');
   assert.match(cfg, /\[preset\.1\]\n\nname="Web"\nplatform="Web"/);
   assert.match(cfg, /\[preset\.1\.options\][^[]*variant\/thread_support=false/);
+  // the play page's frame refuses focus taken as the page loads; the first tap gives it
+  assert.match(cfg, /\[preset\.1\.options\][^[]*html\/focus_canvas_on_start=false/);
   assert.ok(cfg.includes(`exclude_filter="${GODOT_EXCLUDE}"`));
   assert.ok(cfg.startsWith('[preset.0]'), 'the presets it had are kept');
   assert.ok(existsSync(path.join(tmp.dir, 'build', '.gdignore')) && existsSync(path.join(tmp.dir, 'build', 'web')));

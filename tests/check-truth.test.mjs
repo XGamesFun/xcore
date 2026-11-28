@@ -106,6 +106,11 @@ test(
     // (Chrome says it in the console from version 158 on; an older one says nothing, and the check passes either way)
     const note = r.notes.find(n => /focus-without-user-activation/.test(n));
     if (note) assert.match(note, /set html\/focus_canvas_on_start to false in the Web export preset/);
+    // and the first-session walk does not count it among the errors a player meets
+    const walked = (await pageVerify(focus, { out: path.join(tmp.dir, 'focus-walk') })).firstSession;
+    assert.ok(walked && !walked.error, JSON.stringify(walked));
+    assert.ok(!walked.errors.some(e => /focus-without-user-activation/.test(e.text)), JSON.stringify(walked.errors));
+    assert.ok(!walked.tell.some(l => /\berrors? showed up\b/.test(l)), walked.tell.join('\n'));
   },
 );
 
