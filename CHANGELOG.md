@@ -2,6 +2,15 @@
 
 All notable changes to `@xgamesfun/xcore` (the `xcore` command), newest first. Versions follow [Semantic Versioning](https://semver.org/).
 
+## 0.14.1 — 2026-11-28
+
+xgames.fun now runs game databases and project files for every game (they were switched off on the hosting side). Nothing changes in xcore for them: `xcore publish` creates a game's database, and `xcore files … --live` works, as soon as xgames.fun lists them.
+
+**Fixed**
+
+- `xcore db … --live` names the game ("the game's database on xgames.fun") instead of ".'s database" when run in the game's folder.
+- `xcore files get --live` says "Got … from xgames.fun", not "from on xgames.fun".
+
 ## 0.14.0 — 2026-11-26
 
 Guests keep their saves, a web page uses the solana kit directly, one `xcore loot add`, and `xcore data export` for a

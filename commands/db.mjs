@@ -102,7 +102,8 @@ export default {
       const arg = takes[verb] ? rest[0] : null;
       const dir = await resolveGame(folderArg(values.dir, takes[verb] ? rest[1] : rest[0], usage));
       const live = !!values.live;
-      const where = live ? `${shown(dir)}'s database on xgames.fun` : `${shown(dir)}'s database on this machine`;
+      const whose = shown(dir) === '.' ? 'the game' : shown(dir);
+      const where = live ? `${whose}'s database on xgames.fun` : `${whose}'s database on this machine`;
       const log = m => console.error(m);
 
       if (verb === 'info') {
