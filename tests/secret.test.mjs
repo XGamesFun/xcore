@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { saveSecret } from '../lib/credentials.mjs';
 import { credentialKey } from '../lib/publish/client.mjs';
@@ -320,7 +320,17 @@ test('secret set XSOLANA_RPC_URL waits for backend.json’s origin to be publish
   const url = 'https://devnet.rpc.example.com/?api-key=k';
   await writeFile(path.join(dir, 'rpc.txt'), url);
   const xc = args => runAsync(['secret', 'set', ...args], { env, cwd: dir });
-  let r = await xc(['XSOLANA_RPC_URL', '--from-file', 'rpc.txt']);
+  // --json: done as asked (the origin added), not a failure; the secret is not set yet
+  let r = await xc(['XSOLANA_RPC_URL', '--from-file', 'rpc.txt', '--json']);
+  assert.equal(r.status, 0, r.stderr);
+  const waits = JSON.parse(r.stdout);
+  assert.deepEqual([waits.ok, waits.set, waits.state], [true, false, 'origin-added']);
+  // and the help says how to tell it from a set secret
+  const help = (await import('../commands/secret.mjs')).default.usage.replace(/\s+/g, ' ');
+  assert.match(help, /\{ok: true, set: false, state: "origin-added", added, file, next\}: check set, not ok alone/);
+  assert.match(waits.next, / publish$/);
+  await rm(path.join(dir, 'backend.json'));
+  r = await xc(['XSOLANA_RPC_URL', '--from-file', 'rpc.txt']);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Not set yet/);
   assert.equal(names.has('XSOLANA_RPC_URL'), false);

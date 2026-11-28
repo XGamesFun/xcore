@@ -116,7 +116,7 @@ with a key file on the person's machine. Follow that skill; this one adds where 
   tell the person in one plain sentence that it is regulated in many places, that its legality where they and their
   players are is theirs to check, and that you are not giving legal advice. Say it again when they ask for mainnet,
   with the rest of what mainnet means (real money, what is sent can be lost, loot not independently audited).
-  xcore's docs/DISCLAIMER.md says it in full.
+  xcore's [docs/DISCLAIMER.md](../../docs/DISCLAIMER.md) says it in full.
 - An economy is on devnet, where nothing has real value, unless its `xsolana.json` says `"network": "mainnet"`, which
   goes in only when the person asks for mainnet in their own words.
 

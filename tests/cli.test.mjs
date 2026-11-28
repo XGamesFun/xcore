@@ -67,8 +67,18 @@ test('a usage mistake is answered one way by every command: its words on stderr,
     [['secret', 'lst'], /^Unknown subcommand "lst": use set, list or remove\. Did you mean "list"\?/],
     [
       ['add', 'bogus'],
-      /^"bogus" is not something xcore can add\. [\s\S]*\n\nUsage: xcore add [\s\S]*Run `xcore add --help` for the options\.\n$/,
-    ], // no such subcommand
+      /^"bogus" is not something xcore can add\. [\s\S]*\n\nUsage: xcore add [\s\S]*Run `[^`]*xcore(\.mjs)? add --help` for the options\.\n$/,
+    ], // no such subcommand (its help named as the person runs xcore here)
+    [['data', 'import'], /^Unknown subcommand "import": use export\. Did you mean "export"\?/], // one subcommand
+    [['dev', '.', '--port', '-5'], /^--port takes a value, and one that starts with "-" goes after an equals sign/],
+    // extra words are a usage mistake, never dropped
+    [['add', 'signin', '.', 'extra'], /^Too many arguments: extra\./],
+    [['dev', '.', 'extra'], /^Too many arguments: extra\./],
+    [['backend', 'use', 'custom', '.', 'extra', '--url', 'https://api.game.example'], /^Too many arguments: extra\./],
+    [['loot', 'add', '.', 'extra'], /^Too many arguments: extra\./],
+    [['secret', 'list', '.', 'extra'], /^Too many arguments: extra\./],
+    [['secret', 'set', 'NAME', '.', 'extra'], /^Too many arguments: extra\./],
+    [['card', '.', '--dir', 'other'], /^Give the game's folder once: \. or --dir other/],
     [['adopt', '.', '--frob'], /^Unknown option '--frob'/], // no such flag
     [['dev', '.', '--port', 'eighty'], /^--port takes a port number/], // a value that is none
   ]) {
@@ -87,10 +97,24 @@ test('a usage mistake is answered one way by every command: its words on stderr,
     );
   }
   // help that was asked for is no mistake: on stdout, exit code 0
-  for (const args of [['--help'], ['loot', '--help'], ['add', '--help']]) {
+  for (const args of [['--help'], ['loot', '--help'], ['add', '--help'], ['help', 'adopt']]) {
     const r = run(args, { cwd: away.dir });
     assert.deepEqual([r.status, r.stderr, /^Usage: xcore /.test(r.stdout)], [0, '', true], args.join(' '));
   }
+  assert.match(
+    run(['help', 'adopt'], { cwd: away.dir }).stdout,
+    /^Usage: xcore adopt /,
+    "help <command> is that command's",
+  );
+  // --dir names the folder too, in every command that takes one
+  for (const args of [
+    ['dev', '--dir', 'nowhere'],
+    ['card', '--dir', 'nowhere'],
+    ['loot', 'add', '--dir', 'nowhere'],
+    ['backend', 'use', 'custom', '--dir', 'nowhere', '--url', 'https://api.game.example'],
+  ])
+    assert.match(run(args, { cwd: away.dir }).stderr, /nowhere: no such folder/, args.join(' '));
+  assert.match(run(['add', 'signin', '--dir', 'nowhere'], { cwd: away.dir }).stderr, /nowhere/);
   // a refusal is not a usage mistake: exit code 1, and under --json always { ok: false, error, code }
   for (const [args, code] of [
     [['check', 'nowhere'], 'no-folder'],

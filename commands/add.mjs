@@ -1,14 +1,15 @@
 // `xcore add signin|database|multiplayer|rpc|vouchers [folder]`: xgames.fun's player sign-in, saves and leaderboards, a database of
 // the game's own, multiplayer rooms, the economy's own Solana RPC or its own voucher key, put into a web game, a Godot 4 project or a Unity project (../lib/add.mjs).
 import path from 'node:path';
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
-import { shown } from '../lib/games.mjs';
+import { folderArg, guard, parse, printJson, tooMany, UsageError } from '../lib/cli.mjs';
+import { shown, typedDir } from '../lib/games.mjs';
 import { addDatabase, addMultiplayer, addRpc, addSignin, addVouchers } from '../lib/add.mjs';
 import { CMD } from '../lib/command.mjs';
 
 const usage = `Usage: xcore add signin|database|multiplayer|rpc|vouchers [folder] [--verbose] [--json]
 
-Install or update services in a web, Godot 4 or Unity game. The folder defaults to the current directory.
+Install or update services in a web, Godot 4 or Unity game. The folder is the word after what to add, or
+--dir <folder> (default: the current directory).
 
   signin       X or Google sign-in, saves and leaderboards. Installs gamesfun.js for web games, a Godot autoload
                or a Unity WebGL plugin. Test with a local player in xcore dev.
@@ -79,7 +80,7 @@ export function addedLines(what, where, r, { verbose = false } = {}) {
   const steps = verbose ? r.steps : (r.next ?? r.steps);
   if (steps.length) lines.push('', 'Next:', ...steps.map((s, i) => `  ${i + 1}. ${s}`));
   if (!verbose && r.next && r.steps.length)
-    lines.push('', `Details (${r.steps.length} notes): ${CMD} add ${what} ${where === '.' ? '.' : where} --verbose`);
+    lines.push('', `Details (${r.steps.length} notes): ${CMD} add ${what} ${typedDir(where)} --verbose`);
   return lines;
 }
 
@@ -89,13 +90,14 @@ export default {
   usage,
   run: args =>
     guard(async () => {
-      const { values, positionals } = parse(args, { verbose: { type: 'boolean' } }, usage);
+      const { values, positionals } = parse(args, { verbose: { type: 'boolean' }, dir: { type: 'string' } }, usage);
       const what = positionals[0];
       const add = KINDS[what];
       if (!add) throw new UsageError(`${unknownKind(what)}\n\n${usage}`);
-      const dir = path.resolve(positionals[1] ?? '.');
+      if (positionals.length > 2) throw new UsageError(`${tooMany(positionals.slice(2))}\n\n${usage}`);
+      const dir = path.resolve(folderArg(values.dir, positionals[1], usage) ?? '.');
       const r = await add(dir);
-      if (values.json) return printJson({ ok: true, what, dir, ...r });
+      if (values.json) return printJson({ ok: true, what, dir: shown(dir), ...r });
       console.log(addedLines(what, shown(dir), r, { verbose: values.verbose === true }).join('\n'));
     }, args),
 };

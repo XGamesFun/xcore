@@ -8,7 +8,8 @@ import path from 'node:path';
 import { adopt, addLoot } from '../lib/publish/adopt.mjs';
 import { ECONOMY_FILE, economyFile, lootProgram, solanaRoot } from '../lib/economy.mjs';
 import { solanaRpc, rpcWords, SHARED_RPC } from '../lib/solana-rpc.mjs';
-import { fixture, run, tempDir } from './helpers.mjs';
+import { spawn } from 'node:child_process';
+import { BIN, fixture, run, tempDir } from './helpers.mjs';
 import { fromFolder, ownWords, rpcFor } from '../commands/loot.mjs';
 
 test('backend use custom: backend.json in the folder the build copies, its origins checked', async t => {
@@ -39,8 +40,11 @@ test('backend use custom: backend.json in the folder the build copies, its origi
     'https://api.orbit-example.net',
     'wss://api.orbit-example.net',
   ]);
-  // xgames.fun's own hosts: its publish route refuses them, so xcore does too (the game reaches its own host anyway)
-  const own = run(['backend', 'use', 'custom', dir, '--url', 'https://play.xgames.fun/loot/v1/health']);
+  // xgames.fun's own hosts: its publish route refuses them, so xcore does too (the game reaches its own host anyway).
+  // Which hosts are its own follows GAMESFUN_STUDIO, so the run names xgames.fun (nothing here reaches it)
+  const own = run(['backend', 'use', 'custom', dir, '--url', 'https://play.xgames.fun/loot/v1/health'], {
+    env: { GAMESFUN_STUDIO: 'https://xgames.fun' },
+  });
   assert.equal(own.status, 1);
   assert.match(own.stderr, /play\.xgames\.fun" is xgames\.fun itself/);
   for (const bad of ['http://localhost:3000', 'https://10.0.0.1'])
@@ -152,6 +156,59 @@ test("gamesfun loot runs @xgamesfun/solana's own tools on the economy file", asy
   assert.doesNotMatch(p.stdout, /npx -y|xsolana (approve|check|keygen)/);
 });
 
+test('xcore loot mcp lists the tools under the names they answer to, and a call to a listed name works', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const child = spawn(process.execPath, [BIN, 'loot', 'mcp'], {
+    cwd: tmp.dir,
+    env: { ...process.env, GAMESFUN_KIT: '' },
+  });
+  t.after(() => child.kill());
+  const answers = new Map();
+  let rest = '';
+  child.stdout.setEncoding('utf8');
+  const got = id =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`no answer ${id}: ${rest}`)), 60_000);
+      const look = () => {
+        if (!answers.has(id)) return;
+        clearTimeout(timer);
+        child.stdout.off('data', look);
+        resolve(answers.get(id));
+      };
+      child.stdout.on('data', look);
+      look();
+    });
+  child.stdout.on('data', chunk => {
+    const lines = (rest + chunk).split('\n');
+    rest = lines.pop();
+    for (const l of lines.filter(Boolean)) {
+      const m = JSON.parse(l);
+      answers.set(m.id, m);
+    }
+  });
+  const send = m => child.stdin.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n');
+  send({
+    id: 1,
+    method: 'initialize',
+    params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '0' } },
+  });
+  await got(1);
+  send({ method: 'notifications/initialized' });
+  send({ id: 2, method: 'tools/list' });
+  const names = (await got(2)).result.tools.map(x => x.name);
+  assert.ok(names.length > 5, names.join(', '));
+  assert.deepEqual(
+    names.filter(n => !/^xsolana_[a-z_]+$/.test(n)),
+    [],
+    'every listed name is a valid MCP tool name the server answers to',
+  );
+  assert.ok(names.includes('xsolana_check'));
+  send({ id: 3, method: 'tools/call', params: { name: 'xsolana_guide', arguments: {} } });
+  const call = await got(3);
+  assert.notEqual(call.result?.isError, true, JSON.stringify(call).slice(0, 400));
+});
+
 test('gamesfun loot approve opens nothing unless told how it is signed; a key file is made outside the game', async t => {
   const tmp = await tempDir();
   t.after(tmp.cleanup);
@@ -208,6 +265,12 @@ test('a key file named beside flags is given whole; approve never goes to the sh
     '~/.config/xsolana/k.json',
   ]);
   assert.deepEqual(fromFolder(['approve', '--keypair', '/abs/k.json'], cwd), ['approve', '--keypair', '/abs/k.json']);
+  assert.deepEqual(fromFolder(['handover', '--keypair', 'k.json', '--to=keys/new.json'], cwd), [
+    'handover',
+    '--keypair',
+    path.join(cwd, 'k.json'),
+    `--to=${path.join(cwd, 'keys/new.json')}`,
+  ]);
   // Going live makes mints and token accounts, which the shared relay does not pass: with no RPC of the person's
   // own, approve is left to the tools' default; every other command reads through the relay.
   const shared = solanaRpc({}, { file: null });
@@ -249,9 +312,19 @@ test("xsolana's words as xcore's", () => {
     '2. xcore loot approve public/xsolana.json --keypair ~/.config/xsolana/my-game.json',
   );
   assert.equal(say('(`xsolana keygen <file>` makes a key file)'), '(`xcore loot keygen <file>` makes a key file)');
+  const plain = ownWords();
   assert.equal(
-    say('`xsolana check` then xsolana_simulate; xsolana_save stays'),
+    plain('`xsolana check` then xsolana_simulate; xsolana_save stays'),
     '`xcore loot check` then xcore loot simulate; xsolana_save stays',
+  );
+  // a file named from elsewhere: the commands it suggests that read the file name it too, run from here
+  assert.equal(
+    say('Next: xsolana simulate and xsolana explain, or xsolana check [file]'),
+    'Next: xcore loot simulate public/xsolana.json and xcore loot explain public/xsolana.json, or xcore loot check [file]',
+  );
+  assert.equal(
+    say('then xsolana handover --keypair k.json'),
+    'then xcore loot handover public/xsolana.json --keypair k.json',
   );
   // the MCP server's command is what connect registers in an agent: said as it is, so a dry run shows the real thing
   assert.equal(
@@ -264,7 +337,7 @@ test("xsolana's words as xcore's", () => {
     say('cmd /c npx -y --package=@xgamesfun/solana@0.20.1 xsolana mcp'),
     'cmd /c npx -y --package=@xgamesfun/solana@0.20.1 xsolana mcp',
   );
-  assert.equal(say('npx -y --package=@xgamesfun/solana@0.20.1 xsolana check'), 'xcore loot check');
+  assert.equal(plain('npx -y --package=@xgamesfun/solana@0.20.1 xsolana check'), 'xcore loot check');
   assert.equal(say('xsolana: the tools for loot'), 'xsolana: the tools for loot');
   assert.equal(say('  xsolana guide [part]            what'), '  xcore loot guide [part]         what');
 });
@@ -400,4 +473,124 @@ test("xcore loot --help lists every command of the installed tools, and <command
   assert.equal(one.status, 0);
   assert.match(one.stdout, /^Usage: xcore loot handover \[file\] --keypair <owner keyfile> --to <new owner keyfile>/);
   assert.match(run(['loot', 'add', '--help']).stdout, /^Usage: xcore loot add/);
+});
+
+test('loot add refuses an economy file that does not read, before anything is copied', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  await writeFile(path.join(dir, 'xsolana.json'), '{"grants": [');
+  const r = run(['loot', 'add', dir]);
+  assert.equal(r.status, 1, r.stdout);
+  assert.match(r.stderr, /xsolana\.json is not valid JSON/);
+  assert.equal(existsSync(path.join(dir, 'gf')), false, 'no page client copied');
+  await writeFile(path.join(dir, 'xsolana.json'), '[]');
+  const list = run(['loot', 'add', dir, '--json']);
+  assert.equal(list.status, 1);
+  assert.equal(JSON.parse(list.stdout).code, 'not-json');
+  assert.match(JSON.parse(list.stdout).error, /holds no economy/);
+});
+
+test('backend use custom keeps the origins backend.json had, says so, and refuses a file that does not read', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  const file = path.join(dir, 'backend.json');
+  await writeFile(file, JSON.stringify({ origins: ['https://api.orbit-example.net'] }));
+  const r = run(['backend', 'use', 'custom', dir, '--url', 'https://api.example.com', '--json']);
+  assert.equal(r.status, 0, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.equal(out.ok, true);
+  assert.deepEqual(out.kept, ['https://api.orbit-example.net']);
+  assert.deepEqual(JSON.parse(await readFile(file, 'utf8')).origins, [
+    'https://api.example.com',
+    'wss://api.example.com',
+    'https://api.orbit-example.net',
+  ]);
+  const words = run(['backend', 'use', 'custom', dir, '--url', 'https://api.example.com']);
+  assert.match(words.stdout, /https:\/\/api\.orbit-example\.net was in it already and is kept/);
+  for (const broken of ['{"origins": ["https://api.orbit-example.net"', '[]', 'null']) {
+    await writeFile(file, broken);
+    const b = run(['backend', 'use', 'custom', dir, '--url', 'https://api.example.com']);
+    assert.equal(b.status, 1, broken);
+    assert.match(b.stderr, /backend\.json (is not valid JSON|is not a JSON object)/, broken);
+    assert.equal(await readFile(file, 'utf8'), broken, 'left as it was');
+  }
+});
+
+test('backend use custom with a new --url replaces the backend it named, and an over-full file names its own origins', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  const file = path.join(dir, 'backend.json');
+  const origins = async () => JSON.parse(await readFile(file, 'utf8')).origins;
+  assert.equal(
+    run(['backend', 'use', 'custom', dir, '--url', 'https://a.example.com', '--origin', 'https://cdn.example.org'])
+      .status,
+    0,
+  );
+  for (const host of ['b', 'c', 'd', 'e', 'f']) {
+    const r = run(['backend', 'use', 'custom', dir, '--url', `https://${host}.example.com/api`]);
+    assert.equal(r.status, 0, r.stderr);
+  }
+  assert.deepEqual(await origins(), ['https://f.example.com', 'wss://f.example.com', 'https://cdn.example.org']);
+  // the same url again keeps it as it is
+  run(['backend', 'use', 'custom', dir, '--url', 'https://f.example.com']);
+  assert.deepEqual(await origins(), ['https://f.example.com', 'wss://f.example.com', 'https://cdn.example.org']);
+  // over the cap with the file's own origins: they are named, and the file is left as it was
+  const many = Array.from({ length: 7 }, (_, i) => `https://h${i}.example.net`);
+  await writeFile(file, JSON.stringify({ url: 'https://f.example.com', origins: many }));
+  const over = run(['backend', 'use', 'custom', dir, '--url', 'https://g.example.com']);
+  assert.equal(over.status, 1);
+  assert.match(over.stderr, /at most 8/);
+  assert.match(
+    over.stderr,
+    /has https:\/\/h0\.example\.net, .*https:\/\/h6\.example\.net already, and they are kept: take the ones/,
+  );
+  assert.deepEqual(await origins(), many);
+});
+
+test('loot with a command the tools do not have, and --json: a usage refusal as JSON on stdout', () => {
+  const r = run(['loot', 'bogus', '--json']);
+  assert.equal(r.status, 2, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.deepEqual([out.ok, out.code], [false, 'usage']);
+  assert.match(out.error, /Unknown subcommand "bogus"/);
+  // without --json, the tools' own words
+  assert.notEqual(run(['loot', 'bogus']).status, 0);
+  // --json before the command is for that command
+  const first = run(['loot', '--json', 'bogus']);
+  assert.equal(first.status, 2, first.stderr);
+  assert.match(JSON.parse(first.stdout).error, /Unknown subcommand "bogus"/);
+  const guide = run(['loot', '--json', 'guide']);
+  assert.equal(guide.status, 0, guide.stderr);
+  assert.equal(typeof JSON.parse(guide.stdout).text, 'string');
+});
+
+test("loot handover reads a loot.json game's file, version names the program of the folder's cluster, a refusal says xcore", async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const legacy = path.join(tmp.dir, 'legacy');
+  await mkdir(legacy);
+  const examples = path.join(solanaRoot(), 'examples');
+  const spec = await readFile(
+    path.join(
+      examples,
+      readdirSync(examples).find(f => f.endsWith('.json')),
+    ),
+    'utf8',
+  );
+  await writeFile(path.join(legacy, 'loot.json'), spec);
+  const h = run(['loot', 'handover', '--keypair', 'none.json', '--to', 'other.json'], { cwd: legacy });
+  assert.equal(h.status, 1);
+  assert.doesNotMatch(h.stderr, /xsolana\.json does not exist/, 'loot.json is the file it reads');
+  assert.doesNotMatch(h.stderr, /^xsolana: /m, "a refusal is xcore's");
+  const main = path.join(tmp.dir, 'mainshop');
+  await mkdir(main);
+  await writeFile(path.join(main, 'xsolana.json'), JSON.stringify({ ...JSON.parse(spec), network: 'mainnet' }));
+  const v = run(['loot', 'version'], { cwd: main, env: { XSOLANA_CLUSTER: '' } });
+  assert.equal(v.status, 0, v.stderr);
+  assert.match(v.stdout, /mainnet/);
+  assert.doesNotMatch(v.stdout, /devnet/);
+  assert.match(run(['loot', 'version'], { cwd: legacy, env: { XSOLANA_CLUSTER: '' } }).stdout, /devnet/);
 });

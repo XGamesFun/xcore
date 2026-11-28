@@ -1,8 +1,9 @@
 # Sign-in, saves, a database and rooms
 
 Open this when the game has (or needs) a login, progress kept between visits, a high-score table, data shared by all
-players, or multiplayer. `xcore add <signin|database|multiplayer> <folder>` writes the files; the calls are listed at the
-top of the file it writes.
+players, or multiplayer. `xcore add <signin|database|multiplayer> <folder>` writes the files. Every call is in
+[docs/CLIENT.md](../../../docs/CLIENT.md); a Godot or Unity game also has them listed at the top of the GamesFun file it
+writes (a web game's `gamesfun.js` is minified: read the calls in CLIENT.md, not there).
 
 ## Sign-in, saves, leaderboards
 
@@ -27,6 +28,29 @@ sign-in), so the game asks for no password and keeps no accounts of its own: xga
   A game that can't start again at that moment (a run in progress with nothing saved) signs in before play starts, or
   passes `stay: true` (`GamesFun.signIn({stay: true})`, `sign_in("x", true)`, `SignIn("x", true)`), which opens a
   window instead.
+- **Guests save too, and their saves stay in the browser at sign-in.** A guest (nobody signed in) saves in that
+  browser. Once they sign in, `saves.get` reads the account, so a game that replaced its local save file sees the
+  guest's progress vanish, the moment the player signed in to keep it, unless it carries it over. Carry a guest save
+  into the account when the account has none of that key, or ask the person how their game should choose (keep the
+  better one, ask the player):
+
+  ```js
+  GamesFun.onChange(async player => {
+    if (!player) return;
+    const { data: kept } = await GamesFun.saves.guest.list();
+    for (const { key } of kept ?? []) {
+      const { data: mine, error } = await GamesFun.saves.get(key);
+      if (!error && mine == null) await GamesFun.saves.guest.move(key); // the account has none: the guest's goes over
+    }
+  });
+  ```
+
+  Godot: `saves_guest_list`, `saves_guest_move`; Unity: `SavesGuestList`, `SavesGuestMove`.
+
+- **A leaderboard the page writes takes any score a player sends** from their browser console. Say so to the person
+  when the board matters (a prize, a ranked board): the game's server makes that board with
+  `env.GF.scores.setup(board, { writer: 'server' })` and submits each score after checking the run
+  ([docs/CLIENT.md](../../../docs/CLIENT.md), "Leaderboards").
 - `GamesFun.signOut()` tells xgames.fun to forget the game in that browser. A game that draws its own button as a link
   takes the address from `GamesFun.signInLink('x')`.
 - A game whose `gamesfun.js` is older than 1.9.0 gets none of this until `xcore add signin` brings the file up to date

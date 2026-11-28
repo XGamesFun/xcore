@@ -1,8 +1,8 @@
 // `xcore secret set|list|delete`: a game server's own secrets on xgames.fun (../lib/publish/secrets.mjs).
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { guard, parse, printJson, UsageError, notOneOf, folderArg, verbNamed } from '../lib/cli.mjs';
-import { resolveGame, shown } from '../lib/games.mjs';
+import { guard, parse, printJson, UsageError, notOneOf, folderArg, tooMany, verbNamed } from '../lib/cli.mjs';
+import { resolveGame, shown, typedDir } from '../lib/games.mjs';
 import { deleteSecret, listSecrets, setSecret } from '../lib/publish/secrets.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -42,6 +42,10 @@ Commands:
                        a prompt             typed at the terminal (not shown)
   list               list the names (values are never shown)
   remove <NAME>      remove a secret
+
+An RPC URL (XSOLANA_RPC_URL, LOOT_RPC_URL) whose origin backend.json does not list yet is not set: the origin is added
+to backend.json, and the URL waits for the publish that sends it; run set again after it. With --json that answer is
+{ok: true, set: false, state: "origin-added", added, file, next}: check set, not ok alone.
 
 Confirming changes:
   A new name is set immediately. Replacing a name the server already has, or deleting one, cannot be undone:
@@ -146,6 +150,8 @@ export default {
       const needsName = verb === 'set' || verb === 'remove';
       if (needsName && !rest[0]) throw new UsageError(`${word} needs a NAME\n\n${usage}`);
       const name = needsName ? rest[0] : null;
+      const extra = rest.slice(needsName ? 2 : 1);
+      if (extra.length) throw new UsageError(`${tooMany(extra)}\n\n${usage}`);
       const dir = await resolveGame(folderArg(values.dir, needsName ? rest[1] : rest[0], usage));
       const out = values.json ? printJson : null;
       if (verb === 'list') {
@@ -235,10 +241,12 @@ export default {
         const { file, added } = await allowOrigin(dir, origin);
         if (added) {
           const where = path.relative(process.cwd(), file) || file;
-          if (out) out({ ok: false, game, name, set: false, added: origin, file: where, next: `${CMD} publish` });
+          // (done as asked so far: the origin is added; the URL waits for the publish that sends it)
+          const next = `${CMD} publish${shown(dir) === '.' ? '' : ` ${typedDir(dir)}`}`;
+          if (out) out({ ok: true, game, name, set: false, state: 'origin-added', added: origin, file: where, next });
           else
             console.log(
-              `Not set yet: the game's server may call only the origins in ${where}, and ${origin} was not one. It is now: publish (${CMD} publish), then run this again, and the server takes the URL with leave to call it.`,
+              `Not set yet: the game's server may call only the origins in ${where}, and ${origin} was not one. It is now: publish (${next}), then run this again, and the server takes the URL with leave to call it.`,
             );
           return 0;
         }
