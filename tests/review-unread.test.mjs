@@ -155,6 +155,19 @@ test('a review that cannot finish exits 3 (INCONCLUSIVE) with the verdict in its
   const plain = run(['review', dir, '--out', path.join(blocked, 'review')], { env: { GAMESFUN_SOLANA: '' } });
   assert.equal(plain.status, 3);
   assert.match(plain.stderr, /^review: INCONCLUSIVE: the review could not finish \(/);
+  assert.match(plain.stderr, /review --verbose says where it stopped/);
+  assert.equal(j.stack, undefined);
+  // --verbose: where it stopped, in words and in the JSON
+  const verbose = run(['review', dir, '--out', path.join(blocked, 'review'), '--verbose'], {
+    env: { GAMESFUN_SOLANA: '' },
+  });
+  assert.equal(verbose.status, 3);
+  assert.match(verbose.stderr, /^Where it stopped:\n\w*Error: .*\n\s+at /m);
+  const vj = JSON.parse(
+    run(['review', dir, '--out', path.join(blocked, 'review'), '--verbose', '--json'], { env: { GAMESFUN_SOLANA: '' } })
+      .stdout,
+  );
+  assert.match(vj.stack, /\n\s+at /);
 });
 
 test('server code that sends a transaction itself is a payout not read: INCONCLUSIVE, and METHOD says only vouchers are read', async t => {

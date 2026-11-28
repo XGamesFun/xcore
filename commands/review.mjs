@@ -115,6 +115,8 @@ export default {
       } catch (e) {
         // a review that could not finish read nothing through: INCONCLUSIVE (3), never FAIL's code or a pass
         const why = String(e?.message ?? e).split('\n')[0];
+        // where it stopped, for telling a game it could not read from a fault in the review itself
+        const stack = values.verbose && e?.stack ? String(e.stack) : null;
         if (values.json)
           printJson({
             ok: false,
@@ -122,11 +124,18 @@ export default {
             error: `the review could not finish: ${why}`,
             code: 'review-unfinished',
             unread: [{ what: shown(dir), why: `the review stopped: ${why}` }],
+            ...(stack ? { stack } : {}),
           });
-        else
+        else {
           console.error(
             `review: INCONCLUSIVE: the review could not finish (${why}). Nothing was read through: fix that, then run ${CMD} review again.`,
           );
+          console.error(
+            stack
+              ? `Where it stopped:\n${stack}`
+              : `(${CMD} review --verbose says where it stopped, for a report when the fault is xcore's.)`,
+          );
+        }
         return EXIT.INCONCLUSIVE;
       }
       if (values.json) printJson(r);
