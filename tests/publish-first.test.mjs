@@ -158,7 +158,7 @@ test('a first publish asks first: account, game and slot; the code goes on; a li
 
   const planned = JSON.parse((await runAsync(['publish', dir, '--no-card', '--json'], cli)).stdout);
   assert.deepEqual([planned.ok, planned.planned, planned.plan.account], [true, true, 'alice@example.com']);
-  assert.match(planned.next, / --yes [0-9a-f]{8}$/);
+  assert.match(planned.confirm, / --yes [0-9a-f]{8}$/);
 
   // another code is refused; the printed one publishes
   const wrong = await runAsync(['publish', dir, '--no-card', '--yes', '00000000'], cli);

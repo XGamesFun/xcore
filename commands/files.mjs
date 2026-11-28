@@ -1,7 +1,6 @@
 // `xcore files ls|put|get|rm|usage`: the game's project files (env.GF.files), on this machine (the ones `xcore dev`
 // serves) or, with --live, on xgames.fun (../lib/files.mjs).
-import { existsSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { guard, parse, printJson, UsageError, notOneOf, verbNamed } from '../lib/cli.mjs';
 import { named, resolveGame } from '../lib/games.mjs';
@@ -18,6 +17,9 @@ import {
 import { consented } from '../lib/consent.mjs';
 import { CMD, typedPath } from '../lib/command.mjs';
 import { sha256 } from '../lib/util.mjs';
+import { STUDIO_BODY_BYTES } from '../lib/server/contract.mjs';
+import { privateTarget, writePrivate } from '../lib/publish/private-file.mjs';
+import { stateFolder } from '../lib/state-folder.mjs';
 
 const usage = `Usage: xcore files list [prefix/] [--dir <game>] [--live] [--json]
        xcore files put <file> [path] [--public] [--type <mime>] [--dir <game>] [--live [--yes <code>]] [--json]
@@ -37,11 +39,16 @@ audit log.
 
 Commands:
   list [prefix/]     list the files, or those in one folder ("replays/")
-  put <file> [path]  upload a file from this machine to [path] (default: its file name). Up to 25 MB per file.
+  put <file> [path]  upload a file from this machine to [path] (default: its file name). Up to 25 MB per file on
+                     this machine; with --live up to ${mb(STUDIO_BODY_BYTES)} (it goes through xgames.fun's Studio, whose
+                     host takes no bigger a request). A bigger file, up to 25 MB, can only be written by the game's
+                     own server (env.GF.files.put).
                      --public serves it at https://<slug>.xgamesusercontent.com/<path>, a separate site (locally: the
                      files origin ${CMD} dev prints); without --public, only the game's server can read it.
                      --type <mime> sets its content type
-  get <path>         download a file to --out <file> (default: its name, in the current folder; --force overwrites)
+  get <path>         download a file to --out <file> (default: .gamesfun/downloads/<path> in the game's folder, never
+                     published; --force overwrites). A file among the game's published files is refused: the next
+                     publish would make it public. The file is readable by you only
   remove <path>      delete a file
   usage              show the bytes stored, against the game's cap (Free: 100 MB)
 
@@ -54,8 +61,9 @@ Confirming live changes:
   A new path is uploaded immediately. Overwriting a file xgames.fun already has (put --live) or deleting one
   (remove --live) cannot be undone: xgames.fun keeps one copy of each file and no earlier versions. So these first print
   what would be replaced or deleted, with a code, and change nothing. Run the command again with --yes <code> to
-  apply it. A code printed for a different change is refused. With --json, the printout is
-  {planned: true, code, plan, next}. Local files change immediately.`;
+  apply it. A code works once, within 15 minutes, and only for the change it was printed with. With --json, the
+  printout is {planned: true, code, plan, confirm}: confirm is the command to run once the person has said yes.
+  Local files change immediately.`;
 
 /** A file xgames.fun has, in the words of a printout: "1.2 MB, public, image/png". */
 const facts = f =>
@@ -146,15 +154,24 @@ export default {
         return 0;
       }
       if (verb === 'get') {
+        // a download is the game's own file, often one only its server reads: kept where publish never takes it
+        const out = values.out ? path.resolve(values.out) : path.join(dir, '.gamesfun', 'downloads', ...a.split('/'));
+        const target = { dir, force: !!values.force, what: 'this project file' };
+        if (!(json && !values.out))
+          try {
+            privateTarget(out, target);
+          } catch (e) {
+            if (e.code === 'exists')
+              throw new UsageError(`${out} is there already: --force writes over it, or --out <file>\n\n${usage}`);
+            throw e;
+          }
         const r = await filesGet(dir, a, { live });
-        const out = path.resolve(values.out ?? path.basename(a));
         if (json && !values.out) {
           const { body, ...facts } = r;
           return json({ ...facts, base64: body.toString('base64') });
         }
-        if (existsSync(out) && !values.force)
-          throw new UsageError(`${out} is there already: --force writes over it, or --out <file>\n\n${usage}`);
-        await writeFile(out, r.body);
+        if (!values.out) await stateFolder(dir);
+        await writePrivate(out, r.body, { ...target, force: true });
         const { body: _body, ...facts } = r;
         if (json) return json({ ...facts, file: out });
         console.log(

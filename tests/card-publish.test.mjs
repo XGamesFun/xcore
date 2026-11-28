@@ -345,11 +345,31 @@ test(
       stopped.stderr,
       /no preview picture[\s\S]*Or run .* check .* first: publish then makes one from its screenshot/,
     );
-    // an earlier check's screenshot: the card is made from it, held to the card's rules, and the publish goes on
+    // an earlier check's screenshot from a run that did not finish, or did not pass: no card is made from it, and
+    // publish says why before it stops
     await mkdir(path.join(dir, 'evidence', 'verify-2'), { recursive: true });
     await writeFile(path.join(dir, 'evidence', 'verify-2', 'desktop.png'), png(1280, 800, { color: [30, 160, 90] }));
     const card = path.join(dir, 'assets', 'card.jpg');
-    assert.equal(existsSync(card), false);
+    const record = pass =>
+      writeFile(
+        path.join(dir, 'evidence', 'verify-2', 'record.json'),
+        JSON.stringify({ pass, started: new Date().toISOString(), seconds: 1 }),
+      );
+    for (const [step, why] of [
+      [null, /that check did not finish \(it has no record\.json\)/],
+      [false, /that check did not pass, so its screenshot may show a broken page/],
+    ]) {
+      if (step !== null) await record(step);
+      const refused = await runAsync(['publish', dir, ...(await yes())], cli);
+      assert.equal(refused.status, 1);
+      assert.match(
+        refused.stderr,
+        new RegExp(`No preview picture was made from evidence/verify-2/desktop\\.png: ${why.source}`),
+      );
+      assert.equal(existsSync(card), false);
+    }
+    // a run that passed on the game as it is: the card is made from it, held to the card's rules, and the publish goes on
+    await record(true);
     const r = await runAsync(['publish', dir, ...(await yes())], cli);
     assert.equal(r.status, 0, r.stderr);
     assert.match(
