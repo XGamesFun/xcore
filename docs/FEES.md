@@ -33,11 +33,11 @@ A plan is bought for the account, not for a game. The full plan table and its ru
 
 Each game keeps its own plan's limits (its own server, saves, scores and files):
 
-| Plan    | Whose games                  | Main limits, per game                                                          |
-| ------- | ---------------------------- | ------------------------------------------------------------------------------ |
-| Free    | a Free account's             | 50 ms of CPU a request; 600 requests a minute; 10 MB of saves; 100 MB of files |
-| Creator | a Creator account's          | 200 ms a request; 6,000 requests a minute; 1 GB of saves; 10 GB of files       |
-| Scale   | a game granted by xgames.fun | 1,000 ms a request; 30,000 requests a minute; 10 GB of saves; 100 GB of files  |
+| Plan    | Whose games                  | Main limits, per game                                                                             |
+| ------- | ---------------------------- | ------------------------------------------------------------------------------------------------- |
+| Free    | a Free account's             | 50 ms of CPU a request; 600 requests a minute; 10 MB of saves; a 100 MB database; 100 MB of files |
+| Creator | a Creator account's          | 200 ms a request; 6,000 requests a minute; 1 GB of saves; a 2 GB database; 10 GB of files         |
+| Scale   | a game granted by xgames.fun | 1,000 ms a request; 30,000 requests a minute; 10 GB of saves; a 10 GB database; 100 GB of files   |
 
 ### What a game gets on each plan
 
@@ -50,7 +50,7 @@ your own to each.
 | Player sign-in (X or Google, with a linked wallet) | included                                                           | included                                                                                      |
 | Saves                                              | 10 MB per game                                                     | 1 GB per game                                                                                 |
 | Leaderboards                                       | 8 boards of 10,000 entries                                         | 16 boards of 1,000,000 entries                                                                |
-| A D1 (SQLite) database                             | one per game                                                       | one per game                                                                                  |
+| A D1 (SQLite) database                             | one per game, up to 100 MB                                         | one per game, up to 2 GB                                                                      |
 | Multiplayer rooms                                  | included (each player's connection counts as one server request)   | included                                                                                      |
 | The game's server (a Cloudflare Worker)            | 50 ms of CPU a request; 600 requests a minute, 120 from one player | 200 ms; 6,000 a minute, 600 from one player                                                   |
 | Project files                                      | 100 MB                                                             | 10 GB                                                                                         |
@@ -67,8 +67,9 @@ your own to each.
   - **In SOL or USDC**: prepay 1–12 periods. It does not renew by itself: renew before it ends. Use past what is
     included is paid from usage credit, which you buy there too.
 - **After expiry.** A prepaid period that ends, a card payment that fails, or a cancelled card plan that ends gives you
-  7 days to renew or pay. Then every game keeps running at Free limits. To publish another, renew Creator or bring
-  your account below 2 games.
+  7 days to renew or pay. Then every game moves to Free limits and keeps running, except that a game whose database
+  is over Free's 100 MB is capped (its server stopped) until the database is smaller. To publish another, renew
+  Creator or bring your account below 2 games.
 - **Metered use.** Server work, rooms and stored data count toward the hosting cap. Page files and shared Solana
   relay calls also use the allowance, but cannot trigger the cap. For example, 100,000 relay calls use $1 of the
   allowance or $2 of Creator credit. With your own RPC, each call costs one server request plus your provider’s charge.
@@ -76,6 +77,9 @@ your own to each.
 - **At the cap.** Pages stay up, the server returns HTTP 451, and saves and scores slow down until the month ends.
   Free games have individual caps. Creator games share one cap. To cover overage, buy usage credit under Plans, or,
   paying by card, raise the spending cap there.
+- **A database past its plan's size** (100 MB on Free, 2 GB on Creator, 10 GB on Scale) caps its game the same way,
+  until the database is smaller or the plan allows more. xgames.fun measures the size each day. Credit and the
+  spending cap do not lift this cap: delete rows, or move the game to a plan that allows more.
 - **Daily account limits.** 30 publishes and 1 GB of new files.
 
 `xcore plan` shows your account and a game's plan and this month's use; `xcore plan --all` shows every game, and

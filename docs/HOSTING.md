@@ -206,14 +206,15 @@ A plan is bought for your **account**, and every game you own takes its plan fro
 
 The plan sets what the game's server, saves and scores may use:
 
-|                      | Free                                                               | Creator                                     | Scale                   |
-| -------------------- | ------------------------------------------------------------------ | ------------------------------------------- | ----------------------- |
-| For                  | the games of a Free account (up to 2)                              | the games of a Creator account (up to 10)   | granted by xgames.fun   |
-| Server               | 50 ms of CPU a request; 600 requests a minute, 120 from one player | 200 ms; 6,000 a minute, 600 from one player | 1,000 ms; 30,000, 1,200 |
-| Saves and scores     | 10 MB of saves; 8 boards of 10,000 entries                         | 1 GB; 16 boards of 1,000,000                | 10 GB; 16 of 1,000,000  |
-| Use included a month | $1 a game                                                          | $10 for the account, shared by its games    | as granted              |
-| Sites that embed it  | 3 (`xcore embed`)                                                  | 10                                          | 25                      |
-| Domains of your own  | none                                                               | 1 (`xcore domain`)                          | 5                       |
+|                                 | Free                                                               | Creator                                     | Scale                   |
+| ------------------------------- | ------------------------------------------------------------------ | ------------------------------------------- | ----------------------- |
+| For                             | the games of a Free account (up to 2)                              | the games of a Creator account (up to 10)   | granted by xgames.fun   |
+| Server                          | 50 ms of CPU a request; 600 requests a minute, 120 from one player | 200 ms; 6,000 a minute, 600 from one player | 1,000 ms; 30,000, 1,200 |
+| Saves and scores                | 10 MB of saves; 8 boards of 10,000 entries                         | 1 GB; 16 boards of 1,000,000                | 10 GB; 16 of 1,000,000  |
+| Database (`xcore add database`) | 100 MB                                                             | 2 GB                                        | 10 GB                   |
+| Use included a month            | $1 a game                                                          | $10 for the account, shared by its games    | as granted              |
+| Sites that embed it             | 3 (`xcore embed`)                                                  | 10                                          | 25                      |
+| Domains of your own             | none                                                               | 1 (`xcore domain`)                          | 5                       |
 
 All costs, including the Creator account, usage credit and its unit prices, are listed in [FEES.md](FEES.md).
 
@@ -225,6 +226,10 @@ slow down (60 save writes, 30 score submits and 60 reads a minute). Its pages ke
 server comes back on by itself when the cap lifts ([SERVER.md](SERVER.md#publishing-it), "Publishing it"). The server of
 an unpublished or taken-down game is switched off the same way. A Creator account's games share their included use,
 so they are capped together, and come back on together.
+
+A game whose database is past its plan's size (the table above; xgames.fun measures it each day) is capped the same
+way, on its own, until the database is smaller or its plan allows more. Usage credit does not lift it.
+`xcore db info --live` shows its size; delete rows with `xcore db query "<sql>" --write --live` to bring it back.
 
 A game's server gets a 429 with `scope` (`"player"` or `"game"`) and `plan` when it goes past a rate limit.
 
@@ -240,7 +245,10 @@ Buy it on your console's Plans tab (xgames.fun/console), one way at a time:
 
 Then:
 
-- When a prepaid period ends, a card payment fails or a cancelled card plan ends, you have 7 days to renew or pay. Then all games keep running at Free limits. To publish another, renew or bring the account below 2 games.
+- When a prepaid period ends, a card payment fails or a cancelled card plan ends, you have 7 days to renew or pay.
+  Then all games move to Free limits and keep running, except that a game whose database is over Free's 100 MB is
+  capped (its server stopped) until the database is smaller. To publish another, renew or bring the account below 2
+  games.
 - Creator games share $10 of monthly use and one cap. Usage credit, or the spending cap when paying by card, covers overage. Page files and shared relay calls count toward the bill but cannot trigger the cap.
 - Run `xcore plan --verbose` for current rates. [Unit prices](FEES.md#unit-prices)
 

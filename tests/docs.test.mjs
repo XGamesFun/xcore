@@ -12,6 +12,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { backendOrigin } from '../lib/publish/scan.mjs';
+import { PLAN_LIMITS } from '../lib/server/contract.mjs';
 import { ROOT } from './helpers.mjs';
 
 const SKILL_DIR = path.join(ROOT, 'skills', 'bring-your-own-game');
@@ -322,4 +323,39 @@ test('the hosting guide says where a post on X lands, and that Sign in there rel
     ),
     [],
   );
+});
+
+/**
+ * The database's size on each plan: the contract's, once it states one, else xgames.fun's plan table (creator-studio
+ * lib/plans.mjs, database.bytes), which caps a game past it.
+ */
+const DATABASE_BYTES = { free: 100 * 2 ** 20, creator: 2 * 2 ** 30, scale: 10 * 2 ** 30 };
+const sizeWords = bytes => (bytes >= 2 ** 30 ? `${bytes / 2 ** 30} GB` : `${bytes / 2 ** 20} MB`);
+
+test("each plan's database size is stated, and that a database past it stops the game's server", () => {
+  const sizes = Object.keys(PLAN_LIMITS).map(plan =>
+    sizeWords(PLAN_LIMITS[plan].database?.bytes ?? DATABASE_BYTES[plan]),
+  );
+  const row = (file, starts, name) =>
+    partOf(file, starts)
+      .split('\n')
+      .find(line => line.startsWith(`| ${name}`) && /database/i.test(line)) ?? '';
+  const problems = [];
+  const hosting = row('docs/HOSTING.md', '## Plans: `xcore plan`', 'Database');
+  if (!sizes.every(size => hosting.includes(size)))
+    problems.push(`HOSTING.md's plan table: ${hosting || 'no Database row'}`);
+  for (const [plan, size] of Object.keys(PLAN_LIMITS).map((p, i) => [p, sizes[i]])) {
+    const line = row('docs/FEES.md', '## Hosting', plan[0].toUpperCase() + plan.slice(1) + ' ');
+    if (!line.includes(`${size} database`)) problems.push(`FEES.md's ${plan} row: ${line}`);
+  }
+  problems.push(
+    ...said('docs/HOSTING.md', '### When a game is capped', /database\s+is\s+past\s+its\s+plan's\s+size/),
+    ...said('docs/SERVER.md', "## The game's database", /server\s+stopped/),
+  );
+  // a lapsed account's games keep running, except one whose database is over Free's size
+  for (const file of REFERENCE)
+    for (const part of read(file).split('\n\n'))
+      if (/keeps? running at Free limits|moves? to Free limits/.test(part) && !/database/.test(part))
+        problems.push(`${rel(file)}: ${part.trim().slice(0, 100)}`);
+  assert.deepEqual(problems, []);
 });

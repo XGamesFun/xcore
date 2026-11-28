@@ -663,7 +663,9 @@ const { voucher } = await voucherFor(env, { grant: 'clear', wallet, round: match
 `xcore add database` gives the game **one D1 database** (SQLite, run by Cloudflare). xgames.fun creates it on the
 first publish that includes it, and keeps it between publishes. The server reads it as `env.DB`. It holds all of the
 game's own data: its records (guilds, match history, shop stock), a player's state with rules (runs left today, gold),
-and, for a game with no server, the documents its page saves.
+and, for a game with no server, the documents its page saves. Its size is held to the game's plan: 100 MB on Free,
+2 GB on Creator, 10 GB on Scale. Past it, the game is capped and its server stopped until the database is smaller
+([HOSTING.md](HOSTING.md#when-a-game-is-capped)).
 
 ```json
 {
