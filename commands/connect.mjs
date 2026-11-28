@@ -4,10 +4,10 @@
 // project folder it runs in only (`--scope project`: the agents' skills folders in it, .claude/skills and
 // .agents/skills); `--scope user` for every project of this user. The folders are the solana kit's (its AGENTS table),
 // and the tools are registered through each agent's own commands. AGENTS.md and CLAUDE.md are never written.
-import { cp, mkdir, readFile, rm, stat } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, parse, printJson, tooMany, UsageError } from '../lib/cli.mjs';
 import { NO_SOLANA, solanaRoot } from '../lib/economy.mjs';
 import { CMD } from '../lib/command.mjs';
 import { ownWords } from './loot.mjs';
@@ -20,7 +20,26 @@ export const SCOPES = ['project', 'user'];
 const SKILL = 'bring-your-own-game';
 const SKILL_SOURCE = path.join(ROOT, 'skills', SKILL);
 
-const usage = `Usage: xcore connect [--scope project|user] [--dry-run] [--json]
+/** The solana kit's skill, which this one sends the agent to for an economy. */
+const ECONOMY_SKILL = 'xsolana-economy';
+/** Where this release's docs are read once the skill is copied out of the package (it has no docs/ beside it). */
+export const DOCS_URL = `https://github.com/XGamesFun/xcore/blob/v${VERSION}/docs/`;
+/** The skill's links into xcore's docs (../../docs/X.md), as links to this release's docs on GitHub. */
+export const pinnedLinks = text => text.replace(/\]\((?:\.\.\/)+docs\//g, `](${DOCS_URL}`);
+
+/** The skill copied to `dir`, its links to xcore's docs pinned to this release. */
+async function copySkill(dir) {
+  await cp(SKILL_SOURCE, dir, { recursive: true });
+  for (const entry of await readdir(dir, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+    const file = path.join(entry.parentPath ?? entry.path, entry.name);
+    const text = await readFile(file, 'utf8');
+    const next = pinnedLinks(text);
+    if (next !== text) await writeFile(file, next);
+  }
+}
+
+const usage = `Usage: xcore connect [--scope project|user] [--remove] [--dry-run] [--json]
 
 Set up the coding agents on this machine (Claude Code, Codex) to bring games to xgames.fun.
 
@@ -28,11 +47,16 @@ It copies xcore's bring-your-own-game skill into each agent's skills folder, and
 does (adds the xsolana tools and the xsolana-economy skill). By default this is for the current project folder only:
 the skills go in its .claude/skills and .agents/skills. It then prints a few lines you can paste into the project's
 AGENTS.md or CLAUDE.md; it never writes those files. A skills folder with the same name that is not xcore's is left
-unchanged.
+unchanged. Codex adds MCP servers only for every project of the user: at --scope project it gets both skills, and its
+tools wait for --scope user.
+
+After upgrading xcore, run it again: the skills are replaced with the new release's, and the lines it prints name the
+new version (update them where you pasted them). --remove takes out what it added, at that scope.
 
 Options:
   --scope project   the current folder only (the default)
   --scope user      every project of this user (~/.claude/skills, ~/.agents/skills, and the user's MCP settings)
+  --remove          remove xcore's skill and what ${CMD} loot connect added (the xsolana tools and skill)
   --dry-run         show what it would copy and the commands it would run, without changing anything
   --json            print the result as JSON`;
 
@@ -86,6 +110,7 @@ function dryRunner(present) {
 
 export async function connectAgents({
   dryRun = false,
+  remove = false,
   scope = 'project',
   run,
   cwd = process.cwd(),
@@ -106,8 +131,15 @@ export async function connectAgents({
     }
     const dir = path.join(a.skills(scope, cwd), SKILL);
     const there = await skillFolder(dir);
-    const action =
-      there === 'other'
+    const action = remove
+      ? there === 'ours'
+        ? dryRun
+          ? 'would-remove'
+          : 'removed'
+        : there === 'other'
+          ? 'left'
+          : 'none'
+      : there === 'other'
         ? 'left'
         : dryRun
           ? there === 'ours'
@@ -116,18 +148,59 @@ export async function connectAgents({
           : there === 'ours'
             ? 'replaced'
             : 'copied';
-    if (!dryRun && action !== 'left') {
+    if (!dryRun && remove && action === 'removed') await rm(dir, { recursive: true, force: true });
+    if (!dryRun && !remove && action !== 'left') {
       await mkdir(path.dirname(dir), { recursive: true });
       if (there === 'ours') await rm(dir, { recursive: true, force: true });
-      await cp(SKILL_SOURCE, dir, { recursive: true });
+      await copySkill(dir);
     }
     agents.push({ agent: id, name: a.name, found: true, skill: { dir, action } });
   }
   const lines = [];
   const say = ownWords();
-  const code = await kit.connect({ dryRun, scope, run, cwd, log: (...m) => lines.push(say(m.join(' '))) });
-  const left = agents.some(a => a.skill?.action === 'left');
-  return { ok: code === 0 && !left, dryRun, scope, agents, solana: { code, lines }, snippet: SNIPPET };
+  const code = await kit.connect({ dryRun, remove, scope, run, cwd, log: (...m) => lines.push(say(m.join(' '))) });
+  // An agent that adds MCP servers only for every project of the user (Codex) is left out by the kit's connect at a
+  // scope it has not, skill and all: it still gets the xsolana-economy skill here (this skill sends it there), and its
+  // tools are said to wait for --scope user
+  for (const entry of agents) {
+    const a = kit.AGENTS[entry.agent];
+    if (!entry.found || a.scopes.includes(scope)) continue;
+    entry.tools = 'skipped';
+    const source = path.join(solanaRoot(env), 'skills', ECONOMY_SKILL);
+    const dir = path.join(a.skills(scope, cwd), ECONOMY_SKILL);
+    const there = kit.skillFolder ? await kit.skillFolder(dir) : 'other';
+    let action;
+    if (there === 'other') action = 'left';
+    else if (remove) action = there === 'ours' ? (dryRun ? 'would-remove' : 'removed') : 'none';
+    else
+      action = dryRun ? (there === 'ours' ? 'would-replace' : 'would-copy') : there === 'ours' ? 'replaced' : 'copied';
+    if (!dryRun && (action === 'removed' || action === 'replaced')) await rm(dir, { recursive: true, force: true });
+    if (!dryRun && (action === 'copied' || action === 'replaced')) {
+      await mkdir(path.dirname(dir), { recursive: true });
+      await cp(source, dir, { recursive: true });
+    }
+    entry.economySkill = { dir, action };
+    // (the kit's own line for it says to add the tools, a removal too: said here instead, with the skill)
+    const own = lines.findIndex(l => l.startsWith(`${a.name}: adds MCP servers only for the whole user`));
+    if (own >= 0) lines.splice(own, 1);
+    const done = {
+      left: `${dir} is there already and is not the ${ECONOMY_SKILL} skill, so it was left as it is`,
+      none: `there is no ${ECONOMY_SKILL} skill at ${dir}`,
+      removed: `the ${ECONOMY_SKILL} skill removed from ${dir}`,
+      'would-remove': `would remove the ${ECONOMY_SKILL} skill at ${dir}`,
+      copied: `the ${ECONOMY_SKILL} skill copied to ${dir}`,
+      replaced: `the ${ECONOMY_SKILL} skill replaced at ${dir}`,
+      'would-copy': `would copy the ${ECONOMY_SKILL} skill to ${dir}`,
+      'would-replace': `would replace the ${ECONOMY_SKILL} skill at ${dir}`,
+    }[action];
+    lines.push(
+      remove
+        ? `${a.name}: ${done}. Its xsolana tools, if added, are for every project of the user: ${CMD} loot connect --agent ${entry.agent} --scope user --remove takes them out.`
+        : `${a.name}: ${done}; its xsolana tools are not added at --scope ${scope} (${CMD} loot connect --agent ${entry.agent} --scope user adds them for every project).`,
+    );
+  }
+  const left = agents.some(a => a.skill?.action === 'left' || a.economySkill?.action === 'left');
+  return { ok: code === 0 && !left, dryRun, remove, scope, agents, solana: { code, lines }, snippet: SNIPPET };
 }
 
 export default {
@@ -136,10 +209,15 @@ export default {
   usage,
   run: args =>
     guard(async () => {
-      const { values } = parse(args, { 'dry-run': { type: 'boolean' }, scope: { type: 'string' } }, usage);
+      const { values, positionals } = parse(
+        args,
+        { 'dry-run': { type: 'boolean' }, remove: { type: 'boolean' }, scope: { type: 'string' } },
+        usage,
+      );
+      if (positionals.length) throw new UsageError(`${tooMany(positionals)}\n\n${usage}`);
       const scope = values.scope ?? 'project';
       if (!SCOPES.includes(scope)) throw new UsageError(`--scope is project or user\n\n${usage}`);
-      const r = await connectAgents({ dryRun: !!values['dry-run'], scope });
+      const r = await connectAgents({ dryRun: !!values['dry-run'], remove: !!values.remove, scope });
       if (values.json) {
         printJson(r);
         return r.ok ? 0 : 1;
@@ -147,6 +225,17 @@ export default {
       for (const a of r.agents) {
         if (!a.found) continue;
         const { dir, action } = a.skill;
+        if (r.remove) {
+          console.log(
+            {
+              removed: `${a.name}: the ${SKILL} skill removed from ${dir}.`,
+              'would-remove': `${a.name}: would remove the ${SKILL} skill at ${dir}`,
+              none: `${a.name}: there is no ${SKILL} skill at ${dir}.`,
+              left: `${a.name}: ${dir} is not xcore's ${SKILL} skill, so it was left as it is.`,
+            }[action],
+          );
+          continue;
+        }
         console.log(
           action === 'left'
             ? `${a.name}: ${dir} is there already and is not xcore's ${SKILL} skill, so it ${r.dryRun ? 'would be' : 'was'} left as it is. Move it away, then run ${CMD} connect again.`
@@ -158,6 +247,14 @@ export default {
       // (the economy tools' own dry run ends with the line this command ends with too: said once, below)
       for (const line of r.solana.lines)
         if (!/^Nothing was changed: this was a dry run\.?$/.test(line.trim())) console.log(line);
+      if (r.remove) {
+        if (r.dryRun) console.log('\nNothing was changed: this was a dry run.');
+        else if (r.agents.some(a => a.found))
+          console.log(
+            "\nIf you pasted xcore's lines into a project's AGENTS.md or CLAUDE.md, take them out there too.",
+          );
+        return r.ok ? 0 : 1;
+      }
       if (r.agents.some(a => a.found))
         console.log(
           `\n${r.dryRun ? `Nothing was changed: this was a dry run. Without --dry-run, it would connect ${scope === 'project' ? `${process.cwd()} only` : 'every project of this user'}.` : scope === 'project' ? `Connected for ${process.cwd()} only (${CMD} connect --scope user for every project).` : 'Connected for every project of this user.'} These lines may go in a project's AGENTS.md or CLAUDE.md (${CMD} connect never writes them):\n\n${r.snippet}`,

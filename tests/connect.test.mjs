@@ -41,7 +41,7 @@ test('connect --scope user: the skill copied for each agent found, the solana ki
   await mkdir(home, { recursive: true });
   await mkdir(project, { recursive: true });
   homeIn(t, home);
-  const { connectAgents, SNIPPET } = await import('../commands/connect.mjs');
+  const { connectAgents, SNIPPET, pinnedLinks, DOCS_URL } = await import('../commands/connect.mjs');
   const { runAgent, calls } = agents(['claude']);
 
   // a dry run: says what it would copy and the commands it would run, runs no agent's program, and changes nothing
@@ -77,10 +77,21 @@ test('connect --scope user: the skill copied for each agent found, the solana ki
   r = await connectAgents({ scope: 'user', run: runAgent, cwd: project });
   assert.equal(r.ok, true, JSON.stringify(r));
   const copied = path.join(home, '.claude', 'skills', 'bring-your-own-game');
+  // the skill as it is, but for its links to xcore's docs, which point at this release's on GitHub: the copy has no
+  // docs/ beside it
+  const skill = await readFile(path.join(copied, 'SKILL.md'), 'utf8');
   assert.equal(
-    await readFile(path.join(copied, 'SKILL.md'), 'utf8'),
-    await readFile(path.join(ROOT, 'skills', 'bring-your-own-game', 'SKILL.md'), 'utf8'),
+    skill,
+    pinnedLinks(await readFile(path.join(ROOT, 'skills', 'bring-your-own-game', 'SKILL.md'), 'utf8')),
   );
+  assert.match(DOCS_URL, /^https:\/\/github\.com\/XGamesFun\/xcore\/blob\/v\d+\.\d+\.\d+[\w.-]*\/docs\/$/);
+  assert.ok(skill.includes(`](${DOCS_URL}BEFORE-YOU-BUILD.md)`), 'the method, reached from the copy');
+  for (const f of ['SKILL.md', ...(await readdir(path.join(copied, 'references'))).map(r => `references/${r}`)]) {
+    const text = await readFile(path.join(copied, f), 'utf8');
+    for (const [, target] of text.matchAll(/\]\(([^)#]+)[^)]*\)/g))
+      if (!/^https:/.test(target))
+        assert.ok(existsSync(path.resolve(path.dirname(path.join(copied, f)), target)), `${f} links to ${target}`);
+  }
   assert.deepEqual(
     (await readdir(path.join(copied, 'references'))).sort(),
     (await readdir(path.join(ROOT, 'skills', 'bring-your-own-game', 'references'))).sort(),
@@ -151,4 +162,69 @@ test('xcore connect --dry-run --json with no agent on this machine: says so, wri
   assert.ok(out.solana.lines.some(l => /No coding agent found/.test(l)));
   assert.equal(r.status, 1);
   assert.deepEqual(await readdir(home), []);
+});
+
+test('connect at --scope project with Codex: both skills in .agents/skills, and its tools said to wait for --scope user', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const home = path.join(tmp.dir, 'home');
+  const project = path.join(tmp.dir, 'project');
+  await mkdir(home, { recursive: true });
+  await mkdir(project, { recursive: true });
+  homeIn(t, home);
+  const { connectAgents } = await import('../commands/connect.mjs');
+  const { runAgent, calls } = agents(['claude', 'codex']);
+  const r = await connectAgents({ run: runAgent, cwd: project });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const codex = r.agents.find(a => a.agent === 'codex');
+  assert.equal(codex.tools, 'skipped');
+  assert.deepEqual(codex.economySkill, {
+    dir: path.join(project, '.agents', 'skills', 'xsolana-economy'),
+    action: 'copied',
+  });
+  assert.ok(existsSync(path.join(project, '.agents', 'skills', 'xsolana-economy', 'SKILL.md')));
+  assert.ok(existsSync(path.join(project, '.agents', 'skills', 'bring-your-own-game', 'SKILL.md')));
+  assert.ok(!calls.some(c => /^codex mcp add/.test(c)), 'no tools registered for Codex here');
+  const said = r.solana.lines.filter(l => l.startsWith('Codex:'));
+  assert.equal(said.length, 1, said.join('\n'));
+  assert.match(
+    said[0],
+    /xsolana-economy skill copied to .*; its xsolana tools are not added at --scope project \(.* loot connect --agent codex --scope user adds them/,
+  );
+});
+
+test('connect --remove takes out the skill it copied, and what loot connect added; a folder not its own stays', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const home = path.join(tmp.dir, 'home');
+  const project = path.join(tmp.dir, 'project');
+  await mkdir(home, { recursive: true });
+  await mkdir(project, { recursive: true });
+  homeIn(t, home);
+  const { connectAgents } = await import('../commands/connect.mjs');
+  const { runAgent } = agents(['claude', 'codex']);
+  await connectAgents({ run: runAgent, cwd: project });
+  // a dry run removes nothing
+  let r = await connectAgents({ run: runAgent, cwd: project, remove: true, dryRun: true });
+  assert.equal(r.agents.find(a => a.agent === 'claude').skill.action, 'would-remove');
+  assert.ok(existsSync(path.join(project, '.claude', 'skills', 'bring-your-own-game')));
+  r = await connectAgents({ run: runAgent, cwd: project, remove: true });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  for (const gone of [
+    '.claude/skills/bring-your-own-game',
+    '.claude/skills/xsolana-economy',
+    '.agents/skills/bring-your-own-game',
+    '.agents/skills/xsolana-economy',
+  ])
+    assert.ok(!existsSync(path.join(project, gone)), gone);
+  assert.ok(!r.solana.lines.some(l => /to add it/.test(l)), 'a removal never says to add');
+  // not xcore's: left as it is
+  const mine = path.join(project, '.claude', 'skills', 'bring-your-own-game');
+  await mkdir(mine, { recursive: true });
+  await writeFile(path.join(mine, 'SKILL.md'), '---\nname: mine\n---\n');
+  r = await connectAgents({ run: runAgent, cwd: project, remove: true });
+  assert.equal(r.agents.find(a => a.agent === 'claude').skill.action, 'left');
+  assert.ok(existsSync(path.join(mine, 'SKILL.md')));
+  // extra words are a usage mistake
+  assert.equal(run(['connect', 'extra'], { cwd: tmp.dir }).status, 2);
 });

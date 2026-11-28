@@ -9,7 +9,7 @@ itself (what it is made of, its checks, going live with a key file) is the xsola
 saved there, run it again: it puts the bundled page client into `gf/loot/` beside it. That folder is a managed copy
 that `loot add` and publish bring up to date, so edits there are lost.
 
-- A web page wires it as xcore's docs/CLIENT.md, "A web page, by hand", shows: a run-time import with a page-relative URL,
+- A web page wires it as xcore's [docs/CLIENT.md](../../../docs/CLIENT.md), "A web page, by hand", shows: a run-time import with a page-relative URL,
   `solanaApp` with `rpcUrl: PAGE_RPC`.
 - A Godot or Unity game, or any page with `gamesfun.js`, uses `GamesFun.loot` (`loot_ready` / `loot_connect` /
   `loot_call` in Godot, `LootReady` / `LootConnect` / `LootCall` in Unity).
@@ -28,7 +28,7 @@ The same button works in both places a player meets the game: inside xgames.fun'
 app; on the game's own host as the whole tab (a post's card on X opens it there), the tab goes to xgames.fun's wallet
 page and comes back signed in. When `canOpenWallet()` is not `true` (a frame inside X's timeline, another site), the
 game shows its own fallback, such as its link to copy. xgames.fun builds the wallet links, so the game builds none.
-xcore's docs/CLIENT.md ("A wallet app, for a claim") has the button.
+xcore's [docs/CLIENT.md](../../../docs/CLIENT.md) ("A wallet app, for a claim") has the button.
 
 ## Tokens
 
