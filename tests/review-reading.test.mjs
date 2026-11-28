@@ -243,3 +243,60 @@ test('a KV put whose key alone is the request’s stores nothing of it; one whos
   r = await review(dir);
   assert.ok(r.findings.some(f => f.id === 'payout-stored-input'));
 });
+
+test('a condition that measures against what the request sent is a medium; one that only logs decides nothing', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await game(tmp, 'b');
+  const LOOKUP =
+    "const run = await db(env).first('SELECT player, started_at FROM runs WHERE id = ?', String(body.runId));\n    ";
+  const PAYS = "return { grant: 'found-whale', round: body.runId, amount: 'grant' };";
+  const read = async body => {
+    await withCheck(dir, LOOKUP + body + PAYS);
+    return review(dir);
+  };
+  for (const cond of [
+    'if (!run || Date.now() - run.started_at < Number(body.minMs ?? 60_000))',
+    'if (!run || body.endedAt - body.startedAt < 60_000)',
+  ]) {
+    const r = await read(`${cond} return { why: 'Too fast.' };\n    `);
+    assert.equal(r.verdict, 'PASS', cond);
+    assert.deepEqual(cases(r, 'payout-input'), ['request-bound'], cond);
+    assert.equal(r.findings.find(f => f.cases?.includes('request-bound')).severity, 'medium');
+  }
+  // a test of whether it is there, or what it is, is no bar
+  let r = await read(
+    "if (!body.runId || typeof body.runId !== 'string') return { why: 'No run.' };\n    if (!run || Date.now() - run.started_at < 60_000) return { why: 'Too fast.' };\n    ",
+  );
+  assert.deepEqual(cases(r, 'payout-input'), []);
+  // state read only to write a log line: the request alone decides
+  r = await read("if (!run) console.warn('no such run', body.runId);\n    ");
+  assert.equal(r.verdict, 'FAIL');
+  assert.equal(r.ledger[0].source, 'request');
+  assert.match(r.method[3], /Which way a guard points and what its thresholds are is not judged/);
+});
+
+test("a route that signs with voucherFor and reads state through xcore's own gf-db.js is read through, not INCONCLUSIVE", async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await game(tmp, 'v');
+  await writeFile(
+    path.join(dir, 'server', 'resign.js'),
+    `import { voucherFor, walletOf } from './vouchers.js';
+import { db } from './gf-db.js';
+export async function handleResign(request, env) {
+  if (new URL(request.url).pathname !== '/api/resign') return null;
+  const player = await env.GF.verifyPlayer((request.headers.get('authorization') ?? '').replace(/^Bearer\\s+/i, ''));
+  if (!player.ok) return Response.json({ why: 'Sign in first.' }, { status: 401 });
+  const match = await db(env).first('SELECT id FROM matches WHERE winner = ? ORDER BY ended_at DESC', player.sub);
+  if (!match) return Response.json({ why: 'No win.' });
+  const wallet = await walletOf(env, player);
+  return Response.json(await voucherFor(env, { grant: 'found-whale', wallet, round: match.id, amount: 'grant' }));
+}
+`,
+  );
+  const r = await review(dir);
+  assert.deepEqual(r.unread, []);
+  assert.equal(r.verdict, 'PASS', JSON.stringify(r.unread));
+  assert.ok(r.ledger[0].signers.includes('server (server/resign.js)'));
+});
