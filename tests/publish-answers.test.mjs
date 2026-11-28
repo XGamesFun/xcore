@@ -5,7 +5,7 @@
 // links it prints: the plain one and the one that plays inside a post on X.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, readFile, utimes, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { call } from '../lib/publish/client.mjs';
 import { preflight, publishGame, shotProblem } from '../lib/publish/index.mjs';
@@ -403,4 +403,38 @@ test('a first publish’s code is used up when the game is made, not by a refusa
   const again = await runAsync(['publish', dir, '--no-card', '--new', '--yes', code], cli);
   assert.equal(again.status, 1);
   assert.match(again.stderr, /That code is not for this change/);
+});
+
+test('the example migration add database writes is refused until it is the game’s own; one applied already stays', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  const example = await readFile(new URL('../lib/client/server/0001_init.sql', import.meta.url), 'utf8');
+  await mkdir(path.join(dir, 'server', 'migrations'), { recursive: true });
+  await writeFile(path.join(dir, 'server', 'index.js'), 'export default { fetch: () => new Response("ok") };\n');
+  await writeFile(
+    path.join(dir, 'gamesfun.json'),
+    JSON.stringify({ database: { engine: 'd1', binding: 'DB', migrations: 'server/migrations' } }),
+  );
+  // as written, even with Windows line endings
+  await writeFile(path.join(dir, 'server', 'migrations', '0001_init.sql'), example.replace(/\n/g, '\r\n'));
+  const said = (await preflight(dir)).problems.find(p => /example migration/.test(p));
+  assert.match(said, /^server\/migrations\/0001_init\.sql: it is still the example migration .*add database wrote/);
+  assert.match(said, /take out its first line/);
+  // applied on this xgames.fun already (an earlier publish): it can never change, so it is not asked about
+  const { studioOrigin } = await import('../lib/publish/client.mjs');
+  const { sha256 } = await import('../lib/util.mjs');
+  const bytes = await readFile(path.join(dir, 'server', 'migrations', '0001_init.sql'));
+  await mkdir(path.join(dir, '.gamesfun'), { recursive: true });
+  await writeFile(
+    path.join(dir, '.gamesfun', 'publish.json'),
+    JSON.stringify({
+      [studioOrigin()]: { projectId: 'g1', migrations: [{ name: '0001_init.sql', sha256: sha256(bytes) }] },
+    }),
+  );
+  assert.ok(!(await preflight(dir)).problems.some(p => /example migration/.test(p)));
+  // the game's own tables: goes up
+  await rm(path.join(dir, '.gamesfun', 'publish.json'));
+  await writeFile(path.join(dir, 'server', 'migrations', '0001_init.sql'), example.split('\n').slice(1).join('\n'));
+  assert.ok(!(await preflight(dir)).problems.some(p => /example migration/.test(p)));
 });
