@@ -43,7 +43,7 @@ The host serves static files as they are (GET and HEAD).
 ### Where it is served
 
 - Once published: at the root of the game's own origin (the link `xcore publish` prints).
-- In xgames.fun Studio's preview: under a folder.
+- In the preview of xgames.fun's Studio (its game builder, which is invite only): under a folder.
 - In `xcore dev`: under `/game/`.
 
 Use relative URLs (`./assets/x.js`, not `/assets/x.js`) so the game works in all three.
@@ -87,6 +87,17 @@ no top-level navigation, so a `<form>`, `window.open` or a link that leaves the 
 Sign-in, the wallet and full screen go through `gamesfun.js`, and the play page handles them. `xcore check` also loads
 the game in this frame, and fails a page that tries any of these while it loads. Test each flow inside the play page,
 not only in the bare game.
+
+**Where players land.** The link `xcore publish` prints is this play page, `https://xgames.fun/play/<slug>`. Shared in
+a post on X, it shows the game's picture, and a tap opens the play page in X's own browser. The same link ending in
+`?card=player` plays the game inside the post instead, on X's website and Android app (X's iPhone app shows it as a
+bare link until the post is opened). That player runs the game on its own host, `https://<slug>-play.xgames.fun/`.
+
+**A tap on Sign in here reloads the game**, unless this browser already has the player signed in to xgames.fun. The
+play page sends the whole tab to X (or Google) and back, so the game restarts and loses what it held in memory. A game
+that asks to stay (`GamesFun.signIn({stay: true})`) has the play page run the sign-in in a window instead, where one
+can open. In an app's own browser (X's in-app browser) it still takes the tab, so ask for sign-in before a run
+starts, or save the run first ([CLIENT.md](CLIENT.md#in-xgamesfuns-play-page)).
 
 ### Its server, if any
 
@@ -196,14 +207,15 @@ A plan is bought for your **account**, and every game you own takes its plan fro
 
 The plan sets what the game's server, saves and scores may use:
 
-|                      | Free                                                               | Creator                                     | Scale                   |
-| -------------------- | ------------------------------------------------------------------ | ------------------------------------------- | ----------------------- |
-| For                  | the games of a Free account (up to 2)                              | the games of a Creator account (up to 10)   | granted by xgames.fun   |
-| Server               | 50 ms of CPU a request; 600 requests a minute, 120 from one player | 200 ms; 6,000 a minute, 600 from one player | 1,000 ms; 30,000, 1,200 |
-| Saves and scores     | 10 MB of saves; 8 boards of 10,000 entries                         | 1 GB; 16 boards of 1,000,000                | 10 GB; 16 of 1,000,000  |
-| Use included a month | $1 a game                                                          | $10 for the account, shared by its games    | as granted              |
-| Sites that embed it  | 3 (`xcore embed`)                                                  | 10                                          | 25                      |
-| Domains of your own  | none                                                               | 1 (`xcore domain`)                          | 5                       |
+|                                 | Free                                                               | Creator                                     | Scale                   |
+| ------------------------------- | ------------------------------------------------------------------ | ------------------------------------------- | ----------------------- |
+| For                             | the games of a Free account (up to 2)                              | the games of a Creator account (up to 10)   | granted by xgames.fun   |
+| Server                          | 50 ms of CPU a request; 600 requests a minute, 120 from one player | 200 ms; 6,000 a minute, 600 from one player | 1,000 ms; 30,000, 1,200 |
+| Saves and scores                | 10 MB of saves; 8 boards of 10,000 entries                         | 1 GB; 16 boards of 1,000,000                | 10 GB; 16 of 1,000,000  |
+| Database (`xcore add database`) | 100 MB                                                             | 2 GB                                        | 10 GB                   |
+| Use included a month            | $1 a game                                                          | $10 for the account, shared by its games    | as granted              |
+| Sites that embed it             | 3 (`xcore embed`)                                                  | 10                                          | 25                      |
+| Domains of your own             | none                                                               | 1 (`xcore domain`)                          | 5                       |
 
 All costs, including the Creator account, usage credit and its unit prices, are listed in [FEES.md](FEES.md).
 
@@ -216,13 +228,30 @@ server comes back on by itself when the cap lifts ([SERVER.md](SERVER.md#publish
 an unpublished or taken-down game is switched off the same way. A Creator account's games share their included use,
 so they are capped together, and come back on together.
 
+A Free or Creator game whose database is past its plan's size (the table above; xgames.fun measures it each day) is
+capped the same way, on its own, until the database is smaller or its plan allows more. Usage credit does not lift it.
+A Scale game, or one whose plan xgames.fun granted, is not capped for its database's size.
+`xcore db info --live` shows its size; delete rows with `xcore db query "<sql>" --write --live` to bring it back.
+
 A game's server gets a 429 with `scope` (`"player"` or `"game"`) and `plan` when it goes past a rate limit.
 
 ### Paying for a Creator account and usage
 
-- Prepay $15 per 30 days in SOL or USDC under Plans in the creator console. Buy 1–12 periods at a time and renew manually.
-- You have 7 days to renew after expiry. Then all games keep running at Free limits. To publish another, renew or bring the account below 2 games.
-- Creator games share $10 of monthly use and one cap. Buy usage credit to cover overage. Page files and shared relay calls count toward the bill but cannot trigger the cap.
+Buy it on your console's Plans tab (xgames.fun/console), one way at a time:
+
+- **By card**: a subscription of $15 every 30 days that renews by itself until you cancel it in Manage billing. A
+  cancelled plan runs to the end of the period you paid for. Use past what is included goes on the card invoice, up to
+  the monthly spending cap you set there ($0 until you set one).
+- **In SOL or USDC**: prepay $15 per 30 days, 1–12 periods at a time. It does not renew by itself. Use past what is
+  included is paid from usage credit, bought there too.
+
+Then:
+
+- When a prepaid period ends, a card payment fails or a cancelled card plan ends, you have 7 days to renew or pay.
+  Then all games move to Free limits and keep running, except that a game whose database is over Free's 100 MB is
+  capped (its server stopped) until the database is smaller. To publish another, renew or bring the account below 2
+  games.
+- Creator games share $10 of monthly use and one cap. Usage credit, or the spending cap when paying by card, covers overage. Page files and shared relay calls count toward the bill but cannot trigger the cap.
 - Run `xcore plan --verbose` for current rates. [Unit prices](FEES.md#unit-prices)
 
 ### Seeing a plan
@@ -392,7 +421,7 @@ xcore domain                           # where the game plays, the sites that em
   server and the economy work there as they do on its xgames.fun link.
 - Sign-in still opens a small xgames.fun window, on a phone too. Your domain is a different site from xgames.fun, so a
   returning player clicks Sign in once per visit there, and a reload keeps the sign-in for the hour.
-- Studio stays on xgames.fun, and a post on X still uses the xgames.fun link.
+- Your console stays on xgames.fun, and a post on X still uses the xgames.fun link.
 - A bare domain (`mygame.com`) needs your DNS provider's CNAME flattening or an ALIAS record. Otherwise use `www.` or
   `play.` and redirect.
 - The page must load `gamesfun.js` 1.2.0 or later, which asks the play edge which game it is on when it runs on a host
@@ -404,13 +433,15 @@ xcore domain                           # where the game plays, the sites that em
 
 ## Your game's data, and getting it out
 
-A published game's data is kept in three places, and each can be exported in full.
+A published game's data is kept in five places. xcore exports the first three; the last two have no export:
 
-| Data                                                                                                                      | Where it is kept                                  | How to get it out                                                                 |
-| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | --------------------------------------------------------------------------------- |
-| The game's database: your server's tables, and the page's `GamesFun.db` documents                                         | the game's own D1 database on xgames.fun          | `xcore db export --live` writes all of it as SQL; `xcore db import` loads it back |
-| Project files (`env.GF.files`)                                                                                            | xgames.fun's file store for the game              | `xcore files list --live`, then `xcore files get <path> --live` for each file     |
-| Player saves and leaderboards (`GamesFun.saves`, `GamesFun.scores`, and `env.GF.saves` and `env.GF.scores` on the server) | xgames.fun's player services, not the D1 database | `xcore data export`: every save and every board's entries, in one JSON file       |
+| Data                                                                                                                      | Where it is kept                                  | How to get it out                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The game's database: your server's tables, and the page's `GamesFun.db` documents                                         | the game's own D1 database on xgames.fun          | `xcore db export --live` writes all of it as SQL; `xcore db import` loads it back                                                                                                                                            |
+| Project files (`env.GF.files`)                                                                                            | xgames.fun's file store for the game              | `xcore files list --live`, then `xcore files get <path> --live` for each file. A list shows 100 files at a time and, when there are more, ends with the command for the next ones (`xcore files list --after <path> --live`) |
+| Player saves and leaderboards (`GamesFun.saves`, `GamesFun.scores`, and `env.GF.saves` and `env.GF.scores` on the server) | xgames.fun's player services, not the D1 database | `xcore data export`: every save and every board's entries, in one JSON file                                                                                                                                                  |
+| The storage of the server's rooms and other Durable Objects (`server.objects`)                                            | each object's own SQLite storage, on Cloudflare   | none. Have the server copy what must outlive a room into the database, or answer it from an `api/` route of its own                                                                                                          |
+| Secrets (`xcore secret set`)                                                                                              | the server's host only                            | none, by design: `xcore secret list` names them, and only you keep their values                                                                                                                                              |
 
 `xcore data export` writes `.gamesfun/exports/data-<time>.json` (or `--out <file>`), which git leaves out:
 

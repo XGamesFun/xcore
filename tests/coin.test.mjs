@@ -48,6 +48,7 @@ import { lootProgram, solanaRoot } from '../lib/economy.mjs';
 import { credentialKey } from '../lib/publish/client.mjs';
 import { SHARED_RPC } from '../lib/solana-rpc.mjs';
 import { ROOT, run, runAsync, signIn, standIn, tempDir } from './helpers.mjs';
+import { UsageError } from '../lib/cli.mjs';
 
 // (a new key that signs, as the launchpad's are: the package keeps it with its approval code, not among its exports)
 const { freshKeypair } = await import(pathToFileURL(path.join(solanaRoot(), 'js', 'approve', 'ed25519.mjs')).href);
@@ -2178,7 +2179,11 @@ test('status and drop: the folder’s game, the saved sign-in; a folder never pu
   for (const act of [() => coinStatus(dir, opts), () => dropLaunch(dir, opts), () => launchCoin(dir, FORM, opts)])
     await assert.rejects(
       act,
-      e => e.code === 'not-published' && /a coin is launched for a published game\. Publish it first/.test(e.message),
+      e =>
+        e instanceof CoinError &&
+        e.code === 'not-published' &&
+        /not on .* yet: publish it first \(.* publish .+\), then launch its coin$/.test(e.message) &&
+        / publish .+$/.test(e.next),
     );
   // an xgames.fun from before the route
   await writeFile(path.join(dir, '.gamesfun', 'publish.json'), JSON.stringify({ [ORIGIN]: { projectId: 'g-old' } }));
@@ -2307,7 +2312,7 @@ test('the command: a plan, then a launch signed by a real key file, against a st
   // the venues in this command's own words, with what xgames.fun says each pairs a coin with
   assert.match(
     r.stdout,
-    /moth-run has no coin yet\.\n +meteora +Meteora: a curve of its own.*Pairs: SOL, USDC\n +pumpfun +pump\.fun: its curve.*Pairs: SOL, USDC\n +pictures +art\/coin\.png\nLaunch one: .*coin launch --name <name> --ticker <TICKER> --picture <file> --keypair <keyfile>/s,
+    /moth-run has no coin on Solana devnet yet\.\n +meteora +Meteora: a curve of its own.*Pairs: SOL, USDC\n +pumpfun +pump\.fun: its curve.*Pairs: SOL, USDC\n +pictures +art\/coin\.png\nLaunch one: .*coin launch --name <name> --ticker <TICKER> --picture <file> --keypair <keyfile>/s,
   );
   assert.doesNotMatch(r.stdout, /whatever the server says/);
 
@@ -2436,7 +2441,7 @@ test('the command: a plan, then a launch signed by a real key file, against a st
   seen.live = false;
   seen.why = 'off\n\u001b[2Kxcore: launched \u202e';
   r = await xc([]);
-  assert.equal(r.stdout, 'moth-run has no coin yet.\noff[2Kxcore: launched \n');
+  assert.equal(r.stdout, 'moth-run has no coin on Solana devnet yet.\noff[2Kxcore: launched \n');
   seen.why = null;
 
   // usage: what a launch needs, said before the folder is looked at
@@ -2555,4 +2560,34 @@ test('mainnet is held to mainnet’s first block, never xgames.fun’s RPC, and 
     e = await launchCoin(s.dir, FORM, { ...s.opts, cluster: asked }).catch(x => x);
     assert.deepEqual([e?.code, s.key.signed.length], ['wrong-cluster', 0], `${asked} answered as ${says}`);
   }
+});
+
+test("coin's cluster: --cluster when named; else the economy's, for reading where the coin stands; a launch on a mainnet economy asks", async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const { clusterFor } = await import('../commands/coin.mjs');
+  const dir = path.join(tmp.dir, 'g');
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>g</title>');
+  assert.equal(clusterFor(dir, null, 'status'), null, 'no economy: devnet, as always');
+  await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify({ network: 'devnet' }));
+  assert.equal(clusterFor(dir, null, 'launch'), null);
+  await writeFile(path.join(dir, 'xsolana.json'), JSON.stringify({ network: 'mainnet' }));
+  assert.equal(clusterFor(dir, null, 'status'), 'mainnet');
+  assert.equal(clusterFor(dir, 'devnet', 'status'), 'devnet');
+  assert.equal(clusterFor(dir, 'mainnet', 'launch'), 'mainnet');
+  for (const verb of ['launch', 'drop'])
+    assert.throws(
+      () => clusterFor(dir, null, verb),
+      e =>
+        e instanceof UsageError &&
+        /economy is on mainnet .*--cluster mainnet \(real money\) or --cluster devnet/.test(e.message),
+    );
+  // and the help says so: devnet is the default only where the economy is not on mainnet
+  const help = (await import('../commands/coin.mjs')).default.usage.replace(/\s+/g, ' ');
+  assert.match(
+    help,
+    /In a folder whose xsolana\.json is on mainnet, the status reads the mainnet coin, and launch and drop ask for --cluster/,
+  );
+  assert.doesNotMatch(help, /devnet \(the default\)/);
 });

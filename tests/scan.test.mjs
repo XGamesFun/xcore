@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import * as scan from '../lib/publish/scan.mjs';
-import { MAX_MATCH, SECRET_PATTERNS as ALL_PATTERNS } from '../lib/secret-patterns.mjs';
+import { isSplitSeed, MAX_MATCH, SECRET_PATTERNS as ALL_PATTERNS } from '../lib/secret-patterns.mjs';
 
 // a namespace, so this file also runs (and fails, rather than not load) on a scan without the newer exports
 const {
@@ -106,6 +106,11 @@ const PROVIDER_KEYS = [
 /** And for the key formats xcore and Solana tools write themselves. */
 const OWN_KEYS = [
   ['signing key seed (hex)', `VOUCHER_SEED=${'c3'.repeat(32)}\n`],
+  [
+    'signing key seed (hex, split)',
+    `const voucherSeed = '${'0123456789abcdef'.repeat(2)}' + '${'fedcba9876543210'.repeat(2)}';`,
+  ],
+  ['signing key seed (base64)', `const signerSeed = '${Buffer.from(pseudoRandom(32, 7)).toString('base64')}';`],
   ['key file (pub and seed)', `{"pub":"4KQMYSRB7QiBgEDcgNNoCtWCQREaEZpvZP59pVgQCFng","seed":"${'d4'.repeat(32)}"}`],
   [
     'secret key bytes in code',
@@ -130,6 +135,35 @@ test("keys with a provider's own shape are refused (each made here, at run time)
     'const ratio = "1920:1080";',
   ])
     assert.deepEqual(kinds('lib.js', text), [], text);
+});
+
+test('a seed split in pieces or written as base64 is refused by a key’s name; pieces that are no seed are not', () => {
+  const hex = '0123456789abcdef'.repeat(4);
+  assert.ok(
+    kinds('game.js', `const SECRET = '${hex.slice(0, 32)}' + "${hex.slice(32)}";`).includes(
+      'signing key seed (hex, split)',
+    ),
+  );
+  assert.ok(
+    kinds('game.js', `privateKey: '${Buffer.from(pseudoRandom(64, 3)).toString('base64')}'`).includes(
+      'signing key seed (base64)',
+    ),
+  );
+  // the pieces make 48 hex characters: no seed
+  assert.ok(
+    !kinds('game.js', `const seed = '${hex.slice(0, 24)}' + '${hex.slice(24, 48)}';`).includes(
+      'signing key seed (hex, split)',
+    ),
+  );
+  // under no key's name, base64 and pieces are not refused (review reads them as possible keys)
+  assert.deepEqual(kinds('game.js', `const tile = '${Buffer.from(pseudoRandom(32, 9)).toString('base64')}';`), []);
+  assert.deepEqual(kinds('game.js', `const colors = '${hex.slice(0, 32)}' + '${hex.slice(32)}';`), []);
+  // the count is exported beside the pattern, so a scanner that reads SECRET_PATTERNS refuses what publish refuses
+  const split = ALL_PATTERNS.find(([kind]) => kind === 'signing key seed (hex, split)')[1];
+  const matched = text => split.exec(text)?.[0] ?? '';
+  assert.equal(isSplitSeed(matched(`const SECRET = '${hex.slice(0, 32)}' + "${hex.slice(32)}";`)), true);
+  assert.equal(isSplitSeed(matched(`const seed = '${hex.slice(0, 24)}' + '${hex.slice(24, 48)}';`)), false);
+  assert.equal(isSplitSeed(matched(`const seed = '${'ab'.repeat(16)}' + '${'ab'.repeat(16)}';`)), false, 'two letters');
 });
 
 test('no pattern goes untried: the scan refuses a key of every kind lib/secret-patterns.mjs lists', () => {
@@ -455,6 +489,8 @@ const HOSTILE = {
   seed: "n => repeat('wallet_seed: \"', n)",
   bytes: "n => repeat('SECRET = [1, ', n)",
   keyfile: 'n => repeat(\'"seed": "\', n)',
+  split: 'n => repeat(\'seed = "0123abcd" + \', n)',
+  base64: "n => repeat('privateSeed: \"', n)",
   database: "n => repeat('postgres://a', n)",
 };
 /** scanFile on each hostile text at each size, in a child process stopped after `limit` ms. → {which: [ms]} or null */

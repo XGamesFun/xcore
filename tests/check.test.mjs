@@ -404,7 +404,11 @@ test(
     assert.equal(w.tell[0], 'The game screen changed on tap 1, with no sign-in or wallet.');
     assert.ok(w.tell.length >= 2 && w.tell.length <= 4, w.tell.join('\n'));
     for (const shot of w.screenshots) assert.ok(existsSync(path.join(out, shot)), shot);
-    assert.deepEqual(JSON.parse(await readFile(path.join(out, 'record.json'), 'utf8')).firstSession.tell, w.tell);
+    const saved = JSON.parse(await readFile(path.join(out, 'record.json'), 'utf8'));
+    assert.deepEqual(saved.firstSession.tell, w.tell);
+    // the files that go up, as checked: publish judges the screenshot's freshness by them
+    const { buildTree } = await import('../lib/publish/tree.mjs');
+    assert.equal(saved.filesFingerprint, (await buildTree(dir)).filesFingerprint);
     const at = lines.indexOf('First session (as a first-time player on a phone, in the play frame):');
     assert.ok(at > 0, lines.join('\n'));
     assert.ok(lines.slice(at).includes('  In short:'), lines.slice(at).join('\n'));
@@ -424,10 +428,15 @@ test(
     );
     const r = await pageVerify(dir, { out: path.join(tmp.dir, 'out') });
     const w = r.firstSession;
-    assert.deepEqual(w.firstSignIn, { step: 1, provider: 'X' }, JSON.stringify(w.steps));
+    // (tapped on the game's own Sign in: the sign-in, never counted as play)
+    assert.deepEqual(w.firstSignIn, { step: 1, provider: 'X', control: true }, JSON.stringify(w.steps));
     assert.deepEqual(w.steps[0].asked, [{ kind: 'signin', detail: 'X' }]);
+    assert.equal(w.steps[0].playing, false);
     assert.equal(w.firstWallet, null);
-    assert.equal(w.tell[0], 'The game screen changed on tap 1, after a sign-in with X (at tap 1).');
+    assert.ok(
+      w.tell.includes('At tap 1 the walk tapped “Sign in”, a sign-in with X; no wallet was asked for in its one tap.'),
+      w.tell.join('\n'),
+    );
   },
 );
 
@@ -672,7 +681,7 @@ test('every file of a game goes out with the play host’s headers: its type by 
     assert.equal(r.status, 200, p);
     assert.equal(sent('content-type'), type, p);
     assert.equal(sent('x-content-type-options'), 'nosniff', p);
-    assert.equal(sent('referrer-policy'), 'no-referrer', p);
+    assert.equal(sent('referrer-policy'), 'strict-origin', p);
     assert.equal(sent('cross-origin-resource-policy'), 'same-origin', p);
     assert.equal(sent('permissions-policy'), 'camera=(), microphone=(), geolocation=(), payment=(), usb=()', p);
     const policy = sent('content-security-policy').split('; ');

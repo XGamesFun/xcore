@@ -560,6 +560,7 @@ test("xcore db query: the rule of xgames.fun's query route, the same cases taken
     "PRAGMA table_info('guilds');",
     'PRAGMA main.table_info("guilds")',
     '/* hi */ SELECT 1',
+    'WITH top AS (SELECT * FROM guilds) SELECT * FROM top',
   ])
     assert.equal(queryProblem(sql), null, sql);
   for (const sql of [
@@ -585,7 +586,12 @@ test("xcore db query: the rule of xgames.fun's query route, the same cases taken
     assert.ok(queryProblem(sql), sql);
   assert.match(queryProblem('SELECT 1; SELECT 2'), /one statement at a time \(this has 2\)/);
   assert.match(queryProblem("SELECT 'unclosed"), /never ends/);
-  assert.match(queryProblem('DELETE FROM t'), /Add --write/);
+  assert.match(queryProblem('DELETE FROM t'), /changes the database.*add --write to change data/);
+  assert.match(queryProblem('WITH x AS (SELECT 1) DELETE FROM t'), /add --write/);
+  // a typo is no write: it is said as a statement the query does not read with, and --write is not offered
+  assert.match(queryProblem('SELEC 1'), /^A query reads with SELECT .*, and "SELEC" is none of them\.$/);
+  // with --write a trigger's BEGIN … END is one statement, as a migration is read
+  assert.equal(queryProblem('CREATE TRIGGER t AFTER INSERT ON a BEGIN UPDATE a SET x = 1; END', { write: true }), null);
   assert.equal(queryProblem('DELETE FROM t', { write: true }), null);
   assert.match(queryProblem('DELETE FROM t; DELETE FROM u', { write: true }), /one statement/);
   assert.deepEqual(sqlStatements("SELECT 'a;b'; -- c;\nSELECT [x;y] /* ; */"), ["SELECT 'a;b'", 'SELECT [x;y]']);
@@ -1051,7 +1057,7 @@ test('xcore db --live goes through the owner routes; a live change prints itself
   assert.equal(seen.length, sent);
   r = await xc(['query', 'DELETE FROM players', '--live']);
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /a query may only read: SELECT, EXPLAIN.*Add --write/);
+  assert.match(r.stderr, /changes the database, and a query only reads unless it says so: add --write/);
   assert.equal(seen.length, sent);
   // a write live prints exactly what it changes, with a code, and sends nothing (no terminal to type the word in)
   r = await xc(['query', 'DELETE FROM players WHERE id = ?', '--params', '["p1"]', '--live', '--write']);
@@ -1072,7 +1078,8 @@ test('xcore db --live goes through the owner routes; a live change prints itself
   r = await xc(['query', 'DELETE FROM players WHERE id = ?', '--params', '["p1"]', '--live', '--write', '--json']);
   let planned = JSON.parse(r.stdout);
   assert.equal(planned.planned, true);
-  assert.equal(planned.code, code, 'the same change, the same code');
+  assert.match(planned.code, /^[0-9a-f]{8}$/);
+  assert.notEqual(planned.code, code, 'each printout its own code: a code is not worked out from the change');
   assert.deepEqual(planned.plan, {
     action: 'write',
     origin: g.origin,
@@ -1080,7 +1087,8 @@ test('xcore db --live goes through the owner routes; a live change prints itself
     statement: 'DELETE FROM players WHERE id = ?',
     params: ['p1'],
   });
-  assert.match(planned.next, new RegExp(`--yes ${code}$`));
+  assert.match(planned.confirm, new RegExp(`--yes ${planned.code}$`));
+  assert.equal('next' in planned, false, 'the command that goes on is no `next` to run unasked');
   // another statement or other params: another change, so the code is refused and nothing is sent
   for (const other of [
     ['query', 'DELETE FROM players', '--live', '--write', '--yes', code],
@@ -1108,6 +1116,12 @@ test('xcore db --live goes through the owner routes; a live change prints itself
   ]);
   assert.equal(JSON.parse(r.stdout).ok, true, r.stderr);
   assert.equal(seen.at(-1)[2].write, true);
+  // a code goes on once: the same write again needs a new printout
+  const wrote = seen.length;
+  r = await xc(['query', 'DELETE FROM players WHERE id = ?', '--params', '["p1"]', '--live', '--write', '--yes', code]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /That code is not for this change: .*used already/);
+  assert.equal(seen.length, wrote, 'nothing was sent');
   // a write here (not live) needs no yes
   assert.equal((await xc(['query', 'SELECT 1; SELECT 2', '--live', '--write'])).status, 1, 'refused first, unasked');
   // export downloads the dump into .gamesfun/exports/ (hidden: never published)
@@ -1183,7 +1197,7 @@ test('xcore db --live goes through the owner routes; a live change prints itself
   const restore = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
   r = await xc(['restore', '2026-11-08T10:00:00Z', '--live', '--json']);
   planned = JSON.parse(r.stdout);
-  assert.equal(planned.code, restore);
+  assert.notEqual(planned.code, restore, 'each printout its own code');
   assert.equal(planned.plan.at, '2026-11-08T10:00:00.000Z');
   assert.equal(planned.plan.bookmark, 'bm1');
   assert.deepEqual(planned.plan.migrations, ['0002_guilds.sql']);
@@ -1202,9 +1216,14 @@ test('xcore db --live goes through the owner routes; a live change prints itself
   );
   assert.match(r.stderr, /not rolled back/);
   assert.deepEqual(seen.at(-1)[2], { timestamp: '2026-11-08T10:00:00.000Z', confirm: true });
+  // a code goes on once: that restore again needs a new printout (the --json one's code went with it)
+  r = await xc(['restore', '2026-11-08T10:00:00Z', '--live', '--yes', planned.code]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /used already/);
   // unix seconds go up as the same ISO time: xgames.fun reads a bare number as milliseconds
-  // unix seconds name the same time, so the same change and the same code
-  r = await xc(['restore', '1794132000', '--live', '--yes', restore]);
+  // unix seconds name the same time, so the same change: a code printed for the ISO time goes on with them
+  const again = JSON.parse((await xc(['restore', '2026-11-08T10:00:00Z', '--live', '--json'])).stdout).code;
+  r = await xc(['restore', '1794132000', '--live', '--yes', again]);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual(seen.at(-1)[2], { timestamp: '2026-11-08T10:00:00.000Z', confirm: true });
   r = await xc(['restore', 'yesterday', '--live', '--yes', restore]);
@@ -1288,6 +1307,20 @@ test('db export --live picks up an export-pending with its bookmark; a CI creden
   assert.equal(r.note, NOTE);
   assert.match(said[0], /still running on D1; asking again .*answers nothing else/);
   assert.equal(await readFile(r.file, 'utf8'), 'SELECT 1;\n');
+  // an --out among the game's published files is refused before the export starts on D1
+  const before = asked.length;
+  await assert.rejects(
+    dbExport(dir, { live: true, origin: g.origin, env, wait: 1, out: path.join(dir, 'dump.sql') }),
+    e => e.code === 'published-path',
+  );
+  assert.equal(asked.length, before, 'the live export did not start');
+  // the command says what a live export does to the game before it starts
+  const cli = await runAsync(['db', 'export', dir, '--live'], { env: { ...env, GAMESFUN_STUDIO: g.origin } });
+  assert.equal(cli.status, 0, cli.stderr);
+  assert.match(
+    cli.stderr,
+    /^Exporting .* While it runs .* the database answers nothing else, so players' calls to the game's server wait or fail/,
+  );
   // still pending after the last try: said, with how to pick it up
   pending = 9;
   await assert.rejects(

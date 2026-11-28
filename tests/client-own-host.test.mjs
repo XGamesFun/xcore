@@ -353,7 +353,9 @@ test("Sign out tells xgames.fun to forget this game here (the game's own Sign ou
 
 test("framed by xgames.fun's play page: none of these requests is made", async () => {
   const w = load({ framed: true, session: NAMED });
+  // as xgames.fun's play page answers: gf:host, then gf:auth (nobody signed in there)
   w.from({ type: 'gf:host', v: 1, auth: true });
+  w.from({ type: 'gf:auth', v: 1, level: 0, wallet: '', x: null, token: '', expires: 0, status: 'none' });
   assert.equal(await w.gf.ready, null);
   w.tick();
   await moment();

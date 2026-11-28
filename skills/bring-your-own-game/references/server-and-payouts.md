@@ -26,7 +26,8 @@ result (a score, a win, a place). The full rules are [docs/SERVER.md](../../../d
 docs/SERVER.md, "Paying a result", has the rule.
 
 - **xgames.fun's keeper**, when the server already decides who won and the prize is fixed by place: the server calls
-  `env.GF.loot.report`; the owner certifies the host key in Studio once, and nobody keeps a key.
+  `env.GF.loot.report`; the owner certifies the host key in Studio once (xgames.fun's game builder, which is invite only), and nobody keeps a
+  key.
 - **The server's own key**, when the amount depends on the result, when the server replays or bounds runs, for entry
   fees or a prize pool, or past 120 results an hour. Then, in this order (docs/SERVER.md, "Your own key", has each step
   in full):

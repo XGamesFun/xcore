@@ -613,3 +613,31 @@ test(
     assert.equal(await bought(), `${dev.url}api/rpc`, "the game's own api/rpc");
   },
 );
+
+test('xcore dev names the address that frames the game as the play page does, in its summary and its --json', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = path.join(tmp.dir, 'g');
+  await mkdir(dir);
+  await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>g</title>');
+  const started = async args => {
+    const child = spawn(process.execPath, [BIN, 'dev', dir, '--port', '0', ...args], {
+      env: { ...process.env, GAMESFUN_KIT: '' },
+    });
+    let out = '';
+    child.stdout.on('data', c => (out += c));
+    child.stderr.on('data', c => (out += c));
+    for (let i = 0; i < 150 && !/is running at|"url"/.test(out); i++) await new Promise(r => setTimeout(r, 100));
+    await new Promise(r => setTimeout(r, 300));
+    child.kill('SIGINT');
+    await once(child, 'close');
+    return out;
+  };
+  const said = await started([]);
+  assert.match(
+    said,
+    /is running at (http:\/\/\S+)\/game\/ {2}\(Ctrl\+C stops it\)\n {2}as xgames\.fun's play page frames it: http:\/\/\S+\/play\/\n/,
+  );
+  const json = JSON.parse((await started(['--json'])).match(/^\{[\s\S]*?\n\}$/m)[0]);
+  assert.equal(json.play, `${json.origin}/play/`);
+});

@@ -1,20 +1,21 @@
 // `xcore publish`: a game to xgames.fun at a link anyone can play (../lib/publish/index.mjs). publishCommand makes the
 // command: this package's own, which checks a game by the page check, and the kit's (@xgamesfun/kit), which passes its
 // six gates, its name, its upkeep and its own way of finding a game. A game the kit made goes to the kit's (../bin).
-import { guard, parse, printJson } from '../lib/cli.mjs';
+import { guard, parse, printJson, folderArg, tooMany, UsageError } from '../lib/cli.mjs';
 import { resolveGame as findGame, shown as showDir, named as nameOf } from '../lib/games.mjs';
 import { checkSummary, LABEL, pageCheck, preflight, publishGame, publishStatus } from '../lib/publish/index.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
 import { gate } from '../lib/publish/gate.mjs';
 import { buildFailure, pageRoots, runBuild } from '../lib/publish/page.mjs';
-import { CMD } from '../lib/command.mjs';
-import { confirmFirstPublish, creatorCapWords, firstPublish } from '../lib/publish/first.mjs';
+import { CMD, typedPath } from '../lib/command.mjs';
+import { rmSync } from 'node:fs';
+import { confirmFirstPublish, creatorCapWords, firstPublish, spentFirstPublish } from '../lib/publish/first.mjs';
 import { reviewNudge } from '../lib/review.mjs';
 import { cardPrinted, drawable } from '../lib/card.mjs';
 import { plural, sizeText } from '../lib/util.mjs';
 import { uploadWords } from '../lib/publish/tree.mjs';
 
-const usage = `Usage: xcore publish [dir] [--draft] [--new] [--title <name>] [--no-card] [--yes <code>] [--status] [--check [--verify [--port <n>]]] [--json]
+const usage = `Usage: xcore publish [dir | --dir <dir>] [--draft] [--new] [--title <name>] [--no-card] [--yes <code>] [--status] [--check [--verify [--port <n>]]] [--json]
 
 Publish a game to xgames.fun at a link anyone can play. xgames.fun hosts it; you do not need a server.
 
@@ -22,10 +23,11 @@ Sign in first with ${CMD} login. In a GitHub Actions job with "permissions: id-t
 is used instead of a login.
 
 The first publish of a folder creates a new game on the account this computer is signed in to, and counts toward
-its games (2 on a Free account, one of its free slots; up to 10 on a Creator account). It first prints the account,
+its games (2 on a Free account; up to 10 on a Creator account). It first prints the account,
 the game's name and where it goes, and changes nothing; an account with no room for another game is told so before
 anything is uploaded. At a terminal, type "publish" to go on; otherwise run the same command again with --yes <code>,
-using the code it prints. Publishing a folder that is already linked to a game updates that game without asking.
+using the code it prints (it works once, within 15 minutes; with --json the command is in "confirm"). Publishing a
+folder that is already linked to a game updates that game without asking.
 
 What happens:
   - A game you adopted (${CMD} adopt) is built first if it has a build. Its published folder (gamesfun.json
@@ -42,11 +44,12 @@ What happens:
     version at the same link.
 
 Preview picture:
-  A link to the game shared on X or in a chat shows a square card with the game's picture behind its title. The
-  picture is assets/card.jpg (or assets/card.png) in the published files: a JPEG or PNG with the matching extension,
-  at most 1,500,000 bytes, ideally 960×960.
-  - With no picture, publish makes one from the newest ${CMD} check screenshot (evidence/verify-N/), says so, and goes
-    on. Replace it with ${CMD} card [dir] --force.
+  A plain link to the game shared on X or in a chat shows a wide 1200×628 card: the game's picture behind its title,
+  with the picture's top and bottom cut away. A ?card=player link shows the 960×960 square card. ${CMD} card shows
+  you both (the wide one in .gamesfun/card-wide.png). The picture is assets/card.jpg (or assets/card.png) in the
+  published files: a JPEG or PNG with the matching extension, at most 1,500,000 bytes, ideally 960×960.
+  - With no picture, publish makes one from the newest ${CMD} check screenshot (evidence/verify-N/) of a check that
+    passed on the files as they are, says so, and goes on. Replace it with ${CMD} card [dir] --force.
   - Publish stops before uploading anything if there is no picture and no screenshot, or xgames.fun cannot draw the
     picture (too big, not a JPEG or PNG, the wrong extension, truncated, or a JPEG variant it does not support). Make
     one with ${CMD} card [dir], or publish without one with --no-card (or "card": false in gamesfun.json).
@@ -55,7 +58,7 @@ Preview picture:
   - X and chat apps cache cards, so a link shared earlier can show the old card for a while.
 
 Options:
-  --draft        publish a private version in your xgames.fun Studio, with no public link
+  --draft        publish a private version on your xgames.fun console, with no public link
   --new          publish as a new game (a new link), not as an update of this folder's game
   --title <name> the game's name on xgames.fun (default: its page title)
   --yes <code>   confirm the first publish of a folder (a new game on the account), with the code that was printed
@@ -86,7 +89,24 @@ export function publishCommand({
   shown = showDir,
   named = nameOf,
 } = {}) {
-  const own = { check, label, ...(prepare ? { prepare } : {}), ...(rpcFile ? { rpcFile } : {}) };
+  // Ctrl-C: publish stopped, said as that, and a page check it was running half way leaves no record (onOut: where
+  // this package's check writes it; a kit's own check is told too)
+  let checking = null;
+  const watched = async (d, o) => {
+    try {
+      return await check(d, { ...o, onOut: out => (checking = out) });
+    } finally {
+      checking = null;
+    }
+  };
+  const own = { check: watched, label, ...(prepare ? { prepare } : {}), ...(rpcFile ? { rpcFile } : {}) };
+  const stopped = dir => () => {
+    if (checking) rmSync(checking, { recursive: true, force: true });
+    console.error(
+      `\npublish: stopped (Ctrl-C)${checking ? '; the page check it was running is not recorded' : ''}. ${CMD} publish${shown(dir) === '.' ? '' : ` ${typedPath(shown(dir))}`} --status says what xgames.fun has.`,
+    );
+    process.exit(130);
+  };
   return {
     name: 'publish',
     summary: 'publish the game to xgames.fun at an unlisted link anyone can play',
@@ -105,18 +125,23 @@ export function publishCommand({
             port: { type: 'string' },
             'no-card': { type: 'boolean' },
             yes: { type: 'string' },
+            dir: { type: 'string' },
           },
           usage,
         );
+        if (positionals.length > 1) throw new UsageError(`${tooMany(positionals.slice(1))}\n\n${usage}`);
         const askCard = card && !values['no-card'];
-        const dir = await resolveGame(positionals[0]);
+        const dir = await resolveGame(folderArg(values.dir, positionals[0], usage));
         const origin = studioOrigin();
         // a game that pays results through vouchers, changed since its last security review: one line, never a refusal
         const nudge = values.status || values.json ? null : reviewNudge(dir);
         if (nudge) console.error(nudge);
         if (values.status) {
           const s = await publishStatus(dir, { origin });
-          if (values.json) printJson(s);
+          // the page's sign-in client in this folder, against this xcore's (a published copy is what went up from here)
+          const { staleClient } = await import('../lib/add.mjs');
+          const stale = await staleClient(dir).catch(() => []);
+          if (values.json) printJson({ ok: true, ...s, staleClient: stale });
           else {
             console.log(
               s.signedIn
@@ -130,6 +155,10 @@ export function publishCommand({
                       : `Not signed in to ${origin} (${CMD} login).`,
             );
             console.log(statusLine(named(dir), origin, s));
+            if (stale.length)
+              console.log(
+                `  this game's sign-in client (${stale.join(', ')}) is older than this xcore's: ${CMD} add signin${shown(dir) === '.' ? '' : ` ${typedPath(shown(dir))}`} brings it up to date, then publish again`,
+              );
           }
           return 0;
         }
@@ -151,14 +180,16 @@ export function publishCommand({
           const ok = !p.problems.length && !p.secrets && !p.names;
           const out = checkSummary(p);
           if (ok && values.verify) {
+            const stop = stopped(dir);
+            process.once('SIGINT', stop);
             const g = await gate(dir, {
-              check,
+              check: watched,
               run: true,
               kit: label,
               onLine: values.json ? () => {} : l => console.error(`  ${l}`),
               args: [...(roots.build ? ['--no-build'] : []), ...(values.port ? [`--port=${values.port}`] : [])],
               ...(roots.build ? { built: true } : {}),
-            });
+            }).finally(() => process.off('SIGINT', stop));
             out.verify = { ...g.report, reused: g.reused, changedDuring: g.changedDuring };
             out.ok = ok && g.report.pass;
           }
@@ -186,42 +217,50 @@ export function publishCommand({
           const go = await confirmFirstPublish(first, { args, values });
           if (go !== true) return go;
         }
+        const stop = stopped(dir);
+        process.once('SIGINT', stop);
         const r = await publishGame(dir, {
           ...own,
           origin,
           draft: values.draft,
           newGame: values.new,
-          title: values.title ?? null,
+          // a first publish makes the game its printout named (a build run since may give the page another title)
+          title: values.title ?? first?.plan.game ?? null,
           card: askCard,
+          ...(first && values.yes !== undefined ? { onMade: () => spentFirstPublish(first, values.yes) } : {}),
           progress: values.json ? () => {} : l => console.error(l),
-        }).catch(e => {
-          // A new game needs room on the account (xgames.fun's words say so): name what makes some.
-          // A Creator account at its cap (xgames.fun's 409 game-cap): the words of the check before uploading.
-          if (e?.code === 'game-cap')
-            throw Object.assign(
-              new Error(
-                creatorCapWords(Number(/up to (\d+) games?/.exec(e.message)?.[1]) || 10, {
-                  origin,
-                  then: 'No game was made.',
-                }),
-              ),
-              { status: e.status, code: e.code, next: `${CMD} plan --all` },
-            );
-          if (e?.code === 'no-free-slot')
-            throw Object.assign(
-              new Error(
-                `${e.message}\n  ${CMD} plan --all   your account and its games; archive one you no longer need on ${origin}/console\n  A Creator account runs every game you own, up to 10: your console → Plans`,
-              ),
-              { status: e.status, code: e.code },
-            );
-          throw e;
-        });
-        if (values.json) printJson(r);
+        })
+          .catch(e => {
+            // A new game needs room on the account (xgames.fun's words say so): name what makes some.
+            // A Creator account at its cap (xgames.fun's 409 game-cap): the words of the check before uploading.
+            if (e?.code === 'game-cap')
+              throw Object.assign(
+                new Error(
+                  creatorCapWords(Number(/up to (\d+) games?/.exec(e.message)?.[1]) || 10, {
+                    origin,
+                    then: 'No game was made.',
+                  }),
+                ),
+                { status: e.status, code: e.code, next: `${CMD} plan --all` },
+              );
+            if (e?.code === 'no-free-slot')
+              throw Object.assign(
+                new Error(
+                  `${e.message}\n  ${CMD} plan --all   your account and its games; archive one you no longer need on ${origin}/console\n  A Creator account runs every game you own, up to 10: your console → Plans`,
+                ),
+                { status: e.status, code: e.code },
+              );
+            throw e;
+          })
+          .finally(() => process.off('SIGINT', stop));
+        if (values.json) printJson(r.url ? { ...r, xPostUrl: playerCardUrl(r.url) } : r);
         else {
           console.log(
             (r.url
               ? publishedLines(r.title ? `“${r.title}”` : named(dir), r)
-              : draftLines(named(dir), r, shown(dir))
+              : r.kept
+                ? keptLines(r.title ? `“${r.title}”` : named(dir), r)
+                : draftLines(named(dir), r, shown(dir))
             ).join('\n'),
           );
           if (r.url) {
@@ -238,25 +277,33 @@ export function publishCommand({
 
 const failedNames = failed => failed.map(c => `${c.n} ${c.name}`).join('; ');
 
-/** `publish --status`: where this folder's game is published, and whether it is live. */
-function statusLine(where, origin, s) {
-  let live = '';
-  if (s.live?.error) live = ` xgames.fun says: ${s.live.error}`;
-  else if (s.live) live = s.live.published ? ` Live: version ${s.live.version?.number}.` : ' Not live now.';
-  const own = s.known?.gameUrl ? `\n  the game itself: ${s.known.gameUrl}` : '';
-  const v = s.known?.lastVersion;
-  switch (s.link) {
-    case 'never':
-      return `${where} has not been published to ${origin} yet.`;
-    case 'started':
-      return `${where} was started on ${origin}, but no version finished going up. Run ${CMD} publish again: it goes on with the same game.${live}`;
-    case 'draft':
-      return `${where} is a private draft (version ${v}).${live}${own}`;
-    case 'draft-over-public':
-      return `${where} is published at ${s.known.url}; its latest version (${v}) is a private draft, so an earlier version is the one playing.${live}${own}`;
-    default:
-      return `${where} is published at ${s.known.url} (version ${v}).${live}${own}`;
-  }
+/**
+ * `publish --status`: where this folder's game stands. xgames.fun's answer (what plays now, a takedown) leads; the
+ * folder's own record (.gamesfun/publish.json) says what was last sent from here.
+ */
+export function statusLine(where, origin, s) {
+  const k = s.known ?? {};
+  const own = k.gameUrl ? `\n  the game itself: ${k.gameUrl}` : '';
+  if (s.link === 'never') return `${where} has not been published to ${origin} yet.`;
+  if (s.link === 'started')
+    return `${where} was started on ${origin}, but no version finished going up. Run ${CMD} publish again; if xgames.fun answers that the game has no version yet, publish it with --new and archive the empty game in your console.${s.live?.error ? ` xgames.fun says: ${s.live.error}` : ''}`;
+  // what plays now, by xgames.fun's word when it answered
+  let now;
+  if (s.live && !s.live.error)
+    now = s.live.takenDown
+      ? `${where} was taken down by xgames.fun: nothing plays at its link (${k.url ?? `/play/${k.slug}`}).`
+      : s.live.published
+        ? `${where} is live at ${s.live.url ?? k.url} (version ${s.live.version?.number}).`
+        : `${where} is not live now: nothing plays at its link${k.url ? ` (${k.url})` : ''}.`;
+  else
+    now = `${where} ${k.url ? `was last published at ${k.url}` : 'has no public link yet'}${s.live?.error ? ` (xgames.fun did not say what plays now: ${s.live.error})` : ' (xgames.fun was not asked what plays now: not signed in)'}.`;
+  const sent =
+    s.link === 'kept'
+      ? `  Version ${k.kept.version ?? '?'} was kept on xgames.fun but did not go live: ${k.kept.why ?? 'not published'}.`
+      : s.link === 'draft' || s.link === 'draft-over-public'
+        ? `  The latest version sent from here (${k.lastVersion}) is a private draft.`
+        : `  The latest version sent from here: ${k.lastVersion}.`;
+  return `${now}\n${sent}${own}`;
 }
 
 /** `publish --check` when nothing is refused: what goes up, and the server bundle when there is one. */
@@ -299,10 +346,37 @@ function verifyLine(v, where) {
   return `the checks did not pass: ${why}. A publish now saves a private draft.${evidence}`;
 }
 
+/** The game's link that X shows as a player card (the game inside the post), for a plain /play/<slug> link. */
+export function playerCardUrl(url) {
+  try {
+    const u = new URL(url);
+    u.searchParams.set('card', 'player');
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
+/** The game's database past its plan's size, from xgames.fun's answer: what happens, and what to do. */
+export function databaseLine(db) {
+  if (!db) return null;
+  const over = Number.isFinite(db.sizeBytes) && Number.isFinite(db.cap) && db.sizeBytes > db.cap;
+  if (!over && !db.warning) return null;
+  const size = over ? `${sizeText(db.sizeBytes)}, past its plan's ${sizeText(db.cap)}` : 'past its plan’s size';
+  return `  Worth fixing now: its database is ${size}. xgames.fun stops the game's server for a database past its plan's size (every /api/ call answers 451) until it is under: delete rows (${CMD} db query "DELETE …" --write --live), or move to a plan that allows more (${CMD} plan --all).`;
+}
+
 /** A publish that went live. */
 function publishedLines(where, r) {
+  const x = playerCardUrl(r.url);
   const lines = [
     `Published ${where} (version ${r.version.number}, unlisted): ${r.url}`,
+    ...(x
+      ? [
+          `  to play inside a post on X: ${x}`,
+          '    (on X the plain link shows a picture card, and a tap opens the game; this one plays the game inside the post on desktop and Android, and on iPhone shows as a bare link that plays once the post is opened)',
+        ]
+      : []),
     `  the game itself: ${r.gameUrl}`,
   ];
   if (r.friendsUrl) lines.push(`  play with friends: ${r.friendsUrl}`);
@@ -314,7 +388,23 @@ function publishedLines(where, r) {
         : `  its server code did not go up: ${r.server.why}`,
     );
   }
+  const db = databaseLine(r.database);
+  if (db) lines.push(db);
   return lines;
+}
+
+/** A version xgames.fun kept but could not put live: neither a draft nor published. */
+function keptLines(where, r) {
+  return [
+    `Kept ${where} as version ${r.version.number} on xgames.fun, but it did not go live: ${r.publishError}`,
+    r.takenDown
+      ? '  The game was taken down by xgames.fun, so nothing plays at its link.'
+      : r.liveBefore
+        ? `  Version ${r.liveBefore.version} still plays at ${r.liveBefore.url}. Publish again once the reason above is fixed.`
+        : '  Nothing plays at its link yet. Publish again once the reason above is fixed.',
+    ...(r.studioUrl ? [`  on your console: ${r.studioUrl}`] : []),
+    ...(databaseLine(r.database) ? [databaseLine(r.database)] : []),
+  ];
 }
 
 /** After a publish that went live: the card its link shows. */
@@ -337,6 +427,8 @@ function draftLines(where, r, folder = where) {
         `Fix them (${CMD} check ${folder}) and publish again.`,
     );
   }
+  const db = databaseLine(r.database);
+  if (db) lines.push(db);
   return lines;
 }
 

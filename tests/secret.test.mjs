@@ -1,9 +1,10 @@
 // `xcore secret` (lib/publish/secrets.mjs, lib/server/secrets.mjs): xgames.fun's name and value rules checked first, the
 // folder's own game and the saved sign-in, the routes and bodies xgames.fun takes, and the value never in an answer.
+import { spawn } from 'node:child_process';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { saveSecret } from '../lib/credentials.mjs';
 import { credentialKey } from '../lib/publish/client.mjs';
@@ -11,7 +12,7 @@ import { deleteSecret, listSecrets, setSecret } from '../lib/publish/secrets.mjs
 import { secretNameProblem, secretValueProblem, SECRET_LIMITS } from '../lib/server/secrets.mjs';
 import { readDevVars } from '../lib/dev/server.mjs';
 import { newVoucherKey, seedAddress } from '../lib/add.mjs';
-import { run, runAsync, signIn, standIn, tempDir } from './helpers.mjs';
+import { BIN, run, runAsync, signIn, standIn, tempDir } from './helpers.mjs';
 
 const ORIGIN = 'https://studio.example';
 
@@ -51,7 +52,7 @@ test('set, list, delete: the folder’s game, the saved token, the routes; refus
   const opts = { origin: ORIGIN, env, fetchImpl };
   await assert.rejects(
     listSecrets(dir, opts),
-    /not on https:\/\/studio.example yet: publish it with its server\/ first/,
+    /not on https:\/\/studio.example yet: publish it first \(.* publish.*\), then set its secrets \(its server\/ reads them\)/,
   );
   await writeFile(path.join(dir, '.gamesfun', 'publish.json'), JSON.stringify({ [ORIGIN]: { projectId: 'g-77' } }));
   await assert.rejects(listSecrets(dir, opts), /not signed in/i);
@@ -191,10 +192,11 @@ test('replacing or deleting a live secret prints what changes (never a value) wi
   r = await xc(['set', 'API_KEY', '--from-file', path.join(tmp.dir, 'two.txt'), '--json']);
   const planned = JSON.parse(r.stdout);
   assert.equal(planned.planned, true);
-  assert.equal(planned.code, code);
+  assert.notEqual(planned.code, code, 'each printout its own code');
   assert.equal(planned.plan.action, 'replace');
   assert.equal(planned.plan.name, 'API_KEY');
-  assert.match(planned.next, new RegExp(`--yes ${code}$`));
+  assert.match(planned.confirm, new RegExp(`--yes ${planned.code}$`));
+  assert.equal('next' in planned, false);
   assert.doesNotMatch(r.stdout, /second-value/);
   // a code for another change (another source) is refused
   r = await xc(['set', 'API_KEY', '--from-file', path.join(tmp.dir, 'one.txt'), '--yes', code]);
@@ -204,6 +206,31 @@ test('replacing or deleting a live secret prints what changes (never a value) wi
   r = await xc(['set', 'API_KEY', '--from-file', path.join(tmp.dir, 'two.txt'), '--yes', code]);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(names.get('API_KEY'), 'second-value');
+  // a piped value binds the code too, though it is never printed: a code printed for one value never sets another
+  const piped = (input, args) =>
+    new Promise(resolve => {
+      const child = spawn(process.execPath, [BIN, 'secret', ...args], {
+        cwd: dir,
+        env: { ...process.env, GAMESFUN_KIT: '', ...env },
+      });
+      let stdout = '',
+        stderr = '';
+      child.stdout.on('data', c => (stdout += c));
+      child.stderr.on('data', c => (stderr += c));
+      child.stdin.end(input);
+      child.on('close', status => resolve({ status, stdout, stderr }));
+    });
+  r = await piped('third-value\n', ['set', 'API_KEY']);
+  assert.equal(r.status, 0, r.stderr);
+  const pipedCode = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
+  assert.doesNotMatch(r.stdout, /third-value/);
+  r = await piped('another-value\n', ['set', 'API_KEY', '--yes', pipedCode]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /That code is not for this change/);
+  assert.equal(names.get('API_KEY'), 'second-value');
+  r = await piped('third-value\n', ['set', 'API_KEY', '--yes', pipedCode]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(names.get('API_KEY'), 'third-value');
 
   // a new voucher key over one the server has: says the old key is gone for good and what that breaks
   names.set('VOUCHER_SEED', 'a'.repeat(64));
@@ -320,9 +347,24 @@ test('secret set XSOLANA_RPC_URL waits for backend.json’s origin to be publish
   const url = 'https://devnet.rpc.example.com/?api-key=k';
   await writeFile(path.join(dir, 'rpc.txt'), url);
   const xc = args => runAsync(['secret', 'set', ...args], { env, cwd: dir });
-  let r = await xc(['XSOLANA_RPC_URL', '--from-file', 'rpc.txt']);
-  assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stdout, /Not set yet/);
+  // nothing set: a failure (a script's `&& xcore publish` stops), with both steps left, each one that runs as written
+  let r = await xc(['XSOLANA_RPC_URL', '--from-file', 'rpc.txt', '--json']);
+  assert.equal(r.status, 1, r.stderr);
+  const waits = JSON.parse(r.stdout);
+  assert.deepEqual([waits.ok, waits.code, waits.set], [false, 'not-set', false]);
+  assert.match(waits.error, /^Not set yet: .* Two steps are left/, 'a failure says why in error, as every one does');
+  assert.match(waits.next, / publish$/);
+  assert.deepEqual(waits.steps, [
+    waits.next,
+    waits.next.replace(/ publish$/, ' secret set XSOLANA_RPC_URL --from-file rpc.txt'),
+  ]);
+  // and the help says so
+  const help = (await import('../commands/secret.mjs')).default.usage.replace(/\s+/g, ' ');
+  assert.match(help, /\{ok: false, error, code: "not-set", set: false, added, file, next, steps\}/);
+  await rm(path.join(dir, 'backend.json'));
+  r = await xc(['XSOLANA_RPC_URL', '--from-file', 'rpc.txt']);
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stdout, /Not set yet: .*Two steps are left: publish .*then set it again with the same value/);
   assert.equal(names.has('XSOLANA_RPC_URL'), false);
   assert.deepEqual(JSON.parse(await readFile(path.join(dir, 'backend.json'), 'utf8')).origins, [
     'https://devnet.rpc.example.com',
@@ -381,4 +423,28 @@ test('an economy file that is not valid JSON refuses a new voucher key before th
   }
   assert.deepEqual(puts, [], 'the key the live server has is not replaced');
   assert.ok(!existsSync(path.join(dir, '.gamesfun', 'vouchers.json')), 'and no address is kept');
+});
+
+test('a game in the current folder is named by its folder in secret’s lines, never "."', async t => {
+  const tmp = await tempDir(),
+    g = await standIn();
+  t.after(async () => {
+    await g.close();
+    await tmp.cleanup();
+  });
+  const env = {
+    GAMESFUN_CONFIG_DIR: path.join(tmp.dir, 'config'),
+    GAMESFUN_CREDENTIALS: 'file',
+    GAMESFUN_STUDIO: g.origin,
+  };
+  await signIn(g, env);
+  const dir = path.join(tmp.dir, 'moth');
+  await mkdir(path.join(dir, '.gamesfun'), { recursive: true });
+  await writeFile(path.join(dir, 'index.html'), '<!doctype html><title>moth</title>');
+  await writeFile(path.join(dir, '.gamesfun', 'publish.json'), JSON.stringify({ [g.origin]: { projectId: 'g-1' } }));
+  g.state.handle = (method, url) =>
+    url.startsWith('/api/kit/games/g-1/secrets') ? [200, { ok: true, game: 'g-1', names: [] }] : null;
+  const r = await runAsync(['secret', 'list'], { env, cwd: dir });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^moth's server has no secrets yet/);
 });

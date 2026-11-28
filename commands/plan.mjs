@@ -14,20 +14,28 @@ it used this month.
 
 Accounts:
   Free       Every account starts here: up to 2 games, each on the Free plan with $1 of use a month.
-  Creator    $15 per 30 days, prepaid in SOL or USDC on xgames.fun (your console → Plans), 1 to 12 periods at a
-             time; it does not renew by itself. Every game you own, up to 10, runs on the Creator plan, with $10 of
-             use a month shared by them.
+  Creator    $15 per 30 days, bought in your console → Plans one of two ways, one way at a time:
+               - by card: it renews automatically every 30 days, charging the card, until you cancel it in
+                 Manage billing (it then runs to the end of the period paid for);
+               - prepaid in SOL or USDC, 1 to 12 periods at a time: it does not renew by itself.
+             Every game you own, up to 10, runs on the Creator plan, with $10 of use a month shared by them.
              There are no slots to buy or move. After a period ends there are 7 days' grace; then every game drops
-             to Free limits and keeps running (nothing is taken down).
+             to Free limits and keeps running (nothing is taken down), except that a game whose database is over
+             Free's 100 MB is capped (its server stopped) until the database is smaller.
 
 Plans (per game):
-  Free       A small server (50 ms of CPU per request, 600 requests a minute) and $1 of use a month. Past that, the
-             game is capped until the month ends: its server is switched off (every api/ request answers 451), its
-             pages keep loading, and saves and scores slow down.
-  Creator    Every game of a Creator account. 200 ms per request, 6,000 requests a minute, 1 GB of saves. Past the
-             account's included use, usage credit (bought the same way) pays for more at published unit prices
-             (--verbose lists them); without credit, its games are capped together.
-  Scale      Granted by xgames.fun to a game that needs more.
+  Free       A small server (50 ms of CPU per request, 600 requests a minute), a 100 MB database and $1 of use a
+             month. Past that use, the game is capped until the month ends: its server is switched off (every api/
+             request answers 451), its pages keep loading, and saves and scores slow down.
+  Creator    Every game of a Creator account. 200 ms per request, 6,000 requests a minute, 1 GB of saves, a 2 GB
+             database. Past the account's included use, more is paid at published unit prices (--verbose lists
+             them): paid by card, it goes on the card's invoice, up to the monthly spending cap you set; prepaid,
+             usage credit (bought in SOL or USDC) pays for it. Without enough cap or credit, the account's games are
+             capped together.
+  Scale      Granted by xgames.fun to a game that needs more (a 10 GB database).
+
+On Free and Creator, a database past its plan's size stops the game's server (every api/ request answers 451)
+until it is under. A Scale game, or one whose plan xgames.fun granted, is not stopped for its database's size.
 
 Every plan lets your own sites embed the game (Free 3, Creator 10, Scale 25: ${CMD} embed). Creator and Scale also
 serve it on your own domains (1 and 5: ${CMD} domain). Prices: docs/FEES.md.
@@ -35,7 +43,7 @@ Page files and shared relay calls count toward usage. Only server work, rooms an
 
 Options:
   --all        your account and every game's plan
-  --verbose    also the unit prices usage credit pays
+  --verbose    also the unit prices of use past what is included
   --json       print xgames.fun's answer as JSON (its account, and the fields older versions printed)`;
 
 export default {

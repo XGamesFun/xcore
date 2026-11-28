@@ -8,7 +8,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { folderArg, guard, notOneOf, parse, printJson, tooMany, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { ECONOMY_FILE, NO_SOLANA, solanaCommand, solanaHas, solanaRoot } from '../lib/economy.mjs';
 import { addLoot } from '../lib/loot-add.mjs';
@@ -40,14 +40,14 @@ The economy file is ${ECONOMY_FILE} (loot.json in games made before the rename).
 RPC:
   - Locally, the tools use XSOLANA_RPC_URL (from .env), else xgames.fun's shared devnet RPC.
   - Once published, the page uses xgames.fun's shared relay unless the game has its own RPC: ${CMD} add rpc
-    (docs/SERVER.md, "The economy's own RPC"). Relay calls are billed: they use up the included amount, counted at
-    cost ($10 a million), and past it are charged from usage credit at $20 a million. They never count toward the cap
-    that switches the game's server off.
+    (docs/SERVER.md, "The economy's own RPC"). On mainnet, relay calls are billed: they use up the included amount,
+    counted at cost ($10 a million), and past it are charged from usage credit at $20 a million. A devnet page's relay
+    calls are not billed to the game. They never count toward the cap that switches the game's server off.
   - Going live (approve) sends through XSOLANA_RPC_URL when it is set, else through Solana's public devnet RPC. The
     shared relay only passes loot's own transactions, and a setup also creates mints and token accounts. If the
     public RPC refuses your requests, set XSOLANA_RPC_URL to a devnet RPC of your own.`;
 
-const ADD_USAGE = `Usage: xcore loot add [game] [--verbose] [--json]
+const ADD_USAGE = `Usage: xcore loot add [game] [--dir <folder>] [--verbose] [--json]
 
 Show where the game's economy file (${ECONOMY_FILE}) goes. Once the file exists, copy the economy's page client next
 to it (gf/loot/: the client bundled and minified, play/index.js and chain/rpc.js, with wallets.js). It is a managed
@@ -58,9 +58,20 @@ every build includes them. It prints the next steps in short; --verbose prints e
 (next and steps).`;
 
 /** xsolana's commands that read an economy file ([file], default xsolana.json). */
-const ON_FILE = new Set(['check', 'simulate', 'cost', 'explain', 'review', 'publish', 'status', 'approve']);
+const ON_FILE = new Set(['check', 'simulate', 'cost', 'explain', 'review', 'publish', 'status', 'approve', 'handover']);
 /** xsolana's flags that take a value: the value is never the economy file, whatever it ends with. */
-const VALUED = new Set(['--keypair', '--yes', '--port', '--host', '--args-file', '--agent', '--scope']);
+const VALUED = new Set([
+  '--keypair',
+  '--to',
+  '--yes',
+  '--mint-key',
+  '--save',
+  '--port',
+  '--host',
+  '--args-file',
+  '--agent',
+  '--scope',
+]);
 
 /** Where each argument stands: the indexes of those that are neither a flag nor a flag's value. */
 function plainArgs(args) {
@@ -75,19 +86,26 @@ function plainArgs(args) {
   return plain;
 }
 
+/** The index of the economy file a command names (a plain argument ending in .json), or undefined. */
+export function economyArg(args) {
+  return ON_FILE.has(args[0]) ? plainArgs(args).find(i => i > 0 && args[i].endsWith('.json')) : undefined;
+}
+
 /**
  * The arguments as xsolana gets them when it runs in another folder than the person's: a key file named from where
- * they stand (`--keypair keys/game.json`) is given whole. One that starts with ~ is the home folder's, left as it is.
+ * they stand (`--keypair keys/game.json`, handover's `--to keys/new.json`, approve's `--mint-key coin=keys/mint.json`)
+ * is given whole. One that starts with ~ is the home folder's, left as it is.
  */
 export function fromFolder(args, cwd) {
   const whole = p => (p.startsWith('~') || path.isAbsolute(p) ? p : path.resolve(cwd, p));
-  return args.map((a, i) =>
-    a.startsWith('--keypair=')
-      ? `--keypair=${whole(a.slice('--keypair='.length))}`
-      : i > 0 && args[i - 1] === '--keypair'
-        ? whole(a)
-        : a,
-  );
+  // (a mint key is <token>=<key file>: the file after the first =)
+  const mint = v => (v.includes('=') ? `${v.slice(0, v.indexOf('=') + 1)}${whole(v.slice(v.indexOf('=') + 1))}` : v);
+  const KEYS = { '--keypair': whole, '--to': whole, '--mint-key': mint };
+  return args.map((a, i) => {
+    const joined = Object.keys(KEYS).find(k => a.startsWith(`${k}=`));
+    if (joined) return `${joined}=${KEYS[joined](a.slice(joined.length + 1))}`;
+    return i > 0 && Object.hasOwn(KEYS, args[i - 1]) ? KEYS[args[i - 1]](a) : a;
+  });
 }
 
 /**
@@ -111,6 +129,8 @@ export default {
   usage,
   helpFor: args => lootHelp(args),
   run: async args => {
+    // a leading --json goes after the command it is for (`loot --json version` is `loot version --json`)
+    if (args[0] === '--json' && args[1] && !args[1].startsWith('-')) args = [args[1], '--json', ...args.slice(2)];
     if (args[0] === '--help' || args[0] === '-h') {
       console.log(lootHelp([]));
       return 0;
@@ -124,11 +144,17 @@ export default {
       }, args);
     if (args[0] === 'add')
       return guard(async () => {
-        const { values, positionals } = parse(args.slice(1), { verbose: { type: 'boolean' } }, ADD_USAGE);
-        const dir = await resolveGame(positionals[0]);
+        const { values, positionals } = parse(
+          args.slice(1),
+          { verbose: { type: 'boolean' }, dir: { type: 'string' } },
+          ADD_USAGE,
+        );
+        if (positionals.length > 1) throw new UsageError(`${tooMany(positionals.slice(1))}\n\n${ADD_USAGE}`);
+        const dir = await resolveGame(folderArg(values.dir, positionals[0], ADD_USAGE));
         const r = await addLoot(dir);
         if (values.json)
           return printJson({
+            ok: true,
             game: shown(dir),
             home: shown(r.home),
             economy: r.economy,
@@ -156,11 +182,16 @@ export default {
       }, args);
     const xsolana = solanaCommand();
     if (!xsolana) return refuse(NO_SOLANA, 'no-solana');
+    // a command the tools do not have, with --json: said as JSON too (the tools' own refusal is words on stderr alone)
+    if (json && !['add', ...toolCommands()].includes(args[0]))
+      return guard(() => {
+        throw new UsageError(`${notOneOf(args[0], ['add', ...toolCommands()])}\n\n${usage}`);
+      }, args);
     // an installed package without `review`: what to do, instead of its help
     if (args[0] === 'review' && !solanaHas('review')) return refuse(`${NO_REVIEW}.`, 'no-review');
     // a game made before the file was named xsolana.json keeps loot.json: given to the command when it names no file
     // (a key file's name is a flag's value, never the economy file)
-    const at = ON_FILE.has(args[0]) ? plainArgs(args).find(i => i > 0 && args[i].endsWith('.json')) : undefined;
+    const at = economyArg(args);
     let rest =
       ON_FILE.has(args[0]) && at === undefined && !existsSync(ECONOMY_FILE) && existsSync('loot.json')
         ? [...args, 'loot.json']
@@ -170,7 +201,16 @@ export default {
     const file = at === undefined ? null : args[at];
     if (file && path.dirname(file) !== '.') {
       cwd = path.resolve(path.dirname(file));
+      // (a folder that is not there would fail the tools' start, not say why)
+      if (!existsSync(cwd))
+        return refuse(`${file} does not exist: there is no folder ${path.dirname(file)}.`, 'not-found');
       rest = fromFolder(rest, process.cwd()).map((a, i) => (i === at ? path.basename(file) : a));
+    }
+    // going live: what publish refuses of the economy is refused here first, before anything is printed or signed
+    if (args[0] === 'approve') {
+      const named = file ?? [ECONOMY_FILE, 'loot.json'].find(f => existsSync(f));
+      const why = named ? await approveProblem(path.resolve(named)) : null;
+      if (why) return refuse(why.words, why.code);
     }
     const env = { ...process.env };
     // (on the cluster of the economy in the folder it runs in: devnet unless its file says mainnet)
@@ -181,9 +221,20 @@ export default {
     );
     if (rpc) env.XSOLANA_RPC_URL = rpc;
     else delete env.XSOLANA_RPC_URL;
+    // `version` reads no file: it names the program of the cluster the folder's economy is on, as check there does
+    if (args[0] === 'version' && !env.XSOLANA_CLUSTER) env.XSOLANA_CLUSTER = economyCluster(cwd);
     // its words name its own commands (`npx -y @xgamesfun/solana@… approve xsolana.json --keypair …`, `xsolana check`):
     // said here as this package's, with the file as it was named
     const say = ownWords({ file, named: file ? path.basename(file) : null });
+    // the MCP server and `tool` talk to an agent, which calls the tools by the names they list (xsolana_check): their
+    // output goes through as it is, and their notes on stderr keep the tools' names
+    const asTools = args[0] === 'mcp' || args[0] === 'tool';
+    // (its refusals on stderr start "xsolana:": said as every xcore refusal is)
+    const note = text =>
+      (asTools ? ownWords({ file, named: file ? path.basename(file) : null, tools: false }) : say)(text).replace(
+        /^xsolana: /gm,
+        'xcore: ',
+      );
     const child = spawn(xsolana[0], [xsolana[1], ...rest], { stdio: ['inherit', 'pipe', 'pipe'], env, cwd });
     // a reader that stops early (`| head`) closes our output: stop the tools and end quietly, as a pipe expects
     const gone = { yes: false };
@@ -195,8 +246,8 @@ export default {
     process.stdout.on('error', closed);
     process.stderr.on('error', closed);
     const done = [
-      relay(child.stdout, process.stdout, json ? t => t : say, gone),
-      relay(child.stderr, process.stderr, say, gone),
+      relay(child.stdout, process.stdout, json || asTools ? t => t : say, gone),
+      relay(child.stderr, process.stderr, note, gone),
     ];
     return new Promise(resolve =>
       child.on('close', async code => {
@@ -208,6 +259,28 @@ export default {
     );
   },
 };
+
+/**
+ * Why going live (approve) on the economy at `economy` must not go on, as publish would refuse it: a "live" section of
+ * the other cluster's loot, or a mainnet economy that pays through the test voucher key in .dev.vars (the game's
+ * folder: where the command runs, or the economy file's folder or the one above it). → {words, code} or null
+ */
+export async function approveProblem(economy, { cwd = process.cwd() } = {}) {
+  let value;
+  try {
+    value = JSON.parse(readFileSync(economy, 'utf8'));
+  } catch {
+    return null; // the tools say what is wrong with a file they cannot read
+  }
+  const { liveClusterProblem, testKeyProblem } = await import('../lib/publish/index.mjs');
+  const name = path.relative(cwd, economy) || economy;
+  const cluster = liveClusterProblem(value);
+  if (cluster) return { words: `Nothing was sent: ${name}: ${cluster}`, code: 'live-cluster' };
+  const folders = [...new Set([cwd, path.dirname(economy), path.dirname(path.dirname(economy))])];
+  const game = folders.find(d => existsSync(path.join(d, '.dev.vars'))) ?? cwd;
+  const test = await testKeyProblem(game, value);
+  return test ? { words: `Nothing was sent: ${name}: ${test}`, code: 'test-key' } : null;
+}
 
 /** xsolana's commands a person runs as `xcore loot <command>`: the ones its own help lists (read from the installed
  *  package's bin, where each is a key of its COMMANDS table), else these. */
@@ -253,9 +326,10 @@ const TOOLS = 'guide|examples|check|simulate|cost|explain|review|publish|status|
  * xsolana's text as xcore's: its pinned npx forms and its `xsolana <command>` become `xcore loot <command>`, and the
  * file it was given by its plain name (it runs in that file's folder) is the file as the person named it. The MCP
  * server's own command (`npx -y --package=@xgamesfun/solana@… xsolana mcp`, what connect registers in an agent) is
- * said as it is: it is the command the agent runs, so a dry run shows exactly what is registered.
+ * said as it is: it is the command the agent runs, so a dry run shows exactly what is registered. `tools`: false keeps
+ * the MCP tools' names (xsolana_check) as they are, for text an agent reads to call them.
  */
-export function ownWords({ file = null, named = null } = {}) {
+export function ownWords({ file = null, named = null, tools = true } = {}) {
   const COMMANDS = toolCommands().join('|');
   const npx = new RegExp(String.raw`npx -y (?:--package=)?@xgamesfun/solana@[\w.-]+(?: xsolana)? (${COMMANDS})\b`, 'g');
   const own = new RegExp(String.raw`(^|[\s\`'"(])(?<!@xgamesfun/solana@[\w.-]+ )xsolana (${COMMANDS})\b`, 'gm');
@@ -264,13 +338,20 @@ export function ownWords({ file = null, named = null } = {}) {
     file && named && file !== named
       ? new RegExp(String.raw`(xcore loot \w+) ${named.replace(/[.]/g, '\\.')}\b`, 'g')
       : null;
+  // a command that reads the economy file, suggested with none: the file as it was named (run from where it was
+  // named, it reads that folder's file only so)
+  const bare =
+    file && named && file !== named
+      ? new RegExp(String.raw`\b(xcore loot (?:${[...ON_FILE].join('|')}))\b(?! (?:\S+\.json|\[|<|--help))`, 'g')
+      : null;
   return text => {
     let t = text
       .replace(npx, (all, command) => (command === 'mcp' ? all : `xcore loot ${command}`))
       .replace(own, '$1xcore loot $2')
       .replaceAll('xsolana <command> --help', 'xcore loot <command> --help')
-      .replace(tool, 'xcore loot $1');
+      .replace(tool, all => (tools ? `xcore loot ${all.slice('xsolana_'.length)}` : all));
     if (asNamed) t = t.replace(asNamed, `$1 ${file}`).replaceAll(`(${named})`, `(${file})`);
+    if (bare) t = t.replace(bare, `$1 ${file}`);
     // its help's columns: the three letters `xcore loot` adds are taken from the gap after
     t = t.replace(/^( {2}xcore loot \S.*?\S)( {5,})/gm, (_, a, gap) => a + gap.slice(3));
     return t;

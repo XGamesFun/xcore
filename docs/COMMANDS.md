@@ -10,6 +10,7 @@ The unscoped `xcore` package on npm is a different package. Always use `@xgamesf
 Contents:
 
 - [Every command](#every-command)
+- [What only the console does](#what-only-the-console-does): server logs, rolling back, unpublishing, pausing
 - [adopt](#adopt): the game's record, and the list of what to fix
 - [check](#check): the page check, and the first session
 - [dev](#dev): the game on your machine, as xgames.fun hosts it
@@ -23,11 +24,13 @@ Contents:
 
 ## Every command
 
-Commands with subcommands (`files`, `secret`, `db`, `embed`, `domain`, `plan`, `coin`) take them the same way:
+Every command that works on a game takes its folder as the last word or as `--dir <folder>`; either works, and both
+must agree. `files` and `data` take `--dir <folder>` only (`files`' words are file paths). The default is the current
+directory. A word too many is a usage mistake (exit code 2), never dropped.
+
+Commands with subcommands (`files`, `secret`, `db`, `embed`, `domain`, `coin`, `data`) take them the same way:
 
 - `list` and `remove` are the names this reference uses; `ls`, and `rm` or `delete`, are the same subcommands.
-- The game's folder is the last word, or `--dir <folder>`; either works, and both must agree. `files` takes
-  `--dir <folder>` only, because its words are file paths. The default is the current directory.
 - A word that is no subcommand is a usage mistake (exit code 2) that names the subcommands there are, never "no such
   folder".
 
@@ -60,6 +63,28 @@ Commands with subcommands (`files`, `secret`, `db`, `embed`, `domain`, `plan`, `
 
 `xcore --version` (or `-v`) prints the installed version. `xcore help` and `xcore -h` print the command list, the same
 as `xcore --help`.
+
+## What only the console does
+
+Some of a published game's controls have no command. They are on your console, at xgames.fun/console, where you sign
+in with the same account as `xcore login`. Open the game there; a coding agent cannot do these for you, so it should
+send you there:
+
+- **The server's errors and logs**: the game's Logs tab. It shows the errors of the last 24 hours, and the recent
+  requests with what the server logged (`console.log`), from Cloudflare's Workers Logs, kept 7 days. A server last
+  published before logs were turned on logs nothing until it is published again.
+- **Rolling back**: on the Overview tab, under "Link and versions", **Make live** on an earlier version puts it back at
+  the link. Publishing an earlier copy of the folder with `xcore publish` makes a new version instead.
+- **Unpublishing**: **Unpublish** on the same card. The link shows "not found" until you publish again, and the server
+  stops within five minutes. What it stored is kept for 30 days.
+- **Archiving** a game you no longer need, once it is unpublished, so it stops counting toward your account's games.
+- **Pausing for maintenance, announcements and remote settings**: the Live tab
+  ([CLIENT.md](CLIENT.md#live-settings-gamesfunlive)).
+- **Players and boards**: ban a player or hide them from the boards (Players tab); review flagged scores and blocked
+  words (Boards tab).
+- **Activity**: every change to the game's database, files, players and boards, from xcore, GitHub Actions and the
+  console, written down before it acts.
+- **A team**, the **plan and billing** (the Plans page), and the repository that may publish from GitHub Actions.
 
 ## adopt
 
@@ -153,10 +178,15 @@ at run time, such as a path from the root built in a script, or a request to a s
      [Inside the play page](HOSTING.md#inside-the-play-page));
    - from a link with a query string, as a shared link is.
 
-   It passes when no error is thrown, the console shows no errors, none of the game's own files are missing, nothing
-   is requested from the root, something is on screen, and (in the frame) nothing tries a pop-up, form submit or
-   top-level navigation while loading. Screenshots: `phone.png`, `desktop.png` and `framed.png` in
-   `evidence/verify-N/`.
+   It passes when, in its first 5 s, no error is thrown, the console shows no errors, none of the game's own files are
+   missing, nothing is requested from the root, something is on screen (a canvas drawn in one flat colour counts as
+   nothing), and (in the frame) nothing tries a pop-up, form submit or top-level navigation. Focus taken as the page
+   loads, which the frame refuses until the first tap (a Godot export does it), is a note, not a failure.
+   Screenshots: `phone.png`, `desktop.png` and `framed.png` in `evidence/verify-N/`.
+
+   An engine's web export older than its project is a warning beside the verdict. Under publish's own check it fails
+   only when the export has nothing of an autoload `project.godot` names, or the project changed more than 10 minutes
+   after the export; a gap of seconds, as a clone or a copy leaves, stays a warning.
 
    A page whose script never yields to the browser (an endless loop) fails here as "the page stopped answering". The
    check waits 15 s for each answer it asks of a page, stops at the first view that gives none, and then skips step 4
@@ -189,7 +219,8 @@ It reports:
 - a short summary at the end ("In short").
 
 A first reward is mentioned only for a game with an economy. A tap that leaves the page in an endless loop is reported
-with that tap, and ends the walk. The walk is informational and never fails the check. Publish's own check does not
+with that tap, and ends the walk. An error the walk meets is printed, and is a warning beside the verdict. The walk is
+informational and never fails the check. Publish's own check does not
 run it. With `--json`, it is the `firstSession` field.
 
 A backend that does not answer your machine is a note, not a failure. The page check only shows that the game starts
@@ -216,7 +247,8 @@ has behind it, so you can run the whole game before you publish:
     and after `xcore dev` restarts;
   - a Sign out that persists (`session/forget`);
   - Sign in's round trip to X or Google (`x/begin`, `google/begin`);
-  - the sign-in client at `/platform/v1/signin/v1.js`.
+  - the sign-in client at `/platform/v1/signin/v1.js`, served by `xcore dev` only. A published game does not ask for
+    it unless its page sets `GAMESFUN_SIGNIN_SHARED` ([CLIENT.md](CLIENT.md)).
 - **`/platform/v1/live`**: the game's live settings ([`GamesFun.live`](CLIENT.md#live-settings-gamesfunlive)): its announcement,
   config and maintenance mode, from `.gamesfun/live.json` (read again on each request, never published). With
   maintenance on, the game's pages show the holding page, and its `api/` and `/platform/v1/*` answer `503` with code
@@ -287,7 +319,8 @@ your machine:
 
 ```bash
 xcore files put ./levels/forest-3.json levels/forest-3.json --public --live   # served at https://<slug>.xgamesusercontent.com/levels/forest-3.json
-xcore files list levels/ --live
+xcore files list levels/ --live                           # 100 at a time; it ends with the command for the next ones
+xcore files list levels/ --after levels/l-100.json --live # the next ones
 xcore files get replays/run-1.json --live --out run-1.json
 xcore files remove levels/old.json --live                 # prints what it would delete, with a code, and deletes nothing
 xcore files remove levels/old.json --live --yes <code>    # deletes it
@@ -309,7 +342,10 @@ that is overwritten or deleted there is gone for good.
 - `put --live` to a path xgames.fun already has, and `remove --live`, first print what would be lost (the file there, its
   size and type) with a code, and change nothing. Run the same command with `--yes <code>` to go ahead. A code printed
   for a different change is refused.
-- `xcore files get <path> --live` keeps a local copy first.
+- `xcore files get <path> --live` keeps a local copy first. A download goes to `.gamesfun/downloads/<path>` (never
+  published, readable by you only), or to `--out <file>`. A file there already is refused unless `--force`, and an
+  `--out` among the game's published files is refused, since the next publish would make it public. `xcore db export`
+  and `xcore data export` take `--out` and `--force` the same way.
 
 ## login and logout
 
@@ -332,10 +368,14 @@ days. xcore never sees your password.
 | Linux   | the Secret Service (`secret-tool`) when it runs; otherwise a file only you can read under `~/.config/gamesfun/secrets/` |
 | Windows | a file encrypted for your user (DPAPI) under `%APPDATA%\gamesfun\secrets\`                                              |
 
-`GAMESFUN_CREDENTIALS=file` always uses the file.
+`GAMESFUN_SECRET_STORE=file` always uses the file, and `GAMESFUN_CONFIG_DIR=<folder>` moves the folder it is in
+([environment variables](#environment-variables)).
 
 `xcore logout` signs this computer out: the publish token is revoked at xgames.fun and deleted locally. Published
-games stay published.
+games stay published. When xgames.fun could not revoke it (no answer, or a server error), the token is kept so you can
+try again, and logout exits 1; its `--json` is `{ok: false, error, code: "not-revoked", why, next}`, with `status` for
+a server error. `xcore logout --forget` deletes it here anyway, and it stays live until it expires or you revoke it on your console's Sign-ins page. A new `xcore login`
+revokes the token it replaces.
 
 ## publish
 
@@ -361,12 +401,16 @@ longer need on your console, or, on Free, buy a Creator account (`--json`: `code
 
 - At a terminal, type `publish` to go on.
 - Without a terminal (a script, an agent), run the same command again with `--yes <code>`, using the code it printed.
-  With `--json`, the printout is `{ok: true, planned: true, code, plan, next}`, and `next` is the command to run.
+  With `--json`, the printout is `{ok: true, planned: true, code, plan, confirm}`, and `confirm` is the command to run
+  once the person has said yes.
 - The code covers the site, the account, the game's name and the folder. A code printed for anything else is refused.
+  A code works once, within 15 minutes. Every printout with a code works the same way (`secret set` over a name the
+  server has, a live `files` or `db` change); for `secret set`, a value piped in or read from a file is part of what
+  the code covers.
 - Publishing a folder that is already linked to its game (`.gamesfun/publish.json`) updates that game with no question.
   `--new` makes another game, and asks again.
 - A GitHub Actions job signed in with its OIDC token is not asked: it publishes only the game its repository was linked
-  to in Studio.
+  to on your console.
 
 The steps of every publish:
 
@@ -375,13 +419,17 @@ The steps of every publish:
    link stops the publish. Two small records are uploaded with them, because xgames.fun keeps them with every version:
    `foundation.lock.json` (which tool published it) and `adaptation-plan.json` (the game's title and a one-line
    description). Like every published file, both can be read at the game's link.
-2. **No secrets**: every text file is scanned for anything that looks like a key (private keys; cloud, payment and AI
-   keys; a Supabase service-role key; a database address with a password). xgames.fun scans again on its side.
+2. **No secrets, and none of your players' data**: every text file is scanned for anything that looks like a key
+   (private keys; cloud, payment and AI keys; a Supabase service-role key; a database address with a password; a
+   signing key's seed by its name, whole, split in pieces or as base64). xgames.fun scans again on its side. A `.sql`
+   file, a `data export` file and the example migration `xcore add database` wrote, unchanged, are refused too.
+   A mainnet economy is refused when its grants pay through the test voucher key in `.dev.vars`, or when its `live`
+   section is loot on the other cluster ([ECONOMY.md](ECONOMY.md#moving-to-mainnet)).
 3. **Its backend**: `backend.json`'s origins are the only other sites the published page may reach.
 4. **Its server code** (`server/`, a Worker under the `gf-server-v1` contract): bundled into one file and checked. It
    must build, contain no code generated from text, use no Node built-in a Worker lacks, contain no secrets, export
    its Durable Objects, and be at most 5 MB. `server/` and `gamesfun.json` are never public files.
-5. **The check**: a game whose check fails is saved as a private draft (a version in your xgames.fun Studio, with no
+5. **The check**: a game whose check fails is saved as a private draft (a version on your console, with no
    public link), and you are told which checks failed. A pass is remembered for exactly these files.
 6. **Upload**: only the files xgames.fun does not already have.
 7. **The link**: unlisted, and the same across every update. Publishing the folder again makes the next version.
@@ -392,9 +440,9 @@ The steps of every publish:
    - A game installed as an app (a web manifest and a service worker) installs from its own link,
      `https://<slug>-play.xgames.fun/`.
 
-Before anything is uploaded, publish needs the game's **preview picture** ([card](#card)). If there is none, or
-xgames.fun cannot use it, publish stops and says what is wrong. Make one (`xcore card`), or publish without one
-(`--no-card`).
+Before anything is uploaded, publish needs the game's **preview picture** ([card](#card)). If there is none, it makes
+one from the newest page check screenshot and says so. If there is no screenshot either, or xgames.fun cannot use the
+picture, publish stops and says what is wrong. Make one (`xcore card`), or publish without one (`--no-card`).
 
 Other modes:
 
@@ -409,7 +457,7 @@ The limits a publish is held to are in [HOSTING.md](HOSTING.md#limits).
 ### From GitHub Actions, no key stored
 
 The job's own OIDC token signs the publish in place of a login. xgames.fun accepts it for the repository and branch you
-linked to the game once in Studio.
+linked to the game once on your console.
 
 ```yaml
 # .github/workflows/publish.yml
@@ -498,6 +546,8 @@ Open the picture and look at it before you publish.
   `gamesfun.json` makes that permanent, so the game is not asked again.
 - After a publish with a picture, xcore prints the card's address, `https://xgames.fun/play/<slug>/card.png`. A link
   shared earlier can keep its old card for a while, because X and chat apps cache it.
+- The card belongs to the game's link, `https://xgames.fun/play/<slug>`: a tap on it opens the play page, not the
+  game's own host ([where players land](HOSTING.md#inside-the-play-page)).
 
 ## connect
 
@@ -506,6 +556,9 @@ For use with a coding agent, the skill in `skills/bring-your-own-game/` walks th
 - copies the skill into Claude Code's and Codex's skills;
 - adds the economy's tools, as `xcore loot connect` does (the `xsolana_*` MCP tools and the `xsolana-economy` skill);
 - prints a few lines for a project's AGENTS.md (it never writes AGENTS.md or CLAUDE.md).
+
+`xcore connect --remove` takes out what it added, at the same scope. After upgrading xcore, run `xcore connect` again
+([UPGRADING.md](UPGRADING.md)).
 
 By default it does this for the folder it runs in only: the skills go in that folder's `.claude/skills/` and
 `.agents/skills/`, and Claude Code registers the tools for that project. `xcore connect --scope user` does it for every
@@ -539,6 +592,10 @@ Some include a `state` and the next command in `next`.
 - `publish --status --json` also gives the game's `link`: `never`, `started`, `public`, `draft`, or
   `draft-over-public`.
 - `adopt --json` gives `state` (`refused`, `fix`, `ready`) and `next`.
+- `secret set XSOLANA_RPC_URL` (or `LOOT_RPC_URL`) whose origin `backend.json` did not list adds the origin and sets
+  nothing: it exits 1 with `{ok: false, error, code: "not-set", set: false, added, file, next, steps}`, where `steps`
+  are the two commands left (publish, then set it again with the same value, from the same `--from-file` or
+  `--from-dev-vars`).
 
 Exit codes:
 
@@ -547,15 +604,22 @@ Exit codes:
 | 0    | success                                                                                                                                        |
 | 1    | any failure other than a usage mistake                                                                                                         |
 | 2    | a usage mistake (no such command, subcommand or flag; a missing or extra argument): stderr says what was wrong, then the command's usage lines |
-| 3    | `xcore review` only: INCONCLUSIVE, no high finding but a payout the review could not read                                                      |
+| 3    | `xcore review` only: INCONCLUSIVE, no high finding but a part the review did not read, or a review that could not finish                       |
 
 ## Environment variables
 
-| Variable                        | Effect                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GAMESFUN_STUDIO=<origin>`      | publishes to another xgames.fun (a Studio on your own machine while developing it)                                                                                                                                                                                                                                                        |
-| `GAMESFUN_CREDENTIALS=file`     | always keeps the publish token in the file ([login and logout](#login-and-logout))                                                                                                                                                                                                                                                        |
-| `XSOLANA_RPC_URL`               | a Solana RPC of your own. In `.env`: for `xcore dev`'s `/loot/v1/rpc` and for going live ([ECONOMY.md](ECONOMY.md#going-live)). When set, it is also the RPC a coin launch uses ([ECONOMY.md](ECONOMY.md#a-coin-that-trades-xcore-coin)). In `.dev.vars` or as a secret: the game's own RPC ([SERVER.md](SERVER.md#the-economys-own-rpc)) |
-| `GAMESFUN_SERVER_DEPS=<folder>` | a Miniflare installed elsewhere ([SERVER.md](SERVER.md#running-it-locally))                                                                                                                                                                                                                                                               |
-| `XCORE_DEV_SIGNIN=wallet`       | `xcore dev` signs local players in with a wallet only ([SERVER.md](SERVER.md#your-own-key-xcore-add-vouchers))                                                                                                                                                                                                                            |
-| `GAMESFUN_DEBUG=1`              | prints stack traces for errors                                                                                                                                                                                                                                                                                                            |
+| Variable                              | Effect                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GAMESFUN_STUDIO=<origin>`            | publishes to another xgames.fun (one on your own machine while developing it)                                                                                                                                                                                                                                                             |
+| `GAMESFUN_SECRET_STORE=file`          | keeps the publish token and backend sign-ins in a file only you can read, never in the system's keychain ([login and logout](#login-and-logout)). `GAMESFUN_CREDENTIALS=file`, an older name, does the same                                                                                                                               |
+| `GAMESFUN_CONFIG_DIR=<folder>`        | the folder for this computer's sign-in (`credentials.json`, and `secrets/` when the file is used), in place of `~/.config/gamesfun` (Linux), `~/Library/Application Support/gamesfun` (macOS) or `%APPDATA%\gamesfun` (Windows)                                                                                                           |
+| `GAMESFUN_OIDC_AUDIENCE=<origin>`     | the audience of the GitHub Actions token a publish signs in with (default `https://xgames.fun`), for an xgames.fun of your own ([From GitHub Actions](#from-github-actions-no-key-stored))                                                                                                                                                |
+| `XSOLANA_RPC_URL`                     | a Solana RPC of your own. In `.env`: for `xcore dev`'s `/loot/v1/rpc` and for going live ([ECONOMY.md](ECONOMY.md#going-live)). When set, it is also the RPC a coin launch uses ([ECONOMY.md](ECONOMY.md#a-coin-that-trades-xcore-coin)). In `.dev.vars` or as a secret: the game's own RPC ([SERVER.md](SERVER.md#the-economys-own-rpc)) |
+| `GAMESFUN_SERVER_DEPS=<folder>`       | a Miniflare installed elsewhere ([SERVER.md](SERVER.md#running-it-locally))                                                                                                                                                                                                                                                               |
+| `XCORE_DEV_SIGNIN=wallet`             | `xcore dev` signs local players in with a wallet only ([SERVER.md](SERVER.md#your-own-key-xcore-add-vouchers))                                                                                                                                                                                                                            |
+| `GAMESFUN_DEBUG=1`                    | prints stack traces for errors                                                                                                                                                                                                                                                                                                            |
+| `XSOLANA_CLUSTER=<devnet or mainnet>` | the cluster the economy tools work on (`xcore loot …`). Left unset, each command follows the economy file's `"network"`, and `xcore loot version` names the program of the folder's economy's cluster. Set to the other cluster, a command on that economy is refused                                                                     |
+| `GAMESFUN_SOLANA=<folder>`            | the economy tools from another copy of `@xgamesfun/solana` (one you are working on), in place of the installed one                                                                                                                                                                                                                        |
+| `GAMESFUN_WORK=<folder>`              | the folder whose `.env` the economy's RPC is read from (default: the current folder)                                                                                                                                                                                                                                                      |
+| `GAMESFUN_KIT=<folder>`               | the game-making kit's folder, for the commands that are the kit's                                                                                                                                                                                                                                                                         |
+| `XCORE_COMMAND=<command>`             | how printed next steps call xcore (by default `xcore`, the pinned `npx` command or `node bin/xcore.mjs`, from how it was installed)                                                                                                                                                                                                       |

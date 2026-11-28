@@ -462,7 +462,7 @@ test('signin for a web game: gamesfun.js beside the page and loaded first; again
   assert.ok(copy.length < source.length / 2, `${copy.length} of ${source.length}`);
   assert.match(
     copy,
-    /^\/\*! gamesfun\.js \d+\.\d+\.\d+, minified by xcore; readable source, every call listed at its top: https:\/\/github\.com\/XGamesFun\/xcore\/blob\/main\/lib\/client\/gamesfun\.js \(MIT\) \*\/\n/,
+    /^\/\*! gamesfun\.js \d+\.\d+\.\d+, minified by xcore; readable source, every call listed at its top: https:\/\/github\.com\/XGamesFun\/xcore\/blob\/v\d+\.\d+\.\d+\/lib\/client\/gamesfun\.js \(MIT\) \*\/\n/,
   );
   assert.match(copy, /globalThis\.GamesFun/, 'it sets the same global');
   assert.match(
@@ -764,6 +764,23 @@ test('a client copy from an older xcore is named, and add signin brings it up to
   );
   await writeFile(gd, unminified);
   assert.deepEqual(await staleClient(godot), []);
+  // the banner names the release that wrote the copy: the same code from another release is current
+  const { clientSource } = await import('../lib/add.mjs');
+  const fromOther = clientSource().replace(/blob\/v[\d.]+\//, 'blob/v0.1.0/');
+  assert.notEqual(fromOther, clientSource());
+  await writeFile(path.join(web, 'gamesfun.js'), fromOther);
+  assert.deepEqual(await staleClient(web), []);
+  await writeFile(
+    gd,
+    (await readFile(path.join(ROOT, 'lib/client/godot/gamesfun.gd'), 'utf8')).replace(
+      '__GAMESFUN_SOURCE_B64__',
+      Buffer.from(fromOther).toString('base64'),
+    ),
+  );
+  assert.deepEqual(await staleClient(godot), []);
+  // and other code under a current banner is not
+  await writeFile(path.join(web, 'gamesfun.js'), clientSource().replace(/\n[\s\S]*$/, '\n// other code'));
+  assert.deepEqual(await staleClient(web), ['gamesfun.js']);
 });
 
 test('a Godot project with no Web export gets a single-threaded Web preset, once', async t => {
@@ -780,6 +797,8 @@ test('a Godot project with no Web export gets a single-threaded Web preset, once
   const cfg = await readFile(path.join(tmp.dir, 'export_presets.cfg'), 'utf8');
   assert.match(cfg, /\[preset\.1\]\n\nname="Web"\nplatform="Web"/);
   assert.match(cfg, /\[preset\.1\.options\][^[]*variant\/thread_support=false/);
+  // the play page's frame refuses focus taken as the page loads; the first tap gives it
+  assert.match(cfg, /\[preset\.1\.options\][^[]*html\/focus_canvas_on_start=false/);
   assert.ok(cfg.includes(`exclude_filter="${GODOT_EXCLUDE}"`));
   assert.ok(cfg.startsWith('[preset.0]'), 'the presets it had are kept');
   assert.ok(existsSync(path.join(tmp.dir, 'build', '.gdignore')) && existsSync(path.join(tmp.dir, 'build', 'web')));
@@ -1335,4 +1354,34 @@ test('add vouchers keeps .dev.vars out of a repository the game sits in, not onl
   const staged = execFileSync('git', ['diff', '--cached', '--name-only'], { cwd: tmp.dir, encoding: 'utf8' });
   assert.doesNotMatch(staged, /\.dev\.vars/);
   assert.match(staged, /games\/mine\/\.gitignore/);
+});
+
+test('add signin on a Godot or Unity web export leaves the engine’s index.html alone and names the project instead', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  for (const [engine, files] of [
+    ['Godot', ['index.pck', 'index.wasm']],
+    ['Unity', ['Build/web.loader.js']],
+  ]) {
+    const dir = path.join(tmp.dir, engine);
+    const html = '<!doctype html><html><head><title>exported</title></head><body></body></html>';
+    await mkdir(path.join(dir, 'Build'), { recursive: true });
+    await writeFile(path.join(dir, 'index.html'), html);
+    for (const f of files) await writeFile(path.join(dir, f), 'x');
+    await assert.rejects(addSignin(dir), e => {
+      assert.equal(e.code, 'web-export', engine);
+      assert.match(e.message, new RegExp(`is a ${engine} web export: its index\\.html is ${engine}'s own`));
+      assert.match(
+        e.message,
+        new RegExp(`Sign-in goes into the ${engine} project instead: .* add signin <the project's folder>`),
+      );
+      return true;
+    });
+    assert.equal(
+      await readFile(path.join(dir, 'index.html'), 'utf8'),
+      html,
+      `${engine}: index.html as the engine wrote it`,
+    );
+    assert.equal(existsSync(path.join(dir, 'gamesfun.js')), false, engine);
+  }
 });

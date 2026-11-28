@@ -116,16 +116,19 @@ with a key file on the person's machine. Follow that skill; this one adds where 
   tell the person in one plain sentence that it is regulated in many places, that its legality where they and their
   players are is theirs to check, and that you are not giving legal advice. Say it again when they ask for mainnet,
   with the rest of what mainnet means (real money, what is sent can be lost, loot not independently audited).
-  xcore's docs/DISCLAIMER.md says it in full.
+  xcore's [docs/DISCLAIMER.md](../../docs/DISCLAIMER.md) says it in full.
 - An economy is on devnet, where nothing has real value, unless its `xsolana.json` says `"network": "mainnet"`, which
-  goes in only when the person asks for mainnet in their own words.
+  goes in only when the person asks for mainnet in their own words. xcore's
+  [docs/ECONOMY.md, "Moving to mainnet"](../../docs/ECONOMY.md#moving-to-mainnet) lists what else the switch takes.
 
 ## 5. Review (a game whose server pays results)
 
 Before publishing a game that pays results, read it as a cheater would: `xcore review <folder>` writes
-`evidence/review-N/review.md` and `review.json`; its verdict is PASS (exit 0), FAIL (1, a high finding) or
-INCONCLUSIVE (3, a payout it could not read through: never treat that as a pass). `xcore loot review` is the economy's
-part alone.
+`evidence/review-N/review.md` and `review.json`. Its verdict is PASS (exit 0: no high finding, and every part read
+through), FAIL (1, a high finding) or INCONCLUSIVE (3: a part it did not read, such as a payout it could not follow,
+server code that signs or sends a transaction itself, a file it could not open, `--live` requests that got no answer,
+or a review that could not finish, where `--verbose` prints where it stopped; never treat that as a pass).
+`xcore loot review` is the economy's part alone.
 
 - Fix every high finding and run it again. Mediums are the person's to decide with you: say each one plainly.
 - Declare each voucher grant's `trust` as what `PAY.check` really does
@@ -165,6 +168,11 @@ person, who archives a game on their console or buys a Creator account there. `x
 the games this computer may work on; a command refused with `not-granted` means they run `xcore login` again and tick
 that game. Tell them the link, what you changed in their files, what the checks proved, and what nothing checked
 (their gameplay, their backend's own behaviour).
+
+Some things are the console's alone (xgames.fun/console): a live server's errors (its Logs tab), rolling back to an
+earlier version (Make live) and unpublishing (both on its Overview tab), and pausing the game (its Live tab). Send the
+person there for them
+(xcore's [docs/COMMANDS.md, "What only the console does"](../../docs/COMMANDS.md#what-only-the-console-does)).
 
 After that, at their request: its plan and the account's (`xcore plan`, whose `--help` has the tiers, limits and
 prices; a third game needs a Creator account, $15 per 30 days for up to 10 games, bought on their console → Plans),

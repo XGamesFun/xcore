@@ -1,13 +1,17 @@
 // `xcore check [dir]`: the page check (../lib/check.mjs) on a game you brought: it builds, fits xgames.fun's hosting,
 // starts clean in Chrome as the play host serves it, and stays inside its origins. publish runs the same check first.
-import { failureJson, guard, parse, printJson, UsageError } from '../lib/cli.mjs';
-import { resolveGame, shown } from '../lib/games.mjs';
+import { rmSync } from 'node:fs';
+import { failureJson, guard, parse, printJson, UsageError, folderArg, tooMany } from '../lib/cli.mjs';
+import { kitRecordWords, resolveGame, shown } from '../lib/games.mjs';
 import { madeByKit } from '../lib/publish/index.mjs';
 import { CMD } from '../lib/command.mjs';
 import { cardPrinted } from '../lib/card.mjs';
 import { SECTION } from '../lib/journey.mjs';
 
-const usage = `Usage: xcore check [dir] [--no-build] [--out <dir>] [--port <n>] [--verbose] [--json]
+/** How long the check watches each view of the page start (lib/check.mjs, GF_PAGE_SETTLE_MS), in seconds. */
+const SETTLE_S = Number(process.env.GF_PAGE_SETTLE_MS ?? 5000) / 1000;
+
+const usage = `Usage: xcore check [dir | --dir <dir>] [--no-build] [--out <dir>] [--port <n>] [--verbose] [--json]
 
 Check the game's page as xgames.fun hosts it. Run ${CMD} adopt <dir> first.
 
@@ -15,7 +19,8 @@ The check has four steps:
   1. It builds (gamesfun.json page.build).
   2. It fits the hosting: nothing publish would refuse, and nothing that breaks once hosted (paths from the root;
      scripts, styles, fonts or frames from other sites).
-  3. It starts without errors in Chrome, at a phone's size and a desktop's, under the play host's page policy.
+  3. It starts without errors in its first ${SETTLE_S} s in Chrome, at a phone's size and a desktop's, and inside a
+     stand-in for the play page's frame, under the play host's page policy. An error later than that is not seen.
   4. It stays inside its origins: its own files, the host's own paths, and the origins in backend.json.
 
 It does not check that the game plays correctly; that is for your game's own tests.
@@ -57,6 +62,14 @@ export function checkCounts(checks) {
   return parts.join(', ');
 }
 
+/** check's line for a game with no preview picture: publish makes one from a passing check's screenshot only. */
+export function noCardLine(pass, dir) {
+  const card = `${CMD} card${shown(dir) === '.' ? '' : ` ${shown(dir)}`}`;
+  return pass
+    ? `warning: no preview picture. Publish makes one from this check's screenshot, or make your own: ${card}`
+    : `warning: no preview picture. Fix the check, then publish makes one from its screenshot (or make your own: ${card})`;
+}
+
 export default {
   name: 'check',
   summary: 'check the page as xgames.fun hosts it: build, hosting rules, a clean start in Chrome',
@@ -70,24 +83,42 @@ export default {
           out: { type: 'string' },
           port: { type: 'string' },
           verbose: { type: 'boolean' },
+          dir: { type: 'string' },
         },
         usage,
       );
-      const dir = await resolveGame(positionals[0]);
-      if (madeByKit(dir))
-        throw new Error(
-          `${shown(dir)} was made with the game-making kit. Its check is the kit's own (\`${CMD} verify\`, six gates), which runs only where the kit is installed. The kit is not released yet.`,
-        );
+      if (positionals.length > 1) throw new UsageError(`${tooMany(positionals.slice(1))}\n\n${usage}`);
+      const dir = await resolveGame(folderArg(values.dir, positionals[0], usage));
+      if (madeByKit(dir)) throw new Error(kitRecordWords(dir, 'check'));
       const port = values.port === undefined ? 0 : Number(values.port);
       if (values.port !== undefined && !(Number.isInteger(port) && port >= 1 && port <= 65535))
         throw new UsageError(`--port takes a port number (1–65535)\n\n${usage}`);
-      const { pageVerify } = await import('../lib/check.mjs');
-      const r = await pageVerify(dir, {
-        noBuild: values['no-build'] === true,
-        out: values.out ?? null,
-        port,
-        log: values.json ? l => console.error(l) : values.verbose ? l => console.log(l) : shortLog(),
-      });
+      const { pageVerify, walkErrors } = await import('../lib/check.mjs');
+      // Ctrl-C: the check stopped, said as that (never as a page that failed), and a record it made half way is gone
+      let outDir = null,
+        stopped = false;
+      const stop = () => {
+        stopped = true;
+        if (outDir && !values.out) rmSync(outDir, { recursive: true, force: true });
+        console.error(
+          `\ncheck: stopped (Ctrl-C), nothing recorded${outDir && values.out ? ` (what is in ${shown(outDir)} is from a check that did not finish)` : ''}.`,
+        );
+        process.exit(130);
+      };
+      process.once('SIGINT', stop);
+      const say = values.json ? l => console.error(l) : values.verbose ? l => console.log(l) : shortLog();
+      let r;
+      try {
+        r = await pageVerify(dir, {
+          noBuild: values['no-build'] === true,
+          out: values.out ?? null,
+          port,
+          log: l => stopped || say(l),
+          onOut: d => (outDir = d),
+        });
+      } finally {
+        process.off('SIGINT', stop);
+      }
       // the record, and a failed check said as every command's --json says a failure (ok, error, code)
       const failed = r.checks.filter(c => c.ok === false);
       if (values.json)
@@ -107,15 +138,23 @@ export default {
         for (const n of r.notes) if (values.verbose || !n.startsWith(OWN_PLAY)) console.log(`note: ${n}`);
         if (!values.verbose && r.firstSession?.tell?.length)
           console.log(`first session: ${r.firstSession.tell[0]} (--verbose: every tap)`);
+        // every error the walk saw, by default: a game that throws on its first tap is no clean start for a player
+        if (!values.verbose)
+          for (const e of walkErrors(r.firstSession).slice(0, 5))
+            console.log(`  error during the walk, ${e.step === 0 ? 'as it loads' : `at tap ${e.step}`}: ${e.text}`);
         // a warning when it is missing, cannot be drawn, or will be cropped or blurry; never a failed check
         if (r.card)
           console.log(
             !values.verbose && r.card.level === 'stop' && r.card.missing
-              ? `warning: no preview picture. Publish makes one from this check's screenshot, or make your own: ${CMD} card${shown(dir) === '.' ? '' : ` ${shown(dir)}`}`
+              ? noCardLine(r.pass, dir)
               : cardPrinted(r.card),
           );
+        for (const w of r.warnings ?? []) console.log(`warning: ${w}`);
+        const warned = r.warnings?.length
+          ? `, ${r.warnings.length === 1 ? '1 warning' : `${r.warnings.length} warnings`}`
+          : '';
         console.log(
-          `\ncheck: ${r.pass ? 'PASS' : 'FAIL'}, ${checkCounts(r.checks)} · evidence ${shown(r.outDir)}${values.out ? '' : ' (local only, git-ignored)'}`,
+          `\ncheck: ${r.pass ? 'PASS' : 'FAIL'}, ${checkCounts(r.checks)}${warned} · evidence ${shown(r.outDir)}${values.out ? '' : ' (local only, git-ignored)'}`,
         );
       }
       return r.pass ? 0 : 1;

@@ -345,11 +345,31 @@ test(
       stopped.stderr,
       /no preview picture[\s\S]*Or run .* check .* first: publish then makes one from its screenshot/,
     );
-    // an earlier check's screenshot: the card is made from it, held to the card's rules, and the publish goes on
+    // an earlier check's screenshot from a run that did not finish, or did not pass: no card is made from it, and
+    // publish says why before it stops
     await mkdir(path.join(dir, 'evidence', 'verify-2'), { recursive: true });
     await writeFile(path.join(dir, 'evidence', 'verify-2', 'desktop.png'), png(1280, 800, { color: [30, 160, 90] }));
     const card = path.join(dir, 'assets', 'card.jpg');
-    assert.equal(existsSync(card), false);
+    const record = pass =>
+      writeFile(
+        path.join(dir, 'evidence', 'verify-2', 'record.json'),
+        JSON.stringify({ pass, started: new Date().toISOString(), seconds: 1 }),
+      );
+    for (const [step, why] of [
+      [null, /that check did not finish \(it has no record\.json\)/],
+      [false, /that check did not pass, so its screenshot may show a broken page/],
+    ]) {
+      if (step !== null) await record(step);
+      const refused = await runAsync(['publish', dir, ...(await yes())], cli);
+      assert.equal(refused.status, 1);
+      assert.match(
+        refused.stderr,
+        new RegExp(`No preview picture was made from evidence/verify-2/desktop\\.png: ${why.source}`),
+      );
+      assert.equal(existsSync(card), false);
+    }
+    // a run that passed on the game as it is: the card is made from it, held to the card's rules, and the publish goes on
+    await record(true);
     const r = await runAsync(['publish', dir, ...(await yes())], cli);
     assert.equal(r.status, 0, r.stderr);
     assert.match(
@@ -385,8 +405,19 @@ test(
     const r = run(['card', dir, '--from', art]);
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /^Wrote assets\/card\.jpg in .*: 960×960, \d+(\.\d)? KB, from /m);
-    assert.match(r.stdout, /keep the subject clear of the top third \(the title\) and the bottom left \(the button\)/);
-    assert.match(r.stdout, /Open .*card\.jpg and look at it/);
+    // a plain link shows the picture wide, as xgames.fun's card.png?w=1 draws it: a look at it beside the picture
+    assert.match(
+      r.stdout,
+      /Keep the subject in the middle band \(a plain link shows the picture wide, its top and bottom cut away\)/,
+    );
+    assert.match(
+      r.stdout,
+      /Open .*card\.jpg and .*card-wide\.png \(the wide card, as a plain link shows it\) and look at them/,
+    );
+    const { imageFacts } = await import('../lib/card.mjs');
+    const wide = imageFacts(await readFile(path.join(dir, '.gamesfun', 'card-wide.png')));
+    assert.deepEqual([wide.format, wide.width, wide.height], ['png', 1200, 628]);
+    assert.ok(!(await buildTree(dir)).tree.files.some(f => /card-wide/.test(f.path)), 'the look is never published');
     assert.equal((await preflight(dir)).card.status, 'ok');
 
     // the fix publish names, in place: a wide picture (here a PNG named card.jpg, which xgames.fun cannot draw either)
@@ -502,6 +533,25 @@ test(
     assert.ok(existsSync(path.join(dir, 'assets', 'card.jpg')), 'the picture is written, to look at');
   },
 );
+
+test("publish's help says which link shows which card", async () => {
+  const { default: publish } = await import('../commands/publish.mjs');
+  const help = publish.usage.replace(/\s+/g, ' ');
+  assert.match(
+    help,
+    /A plain link .* shows a wide 1200×628 card: .* top and bottom cut away\. A \?card=player link shows the 960×960 square card/,
+  );
+  assert.match(help, /card-wide\.png/);
+});
+
+test('a failed check does not promise its screenshot as the preview picture', async () => {
+  const { noCardLine } = await import('../commands/check.mjs');
+  assert.match(noCardLine(true, '.'), /^warning: no preview picture\. Publish makes one from this check's screenshot/);
+  assert.match(
+    noCardLine(false, '.'),
+    /^warning: no preview picture\. Fix the check, then publish makes one from its screenshot \(or make your own: .* card\)$/,
+  );
+});
 
 test(
   'xcore check reports the picture: missing and blurry are warnings, never a failed check',

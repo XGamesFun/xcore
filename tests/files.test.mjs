@@ -6,7 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { request } from 'node:http';
 import path from 'node:path';
 import { FILES, STUDIO_BODY_BYTES, filePathProblem, servedType, usesFiles } from '../lib/server/contract.mjs';
@@ -14,6 +14,7 @@ import { createFileStore, FILE_HEADERS, serveFiles } from '../lib/dev/files.mjs'
 import { createPlatformStore } from '../lib/dev/platform.mjs';
 import { DEFAULT_LIMITS, pageHeaders } from '../lib/publish/hosting.mjs';
 import { adopt } from '../lib/publish/adopt.mjs';
+import { leftOutOfPublish } from '../lib/publish/tree.mjs';
 import { publishGame } from '../lib/publish/index.mjs';
 import { sizeText as filesSizeText } from '../lib/files.mjs';
 import { plural, sizeText } from '../lib/util.mjs';
@@ -337,7 +338,34 @@ test('xcore files on this machine: put, ls, get, rm, usage', async t => {
   assert.equal(r.status, 0, r.stderr);
   assert.equal(await readFile(path.join(tmp.dir, 'back.json'), 'utf8'), '{"tiles":[1,2]}');
   r = await xc(['get', 'levels/forest-3.json', '--out', path.join(tmp.dir, 'back.json')]);
-  assert.equal(r.status, 2, 'it does not write over a file without --force');
+  assert.equal(r.status, 1, 'it does not write over a file without --force: a refusal, not a usage mistake');
+  assert.match(r.stderr, /back\.json is there already: --force writes over it, or --out <file>\n$/);
+  r = await xc(['get', 'levels/forest-3.json', '--out', path.join(tmp.dir, 'back.json'), '--json']);
+  assert.deepEqual(
+    [JSON.parse(r.stdout).code, / --out .*back\.json --force/.test(JSON.parse(r.stdout).next)],
+    ['exists', true],
+  );
+  // by default a download goes where publish never takes it, readable by this user only; a file among the published
+  // files is refused, since the next publish would make a private file public
+  r = await xc(['get', 'levels/forest-3.json']);
+  assert.equal(r.status, 0, r.stderr);
+  const kept = path.join(dir, '.gamesfun', 'downloads', 'levels', 'forest-3.json');
+  assert.equal(await readFile(kept, 'utf8'), '{"tiles":[1,2]}');
+  if (process.platform !== 'win32') assert.equal((await stat(kept)).mode & 0o777, 0o600);
+  assert.equal(leftOutOfPublish('.gamesfun/downloads/levels/forest-3.json'), true);
+  r = await xc(['get', 'levels/forest-3.json', '--out', path.join(dir, 'forest-3.json')]);
+  assert.equal(r.status, 1);
+  assert.match(
+    r.stderr,
+    /is among the game's published files \(forest-3\.json\), so the next publish would put this project file up as a public page file/,
+  );
+  assert.equal(existsSync(path.join(dir, 'forest-3.json')), false);
+  // --force over a file that was there: its mode becomes this user's only too
+  const loose = path.join(tmp.dir, 'loose.json');
+  await writeFile(loose, 'old', { mode: 0o644 });
+  r = await xc(['get', 'levels/forest-3.json', '--out', loose, '--force']);
+  assert.equal(r.status, 0, r.stderr);
+  if (process.platform !== 'win32') assert.equal((await stat(loose)).mode & 0o777, 0o600);
   r = await xc(['usage', '--json']);
   assert.deepEqual(JSON.parse(r.stdout), { live: false, ok: true, bytes: 15, files: 1, cap: FILES.capBytes });
   r = await xc(['put', 'level.json', 'a/../b.json']);
@@ -496,6 +524,20 @@ test('xcore files --live: refused until xgames.fun lists "files", then through t
   r = await xc(['ls', 'art']);
   assert.match(r.stdout, /public\s+4 bytes\s+art\/hero\.png/);
   assert.equal(seen.at(-1).url, '/api/kit/games/g1/files?prefix=art%2F');
+  // a list is a page at a time: --after asks for the next one, and a page with more says the command for it
+  r = await xc(['ls', 'art', '--after', 'art/a.png']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(seen.at(-1).url, '/api/kit/games/g1/files?prefix=art%2F&after=art%2Fa.png');
+  const handle = g.state.handle;
+  g.state.handle = (method, url, ...rest) => {
+    const answer = handle(method, url, ...rest);
+    return url.startsWith('/api/kit/games/g1/files?') ? [200, { ...answer[1], after: 'art/hero.png' }] : answer;
+  };
+  r = await xc(['ls', 'art/']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /… more after art\/hero\.png: .* files list art\/ --after art\/hero\.png --live\n$/);
+  g.state.handle = handle;
+  assert.equal((await xc(['usage', '--after', 'x'])).status, 2, '--after is for list alone');
   r = await xc(['get', 'art/hero.png', '--out', path.join(tmp.dir, 'h.png')]);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /Got art\/hero\.png .*image\/png\)/);
@@ -520,11 +562,8 @@ test('xcore files rm --live: a file xgames.fun has is deleted only with the code
   const code = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
   r = await xc(['rm', 'art/hero.png', '--json']);
   const planned = JSON.parse(r.stdout);
-  assert.deepEqual(
-    [r.status, planned.ok, planned.planned, planned.code],
-    [0, true, true, code],
-    'the same change, the same code',
-  );
+  assert.deepEqual([r.status, planned.ok, planned.planned], [0, true, true]);
+  assert.notEqual(planned.code, code, 'each printout its own code');
   assert.deepEqual(planned.plan, {
     action: 'delete',
     origin: g.origin,
@@ -534,7 +573,7 @@ test('xcore files rm --live: a file xgames.fun has is deleted only with the code
     public: true,
     bytes: 4,
   });
-  assert.match(planned.next, new RegExp(`files rm art/hero\\.png --live --yes ${code}$`));
+  assert.match(planned.confirm, new RegExp(`files rm art/hero\\.png --live --yes ${planned.code}$`));
   // a code printed for another file, a made-up one and a bare --yes are all refused
   for (const args of [
     ['rm', 'art/old.png', '--yes', code],
@@ -589,7 +628,7 @@ test('xcore files put --live over a file xgames.fun has: written over only with 
   const code = r.stdout.match(/--yes ([0-9a-f]{8})/)[1];
   r = await put('--json');
   const planned = JSON.parse(r.stdout);
-  assert.equal(planned.code, code);
+  assert.notEqual(planned.code, code, 'each printout its own code');
   assert.deepEqual(planned.plan, {
     action: 'replace',
     origin: g.origin,
@@ -709,3 +748,18 @@ test(
     );
   },
 );
+
+test('files put says the size a live put takes from this machine, not only the 25 MB the game’s server can write', async () => {
+  const files = (await import('../commands/files.mjs')).default;
+  const help = files.usage.replace(/\s+/g, ' ');
+  assert.match(
+    help,
+    new RegExp(
+      `with --live up to ${sizeText(STUDIO_BODY_BYTES).replace('.', '\\.')} \\(it goes through xgames\\.fun's Studio`,
+    ),
+  );
+  assert.match(
+    help,
+    /A bigger file, up to 25 MB, can only be written by the game's own server \(env\.GF\.files\.put\)/,
+  );
+});

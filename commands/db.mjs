@@ -1,6 +1,6 @@
 // `xcore db info|query|export|import|restore`: the game's own database (gamesfun.json → database), on this machine
 // (the one `xcore dev` runs) or, with --live, on xgames.fun (../lib/db.mjs).
-import { guard, parse, printJson, UsageError, notOneOf, folderArg, verbNamed } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, notOneOf, folderArg, verbNamed, tooMany } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { dbExport, dbImport, dbInfo, dbQuery, dbRestore, importOf, liveChange, queryProblem } from '../lib/db.mjs';
 import { consented } from '../lib/consent.mjs';
@@ -12,7 +12,7 @@ import { plural, sizeText } from '../lib/util.mjs';
 
 const usage = `Usage: xcore db info [dir] [--live] [--json]
        xcore db query "<sql>" [dir] [--params '<json list>'] [--write] [--live [--yes <code>]] [--json]
-       xcore db export [dir] [--out <file>] [--live] [--json]
+       xcore db export [dir] [--out <file> [--force]] [--live] [--json]
        xcore db import <file.sql> [dir] [--live [--yes <code>]] [--json]
        xcore db restore <time> [dir] --live [--yes <code>] [--json]
 
@@ -31,7 +31,10 @@ Commands:
   query "<sql>"      run one statement. It is read-only (SELECT, EXPLAIN, PRAGMA table_info or table_list) unless you
                      pass --write. --params '["moon", 3]' fills its ? placeholders
   export             write the whole database as SQL to --out <file> or to .gamesfun/exports/ (a hidden folder, never
-                     published). The file holds your players' data: keep it out of git and off shared drives
+                     published). The file holds your players' data: it is readable by you only, a file among the
+                     game's published files is refused, and an existing one is written over only with --force; keep it
+                     out of git and off shared drives. Live, while it runs the database answers nothing else (players'
+                     calls wait or fail): best when few are playing
   import <file.sql>  run a file of SQL statements, all or none; at most ${sizeText(DATABASE_LIMITS.importBytes)} (live, ${sizeText(STUDIO_BODY_BYTES)} as sent). A dump from
                      export (local, live, or D1's own) loads over the existing data or into an empty database: tables
                      are kept, each row is updated by its key, and no row is deleted
@@ -43,8 +46,9 @@ Confirming live changes:
   A change to the live database (query --write --live, import --live, restore) first prints exactly what it would
   change, with a code, and changes nothing. The printout names the game and the statement and its params; or the
   file's name, size and SHA-256; or the time it goes back to. Run the command again with --yes <code> to apply it,
-  or, at a terminal, type the confirmation word (write, import, restore). A code printed for a different change is
-  refused. With --json, the printout is {planned: true, code, plan, next}.`;
+  or, at a terminal, type the confirmation word (write, import, restore). A code works once, within 15 minutes,
+  and only for the change it was printed with. With --json, the printout is {planned: true, code, plan, confirm}:
+  confirm is the command to run once the person has said yes.`;
 
 /** A size as the person reads it (../lib/util.mjs sizeText, the one every command prints sizes with). */
 const kb = sizeText;
@@ -88,6 +92,7 @@ export default {
           write: { type: 'boolean' },
           params: { type: 'string' },
           out: { type: 'string' },
+          force: { type: 'boolean' },
           yes: { type: 'string' },
           dir: { type: 'string' },
         },
@@ -99,6 +104,8 @@ export default {
       const verb = verbNamed(word, verbs);
       if (!verb) throw new UsageError(`${notOneOf(word, verbs)}\n\n${usage}`);
       if (takes[verb] && !rest[0]) throw new UsageError(`${verb} needs ${takes[verb]}\n\n${usage}`);
+      const most = takes[verb] ? 2 : 1;
+      if (rest.length > most) throw new UsageError(`${tooMany(rest.slice(most))}\n\n${usage}`);
       const arg = takes[verb] ? rest[0] : null;
       const dir = await resolveGame(folderArg(values.dir, takes[verb] ? rest[1] : rest[0], usage));
       const live = !!values.live;
@@ -164,7 +171,12 @@ export default {
         return 0;
       }
       if (verb === 'export') {
-        const r = await dbExport(dir, { live, out: values.out ?? null, log });
+        // the server's rule (creator-studio lib/game-database.mjs): while an export runs, nothing else is answered
+        if (live && !values.json)
+          console.error(
+            `Exporting ${where}. While it runs (seconds for a small database, minutes for a large one) the database answers nothing else, so players' calls to the game's server wait or fail: best when few are playing.`,
+          );
+        const r = await dbExport(dir, { live, out: values.out ?? null, force: !!values.force, log });
         if (values.json) return printJson(r);
         console.log(`Exported ${where} (${kb(r.bytes)}) to ${r.file}. It holds your players' data: keep it private.`);
         if (r.note) console.log(`  ${r.note}`);
@@ -218,7 +230,7 @@ export default {
       const go = await asked({
         change,
         lines: [
-          `${where} ${onGame(change)} would go back to how it was at ${at}${p.preview?.bookmark ? ` (bookmark ${p.preview.bookmark})` : ''}. Everything written after that is lost; ${CMD} db export --live keeps a copy first.`,
+          `${where[0].toUpperCase()}${where.slice(1)} ${onGame(change)} would go back to how it was at ${at}${p.preview?.bookmark ? ` (bookmark ${p.preview.bookmark})` : ''}. Everything written after that is lost; ${CMD} db export --live keeps a copy first.`,
           ...(undone.length
             ? [
                 `It rolls back ${plural(undone.length, 'migration')} applied after that time: ${undone.map(m => `${m.name}${m.at ? ` (${m.at})` : ''}`).join(', ')}.`,

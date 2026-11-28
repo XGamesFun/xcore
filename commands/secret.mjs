@@ -1,11 +1,11 @@
 // `xcore secret set|list|delete`: a game server's own secrets on xgames.fun (../lib/publish/secrets.mjs).
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { guard, parse, printJson, UsageError, notOneOf, folderArg, verbNamed } from '../lib/cli.mjs';
-import { resolveGame, shown } from '../lib/games.mjs';
+import { guard, parse, printJson, UsageError, notOneOf, folderArg, tooMany, verbNamed } from '../lib/cli.mjs';
+import { named, resolveGame, shown, typedDir } from '../lib/games.mjs';
 import { deleteSecret, listSecrets, setSecret } from '../lib/publish/secrets.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
-import { CMD } from '../lib/command.mjs';
+import { CMD, typedPath } from '../lib/command.mjs';
 import { consented } from '../lib/consent.mjs';
 import { allowOrigin, newVoucherKey, seedAddress } from '../lib/add.mjs';
 import { economyCluster, solanaRpc } from '../lib/solana-rpc.mjs';
@@ -43,11 +43,17 @@ Commands:
   list               list the names (values are never shown)
   remove <NAME>      remove a secret
 
+An RPC URL (XSOLANA_RPC_URL, LOOT_RPC_URL) whose origin backend.json does not list yet is not set: the origin is added
+to backend.json, nothing is set, and the command exits 1: publish, then set it again with the same value. With --json
+that answer is {ok: false, error, code: "not-set", set: false, added, file, next, steps}.
+
 Confirming changes:
   A new name is set immediately. Replacing a name the server already has, or deleting one, cannot be undone:
   xgames.fun never shows a value, so nothing can bring the old one back. So these first print what would be replaced
   or removed (never the value), with a code, and change nothing. Run the command again with --yes <code> to apply
-  it. With --json, the printout is {planned: true, code, plan, next}.
+  it. A code works once, within 15 minutes, and only for the change it was printed with (a value piped in or read
+  from a file is part of it). With --json, the printout is {planned: true, code, plan, confirm}: confirm is the
+  command to run once the person has said yes.
 
 Limits: names use A–Z, 0–9 and _, start with a letter, and cannot be GF or GF_*; values are up to 5,120 bytes; up to
 32 secrets per game.`;
@@ -92,9 +98,10 @@ async function hidden(question) {
   });
 }
 /**
- * Replacing or deleting a secret the live server has, asked first (../lib/consent.mjs consented). The code is over the
- * game, the name and where the new value comes from, never the value itself. It goes on with the code only: there is
- * no word to type at a terminal.
+ * Replacing or deleting a secret the live server has, asked first (../lib/consent.mjs consented). The plan printed is
+ * the game, the name and where the new value comes from, never the value itself; a value read before the question (a
+ * file, .dev.vars, piped in) binds the code without being printed. It goes on with the code only: there is no word to
+ * type at a terminal.
  */
 const asked = change => consented({ sub: 'secret', ...change });
 
@@ -118,7 +125,7 @@ async function piped() {
 async function fromDevVars(dir, name) {
   const { readDevVars, DEV_VARS } = await import('../lib/dev/server.mjs');
   const { secrets } = await readDevVars(dir);
-  if (!secrets[name]) throw new UsageError(`${DEV_VARS} in ${shown(dir)} has no ${name}`);
+  if (!secrets[name]) throw new UsageError(`${DEV_VARS} in ${named(dir)} has no ${name}`);
   return secrets[name];
 }
 
@@ -146,6 +153,8 @@ export default {
       const needsName = verb === 'set' || verb === 'remove';
       if (needsName && !rest[0]) throw new UsageError(`${word} needs a NAME\n\n${usage}`);
       const name = needsName ? rest[0] : null;
+      const extra = rest.slice(needsName ? 2 : 1);
+      if (extra.length) throw new UsageError(`${tooMany(extra)}\n\n${usage}`);
       const dir = await resolveGame(folderArg(values.dir, needsName ? rest[1] : rest[0], usage));
       const out = values.json ? printJson : null;
       if (verb === 'list') {
@@ -154,8 +163,8 @@ export default {
         else
           console.log(
             r.names.length
-              ? `${shown(dir)}'s server has ${r.names.length} secret${r.names.length === 1 ? '' : 's'}: ${r.names.join(', ')}`
-              : `${shown(dir)}'s server has no secrets yet (${CMD} secret set <NAME>).`,
+              ? `${named(dir)}'s server has ${r.names.length} secret${r.names.length === 1 ? '' : 's'}: ${r.names.join(', ')}`
+              : `${named(dir)}'s server has no secrets yet (${CMD} secret set <NAME>).`,
           );
         return 0;
       }
@@ -171,7 +180,7 @@ export default {
         const go = await asked({
           plan: { action: 'delete', origin: studioOrigin(), game, name },
           lines: [
-            `This deletes ${name} from ${shown(dir)}'s server on xgames.fun (game ${game}). From its next request the server has no env.${name}, and the value is gone for good: xgames.fun never shows a secret, so nothing can bring it back.`,
+            `This deletes ${name} from ${named(dir)}'s server on xgames.fun (game ${game}). From its next request the server has no env.${name}, and the value is gone for good: xgames.fun never shows a secret, so nothing can bring it back.`,
           ],
           nothing: 'Nothing was deleted',
           values,
@@ -193,12 +202,15 @@ export default {
       // the economy file is read for these (a voucher key's address is written into it, an RPC is held to its cluster):
       // one that does not read refuses here, before the value the live server has is replaced
       if (['VOUCHER_SEED', 'XSOLANA_RPC_URL', 'LOOT_RPC_URL'].includes(name)) readEconomy(dir);
-      // what this machine can refuse is refused before xgames.fun is asked: the name, and a value read from a file
+      // what this machine can refuse is refused before xgames.fun is asked: the name, and a value read from a file or
+      // piped in (read now, so a code printed for one value never sets another)
       const early = values['from-dev-vars']
         ? await fromDevVars(dir, name)
         : values['from-file']
           ? (await readFile(values['from-file'], 'utf8')).replace(/\r?\n$/, '')
-          : null;
+          : !values['new-key'] && !process.stdin.isTTY
+            ? await piped()
+            : null;
       const problem =
         secretNameProblem(name) ??
         (early === null ? null : (secretValueProblem(early) ?? rpcProblem(dir, name, early)));
@@ -209,8 +221,10 @@ export default {
         const key = !!values['new-key'];
         const go = await asked({
           plan: { action: 'replace', origin: studioOrigin(), game, name, from: sourceOf(values) },
+          // the code is for this value too, never printed (a value typed at a terminal is asked after the yes)
+          bind: early,
           lines: [
-            `${shown(dir)}'s server on xgames.fun (game ${game}) has ${name} already. This replaces its value with ${sourceOf(values)}, from the server's next request.`,
+            `${named(dir)}'s server on xgames.fun (game ${game}) has ${name} already. This replaces its value with ${sourceOf(values)}, from the server's next request.`,
             key
               ? `The key in ${name} now is gone for good: it was kept only on xgames.fun, which never shows it, so nothing restores it. The grants the server pays are pointed at the new key in xsolana.json as it is made; what the server signs with it is refused on chain until that change goes live (${CMD} loot approve, signed by the key file that owns the economy), and from then vouchers the old key signed that nobody redeemed yet stop paying.`
               : `The value it has now is gone for good: xgames.fun never shows a secret, so nothing brings it back. Anything that still needs the old value (a voucher key's address in a grant, an outside service's old key) stops working with this server.`,
@@ -235,12 +249,31 @@ export default {
         const { file, added } = await allowOrigin(dir, origin);
         if (added) {
           const where = path.relative(process.cwd(), file) || file;
-          if (out) out({ ok: false, game, name, set: false, added: origin, file: where, next: `${CMD} publish` });
-          else
-            console.log(
-              `Not set yet: the game's server may call only the origins in ${where}, and ${origin} was not one. It is now: publish (${CMD} publish), then run this again, and the server takes the URL with leave to call it.`,
-            );
-          return 0;
+          // nothing was set: a failure to a script (`secret set … && …` stops), with both steps still to do
+          const next = `${CMD} publish${shown(dir) === '.' ? '' : ` ${typedDir(dir)}`}`;
+          // the same value again, from where it came (typed or piped in: the person gives it again)
+          const from = values['from-dev-vars']
+            ? ' --from-dev-vars'
+            : values['from-file']
+              ? ` --from-file ${typedPath(values['from-file'])}`
+              : '';
+          const again = `${CMD} secret set ${name}${shown(dir) === '.' ? '' : ` ${typedDir(dir)}`}${from}`;
+          const words = `Not set yet: the game's server may call only the origins in ${where}, and ${origin} was not one. It is now. Two steps are left: publish (${next}), then set it again with the same value (${again}), and the server takes the URL with leave to call it.`;
+          if (out)
+            out({
+              ok: false,
+              error: words,
+              code: 'not-set',
+              game,
+              name,
+              set: false,
+              added: origin,
+              file: where,
+              next,
+              steps: [next, again],
+            });
+          else console.log(words);
+          return 1;
         }
       }
       const r = await setSecret(dir, name, value);
@@ -252,7 +285,7 @@ export default {
       if (out) out(live ? { ...r, address: live.address, ...(pointed ? { economy: pointed } : {}) } : r);
       else {
         console.log(
-          `Set ${name} on ${shown(dir)}'s server: env.${name} from its next request. (${plural(r.names.length, 'secret')}.)`,
+          `Set ${name} on ${named(dir)}'s server: env.${name} from its next request. (${plural(r.names.length, 'secret')}.)`,
         );
         if (made)
           console.log(`It is a new key, made here and kept only on xgames.fun's server. Its address: ${made.address}`);

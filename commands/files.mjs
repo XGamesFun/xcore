@@ -1,9 +1,8 @@
 // `xcore files ls|put|get|rm|usage`: the game's project files (env.GF.files), on this machine (the ones `xcore dev`
 // serves) or, with --live, on xgames.fun (../lib/files.mjs).
-import { existsSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { guard, parse, printJson, UsageError, notOneOf, verbNamed } from '../lib/cli.mjs';
+import { guard, parse, printJson, UsageError, notOneOf, verbNamed, tooMany } from '../lib/cli.mjs';
 import { named, resolveGame } from '../lib/games.mjs';
 import {
   filesGet,
@@ -18,8 +17,11 @@ import {
 import { consented } from '../lib/consent.mjs';
 import { CMD, typedPath } from '../lib/command.mjs';
 import { sha256 } from '../lib/util.mjs';
+import { STUDIO_BODY_BYTES } from '../lib/server/contract.mjs';
+import { privateTarget, writePrivate } from '../lib/publish/private-file.mjs';
+import { stateFolder } from '../lib/state-folder.mjs';
 
-const usage = `Usage: xcore files list [prefix/] [--dir <game>] [--live] [--json]
+const usage = `Usage: xcore files list [prefix/] [--after <path>] [--dir <game>] [--live] [--json]
        xcore files put <file> [path] [--public] [--type <mime>] [--dir <game>] [--live [--yes <code>]] [--json]
        xcore files get <path> [--out <file>] [--force] [--dir <game>] [--live] [--json]
        xcore files remove <path> [--dir <game>] [--live [--yes <code>]] [--json]
@@ -36,12 +38,18 @@ never published). With --live, they use the game's files on xgames.fun, and each
 audit log.
 
 Commands:
-  list [prefix/]     list the files, or those in one folder ("replays/")
-  put <file> [path]  upload a file from this machine to [path] (default: its file name). Up to 25 MB per file.
+  list [prefix/]     list the files, or those in one folder ("replays/"), 100 at a time: when there are more, it
+                     prints the command for the next ones (--after <path>, the last path it listed)
+  put <file> [path]  upload a file from this machine to [path] (default: its file name). Up to 25 MB per file on
+                     this machine; with --live up to ${mb(STUDIO_BODY_BYTES)} (it goes through xgames.fun's Studio, whose
+                     host takes no bigger a request). A bigger file, up to 25 MB, can only be written by the game's
+                     own server (env.GF.files.put).
                      --public serves it at https://<slug>.xgamesusercontent.com/<path>, a separate site (locally: the
                      files origin ${CMD} dev prints); without --public, only the game's server can read it.
                      --type <mime> sets its content type
-  get <path>         download a file to --out <file> (default: its name, in the current folder; --force overwrites)
+  get <path>         download a file to --out <file> (default: .gamesfun/downloads/<path> in the game's folder, never
+                     published; --force overwrites). A file among the game's published files is refused: the next
+                     publish would make it public. The file is readable by you only
   remove <path>      delete a file
   usage              show the bytes stored, against the game's cap (Free: 100 MB)
 
@@ -54,8 +62,9 @@ Confirming live changes:
   A new path is uploaded immediately. Overwriting a file xgames.fun already has (put --live) or deleting one
   (remove --live) cannot be undone: xgames.fun keeps one copy of each file and no earlier versions. So these first print
   what would be replaced or deleted, with a code, and change nothing. Run the command again with --yes <code> to
-  apply it. A code printed for a different change is refused. With --json, the printout is
-  {planned: true, code, plan, next}. Local files change immediately.`;
+  apply it. A code works once, within 15 minutes, and only for the change it was printed with. With --json, the
+  printout is {planned: true, code, plan, confirm}: confirm is the command to run once the person has said yes.
+  Local files change immediately.`;
 
 /** A file xgames.fun has, in the words of a printout: "1.2 MB, public, image/png". */
 const facts = f =>
@@ -77,6 +86,7 @@ export default {
           force: { type: 'boolean' },
           dir: { type: 'string' },
           yes: { type: 'string' },
+          after: { type: 'string' },
         },
         usage,
       );
@@ -86,18 +96,25 @@ export default {
       if (!verb) throw new UsageError(`${notOneOf(word, verbs)}\n\n${usage}`);
       if (['put', 'get', 'remove'].includes(verb) && !a)
         throw new UsageError(`${verb} needs ${verb === 'put' ? 'a file' : 'a path'}\n\n${usage}`);
+      const most = { list: 2, put: 3, get: 2, remove: 2, usage: 1 }[verb];
+      if (positionals.length > most) throw new UsageError(`${tooMany(positionals.slice(most))}\n\n${usage}`);
       const dir = await resolveGame(values.dir);
       const live = !!values.live;
       const where = live ? 'on xgames.fun' : 'on this machine';
       const json = values.json ? printJson : null;
 
+      if (values.after !== undefined && verb !== 'list') throw new UsageError(`--after is for files list\n\n${usage}`);
       if (verb === 'list') {
-        const r = await filesList(dir, { live, prefix: a ?? '' });
+        const r = await filesList(dir, { live, prefix: a ?? '', after: values.after ?? '' });
         if (json) return json(r);
         if (!r.items.length) console.log(`${named(dir)} has no project files ${where}${a ? ` in ${a}` : ''}.`);
         for (const f of r.items)
           console.log(`${f.public ? 'public ' : 'private'}  ${mb(f.bytes).padStart(9)}  ${f.path}  (${f.type})`);
-        if (r.after) console.log(`… more after ${r.after}`);
+        // a page of the list: the next one starts after its last path
+        if (r.after)
+          console.log(
+            `… more after ${r.after}: ${CMD} files list${a ? ` ${typedPath(a)}` : ''} --after ${typedPath(r.after)}${values.dir ? ` --dir ${typedPath(values.dir)}` : ''}${live ? ' --live' : ''}`,
+          );
         return 0;
       }
       // the words a printout before a live change shares
@@ -146,15 +163,28 @@ export default {
         return 0;
       }
       if (verb === 'get') {
+        // a download is the game's own file, often one only its server reads: kept where publish never takes it
+        const out = values.out ? path.resolve(values.out) : path.join(dir, '.gamesfun', 'downloads', ...a.split('/'));
+        const target = { dir, force: !!values.force, what: 'this project file' };
+        if (!(json && !values.out))
+          try {
+            privateTarget(out, target);
+          } catch (e) {
+            // a refusal (exit 1), not a usage mistake: the command was right, and the file is there
+            if (e.code === 'exists')
+              throw Object.assign(new Error(`${out} is there already: --force writes over it, or --out <file>`), {
+                code: 'exists',
+                next: `${CMD} files get ${typedPath(a)}${values.out ? ` --out ${typedPath(values.out)}` : ''} --force${values.dir ? ` --dir ${typedPath(values.dir)}` : ''}${live ? ' --live' : ''}`,
+              });
+            throw e;
+          }
         const r = await filesGet(dir, a, { live });
-        const out = path.resolve(values.out ?? path.basename(a));
         if (json && !values.out) {
           const { body, ...facts } = r;
           return json({ ...facts, base64: body.toString('base64') });
         }
-        if (existsSync(out) && !values.force)
-          throw new UsageError(`${out} is there already: --force writes over it, or --out <file>\n\n${usage}`);
-        await writeFile(out, r.body);
+        if (!values.out) await stateFolder(dir);
+        await writePrivate(out, r.body, { ...target, force: true });
         const { body: _body, ...facts } = r;
         if (json) return json({ ...facts, file: out });
         console.log(

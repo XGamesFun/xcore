@@ -1,0 +1,43 @@
+[
+  {
+    "input": {
+      "studioOrigin": "https://xgames.fun"
+    },
+    "headers": {
+      "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' blob: data:; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self' https://xgames.fun",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "strict-origin",
+      "cross-origin-resource-policy": "same-origin",
+      "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    }
+  },
+  {
+    "input": {
+      "studioOrigin": "https://xgames.fun",
+      "isolated": true,
+      "mime": "text/html; charset=utf-8",
+      "embedders": [
+        "https://x.com"
+      ],
+      "connect": [
+        "wss://a.example"
+      ],
+      "backend": [
+        "https://api.example"
+      ],
+      "files": [
+        "https://moth.xgamesusercontent.com"
+      ]
+    },
+    "headers": {
+      "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; connect-src 'self' blob: data: wss://a.example https://api.example https://moth.xgamesusercontent.com; img-src 'self' data: blob: https://api.example https://moth.xgamesusercontent.com; media-src 'self' data: blob: https://api.example https://moth.xgamesusercontent.com; font-src 'self' data: https://moth.xgamesusercontent.com; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self' https://xgames.fun https://x.com",
+      "x-content-type-options": "nosniff",
+      "referrer-policy": "strict-origin",
+      "cross-origin-resource-policy": "cross-origin",
+      "permissions-policy": "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+      "content-type": "text/html; charset=utf-8",
+      "cross-origin-opener-policy": "same-origin",
+      "cross-origin-embedder-policy": "require-corp"
+    }
+  }
+]

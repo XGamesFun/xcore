@@ -1,8 +1,9 @@
 # Sign-in, saves, a database and rooms
 
 Open this when the game has (or needs) a login, progress kept between visits, a high-score table, data shared by all
-players, or multiplayer. `xcore add <signin|database|multiplayer> <folder>` writes the files; the calls are listed at the
-top of the file it writes.
+players, or multiplayer. `xcore add <signin|database|multiplayer> <folder>` writes the files. Every call is in
+[docs/CLIENT.md](../../../docs/CLIENT.md); a Godot or Unity game also has them listed at the top of the GamesFun file it
+writes (a web game's `gamesfun.js` is minified: read the calls in CLIENT.md, not there).
 
 ## Sign-in, saves, leaderboards
 
@@ -18,15 +19,41 @@ sign-in), so the game asks for no password and keeps no accounts of its own: xga
   awaits `GamesFun.ready` and follows `GamesFun.onChange`. Godot and Unity have no ready to await: read
   `GamesFun.player` (Godot; null with nobody) or `GamesFun.Player` (Unity; the JSON text `"null"` with nobody) and
   follow the `player_changed` signal or the `PlayerChanged` event, which also brings a player found as the page loads.
-  On the game's own host (`<name>-play.xgames.fun`, where a post's card on X and xgames.fun's wallet hand-off open it)
-  xgames.fun is asked who is here as the page loads, and a player who chose this game in this browser is signed in with
-  no tap.
+  On the game's own host (`<name>-play.xgames.fun`, where a `?card=player` link plays it inside a post on X and
+  xgames.fun's wallet hand-off opens it) xgames.fun is asked who is here as the page loads, and a player who chose this
+  game in this browser is signed in with no tap. A post's picture card (and X's Android app) opens the play page,
+  `xgames.fun/play/<name>`, where the play page signs the player in.
 - **On its own host, the Sign in tap takes the tab to X and back** (phone and computer), so the game starts again,
   signed in. Call `signIn` in the click handler itself with nothing awaited before it, because a browser opens X only
   from the tap. `GamesFun.signInEnded` says `'cancelled'` or `'failed'` when it came back with nobody. Tell the person.
   A game that can't start again at that moment (a run in progress with nothing saved) signs in before play starts, or
   passes `stay: true` (`GamesFun.signIn({stay: true})`, `sign_in("x", true)`, `SignIn("x", true)`), which opens a
-  window instead.
+  window instead. On the play page Sign in takes the tab to X and back too, unless the browser is signed in already;
+  with `stay` the play page opens a window where one can open, but in an app's own browser (X's in-app browser) it
+  still takes the tab, so a game that must not restart asks for sign-in before play starts.
+- **Guests save too, and their saves stay in the browser at sign-in.** A guest (nobody signed in) saves in that
+  browser. Once they sign in, `saves.get` reads the account, so a game that replaced its local save file sees the
+  guest's progress vanish, the moment the player signed in to keep it, unless it carries it over. Carry a guest save
+  into the account when the account has none of that key, or ask the person how their game should choose (keep the
+  better one, ask the player):
+
+  ```js
+  GamesFun.onChange(async player => {
+    if (!player) return;
+    const { data: kept } = await GamesFun.saves.guest.list();
+    for (const { key } of kept ?? []) {
+      const { data: mine, error } = await GamesFun.saves.get(key);
+      if (!error && mine == null) await GamesFun.saves.guest.move(key); // the account has none: the guest's goes over
+    }
+  });
+  ```
+
+  Godot: `saves_guest_list`, `saves_guest_move`; Unity: `SavesGuestList`, `SavesGuestMove`.
+
+- **A leaderboard the page writes takes any score a player sends** from their browser console. Say so to the person
+  when the board matters (a prize, a ranked board): the game's server makes that board with
+  `env.GF.scores.setup(board, { writer: 'server' })` and submits each score after checking the run
+  ([docs/CLIENT.md](../../../docs/CLIENT.md), "Leaderboards").
 - `GamesFun.signOut()` tells xgames.fun to forget the game in that browser. A game that draws its own button as a link
   takes the address from `GamesFun.signInLink('x')`.
 - A game whose `gamesfun.js` is older than 1.9.0 gets none of this until `xcore add signin` brings the file up to date

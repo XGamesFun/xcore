@@ -48,8 +48,8 @@ To run without installing, use `npx -y @xgamesfun/xcore@0.14.1 adopt .`. The uns
 
 ## Names
 
-**xcore** is the CLI. **xgames.fun** hosts the game. **Studio** is your creator console.
-**GamesFun** is the client your game calls.
+**xcore** is the CLI. **xgames.fun** hosts the game. **Your console**, at xgames.fun/console, is where you manage a
+published game, its plan and its billing. **GamesFun** is the client your game calls.
 
 For economies, `xcore loot` runs **xsolana**, the CLI in `@xgamesfun/solana`. **loot** is the shared Solana
 program. [solana-kit source](https://github.com/XGamesFun/solana-kit)
@@ -64,7 +64,7 @@ program. [solana-kit source](https://github.com/XGamesFun/solana-kit)
 | Server code for scores, payouts or your own API    | Put a Cloudflare Worker in `server/`. [Server guide](docs/SERVER.md)                                    |
 | Replays, level files or content packs              | `xcore files` · [Project files](docs/COMMANDS.md#files)                                                 |
 | A backend you already host                         | `xcore backend use custom` · [Backend setup](docs/HOSTING.md#a-backend)                                 |
-| Announcements, settings or maintenance mode        | Use the creator console. [Live settings](docs/CLIENT.md#live-settings-gamesfunlive)                     |
+| Announcements, settings or maintenance mode        | Your console's Live tab. [Live settings](docs/CLIENT.md#live-settings-gamesfunlive)                     |
 | Shops, loot boxes, staking or rewards              | `xcore loot add` · [Solana economy](docs/ECONOMY.md)                                                    |
 | Payout and key checks                              | `xcore review` scans your code for known mistakes. [Review limits](docs/ECONOMY.md#review-xcore-review) |
 | Your own site or domain                            | `xcore embed` or `xcore domain` · [Hosting](docs/HOSTING.md#embedding)                                  |
@@ -73,6 +73,9 @@ program. [solana-kit source](https://github.com/XGamesFun/solana-kit)
 
 Run `xcore --help` for the command list or `xcore <command> --help` for options. Use `--json` in scripts.
 [Command reference and exit codes](docs/COMMANDS.md)
+
+A live server's errors and logs, rolling back to an earlier version, unpublishing and pausing for maintenance are on
+your console, not in the CLI. [What only the console does](docs/COMMANDS.md#what-only-the-console-does)
 
 ## Hosting rules and limits
 
@@ -93,11 +96,14 @@ A game can include up to 3,000 files and 100 MiB. An account can publish 30 time
 
 Free accounts can host **2 games**, with $1 of backend use per game each month.
 Creator costs **$15 per account for 30 days** and covers up to **10 games**. Your games share $10 of monthly use.
-Prepay in SOL or USDC under Plans in the creator console. Renew manually.
+Buy it on your console's Plans tab (xgames.fun/console) in one of two ways: by card, a subscription that renews every
+30 days until you cancel it, or prepaid in SOL or USDC for 1–12 periods, which you renew yourself.
 
 Server work, rooms and stored data count toward the hosting cap. Page requests and shared Solana relay calls
-also use the allowance, but cannot trigger a cap on their own. For example, 100,000 relay calls use $1 of the
-allowance or $2 of Creator overage credit. At the cap, pages stay up, the server stops, and saves and scores slow down.
+also use the allowance, but cannot trigger a cap on their own. For example, 100,000 mainnet relay calls use $1 of the
+allowance or $2 of Creator overage credit; a devnet page's relay calls are not billed to the game. At the cap, pages stay up, the server stops, and saves and scores slow down.
+Past the included use, Creator games use usage credit (paying in SOL or USDC) or go on the card invoice up to a spending
+cap you set (paying by card).
 
 Solana fees are separate. A mainnet player action costs 0.0005 SOL plus network fees. Minting a collectible adds
 about 0.0031 SOL including rent. Run `xcore loot cost` for your economy. A coin launch costs about 0.03 SOL.
@@ -107,6 +113,9 @@ about 0.0031 SOL including rent. Run `xcore loot cost` for your economy. A coin 
 
 - **Database.** `xcore db export --live` downloads SQL, including documents saved with `GamesFun.db`. Restore it with `xcore db import`.
 - **Project files.** List them with `xcore files list --live`, then download each with `xcore files get <path> --live`.
+  A list shows 100 files at a time and ends with the command for the next ones (`--after <path>`).
+- **Not exported:** the storage of the server's rooms (Durable Objects) and its secrets.
+  [What is kept where](docs/HOSTING.md#your-games-data-and-getting-it-out)
 - **Saves and leaderboards.** `xcore data export` downloads every save and every board's entries into one JSON file,
   each player as the game's player id, never their X id or wallet. [Data access](docs/HOSTING.md#your-games-data-and-getting-it-out)
 
@@ -134,7 +143,7 @@ For Cursor and other agents, use `npx skills add XGamesFun/xcore`. [Game skill](
 **Do players need a wallet?** Players sign in with X or Google. They can link a wallet for Solana features.
 
 **Does the economy use real money?** It starts on devnet with test funds. Set `"network": "mainnet"` in
-`xsolana.json` to use real funds. [Economy guide](docs/ECONOMY.md)
+`xsolana.json` to use real funds, with the other steps in [Moving to mainnet](docs/ECONOMY.md#moving-to-mainnet).
 
 **Can my game launch a coin?** Once published, it can launch on Meteora or pump.fun.
 [Coin launches](docs/ECONOMY.md#a-coin-that-trades-xcore-coin)

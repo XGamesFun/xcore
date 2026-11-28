@@ -1,12 +1,14 @@
 // `xcore dev [dir]`: the game as xgames.fun hosts it, on this machine, with its server, sign-in, saves, rooms and
 // economy RPC (../lib/dev/index.mjs). Runs until Ctrl+C.
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
-import { resolveGame, shown } from '../lib/games.mjs';
+import { folderArg, guard, parse, printJson, tooMany, UsageError } from '../lib/cli.mjs';
+import { kitRecordWords, resolveGame, shown } from '../lib/games.mjs';
 import { madeByKit } from '../lib/publish/index.mjs';
 import { CMD } from '../lib/command.mjs';
 import { PLAN_NAMES } from '../lib/dev/plans.mjs';
 
 const usage = `Usage: xcore dev [dir] [--port <n>] [--plan <name>] [--no-build] [--open] [--verbose] [--json]
+
+The game's folder is the word or --dir <folder> (default: the current directory).
 
 Run the game on this machine as xgames.fun hosts it, with the same services a published game has:
   http://127.0.0.1:<port>/game/   the published files, with the play host's headers
@@ -79,9 +81,11 @@ export default {
           'no-build': { type: 'boolean' },
           open: { type: 'boolean' },
           verbose: { type: 'boolean' },
+          dir: { type: 'string' },
         },
         usage,
       );
+      if (positionals.length > 1) throw new UsageError(`${tooMany(positionals.slice(1))}\n\n${usage}`);
       let port = values.port === undefined ? 8787 : Number(values.port);
       // (the game's files take the next port, so the last one cannot be the page's)
       if (!Number.isInteger(port) || port < 0 || port > 65534)
@@ -94,11 +98,8 @@ export default {
       const plan = String(values.plan ?? 'free').toLowerCase();
       if (!PLAN_NAMES.includes(plan))
         throw new UsageError(`--plan is ${PLAN_NAMES.slice(0, -1).join(', ')} or ${PLAN_NAMES.at(-1)}\n\n${usage}`);
-      const dir = await resolveGame(positionals[0]);
-      if (madeByKit(dir))
-        throw new Error(
-          `${shown(dir)} was made with the game-making kit. Its dev server is the kit's own, which runs only where the kit is installed. The kit is not released yet.`,
-        );
+      const dir = await resolveGame(folderArg(values.dir, positionals[0], usage));
+      if (madeByKit(dir)) throw new Error(kitRecordWords(dir, 'dev'));
       const say = values.json ? m => console.error(m) : m => console.log(m);
       const { startDev } = await import('../lib/dev/index.mjs');
       let dev;
@@ -116,6 +117,7 @@ export default {
       if (values.json)
         printJson({
           url: dev.url,
+          play: dev.play,
           origin: dev.origin,
           files: dev.files,
           server: dev.server,
@@ -124,6 +126,7 @@ export default {
         });
       else {
         say(`\n${shown(dir)} is running at ${dev.url}  (Ctrl+C stops it)`);
+        if (dev.play) say(`  as xgames.fun's play page frames it: ${dev.play}`);
         say(
           `  server: ${dev.server ? (dev.server.running ? 'running' : 'not running (above)') : 'none (no server/)'} · sign-in: a local player · public project files: ${dev.files}/`,
         );

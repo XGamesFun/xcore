@@ -29,8 +29,22 @@ test("a flag's value is never taken for the game's folder", async t => {
     const { default: command } = await import(`../commands/${name}.mjs`);
     const flags = [...command.usage.split('\n\n')[0].matchAll(/--([a-z-]+) <[^>]+>/g)].map(m => m[1]);
     assert.ok(flags.length > 0, name);
-    for (const flag of flags)
+    for (const flag of flags.filter(f => f !== 'dir'))
       assert.equal(kitsTurn(name, [`--${flag}`, 'value', kg]), true, `${name} --${flag} value <a kit game>`);
+    // --dir names the folder itself
+    assert.equal(kitsTurn(name, ['--dir', kg]), true, `${name} --dir <a kit game>`);
+    assert.equal(kitsTurn(name, ['--dir', tmp.dir]), false, `${name} --dir <a folder of ours>`);
+  }
+  // with no kit here, the file that made it the kit's is named, and what to do with a stray copy
+  for (const name of ['check', 'publish', 'dev']) {
+    const r = run([name, 'kg'], { cwd: tmp.dir, env: { GAMESFUN_KIT: '' } });
+    assert.equal(r.status, 1, r.stderr);
+    assert.match(
+      r.stderr,
+      new RegExp(
+        `^kg has gf-three\\.json, the record of a game made in the game-making kit, so its ${name} is the kit's, .*move it out of the folder, then run ${name} again\\.`,
+      ),
+    );
   }
   const { default: backend } = await import('../commands/backend.mjs');
   for (const [, flag] of backend.usage.split('\n\n')[0].matchAll(/--([a-z-]+) <[^>]+>/g))
