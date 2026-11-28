@@ -324,10 +324,42 @@ test('a check screenshot makes the preview picture only from a run that passed o
     JSON.stringify({ pass: true, started: new Date().toISOString(), seconds: 1 }),
   );
   assert.equal(await shotProblem(dir, shot), null);
-  // a file of the game changed after the run ended
+  // what publish leaves out cannot change the page: the maker's notes, server/, hidden files, a later run's evidence
   const later = new Date(Date.now() + 60_000);
+  for (const rel of ['NOTES.md', 'README.md', 'FRICTION.md', 'server/index.js', '.git/HEAD', 'evidence/verify-2/x.png']) {
+    const file = path.join(dir, ...rel.split('/'));
+    await mkdir(path.dirname(file), { recursive: true });
+    await writeFile(file, 'later');
+    await utimes(file, later, later);
+  }
+  assert.equal(await shotProblem(dir, shot), null);
+  // a file of the game changed after the run ended
   await utimes(path.join(dir, 'game.js'), later, later);
   assert.match(await shotProblem(dir, shot), /changed after that check ran \(game\.js, for one\)/);
+});
+
+test('a built game’s check screenshot stays good over a build run again, not over a changed source', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = path.join(tmp.dir, 'built');
+  await mkdir(path.join(dir, 'src'), { recursive: true });
+  await mkdir(path.join(dir, 'dist'), { recursive: true });
+  await writeFile(path.join(dir, 'gamesfun.json'), JSON.stringify({ page: { build: 'npm run build', out: 'dist' } }));
+  await writeFile(path.join(dir, 'src', 'main.js'), 'console.log(1)');
+  await writeFile(path.join(dir, 'dist', 'index.html'), '<!doctype html><title>built</title>');
+  const run = path.join(dir, 'evidence', 'verify-1');
+  await mkdir(run, { recursive: true });
+  const shot = path.join(run, 'desktop.png');
+  await writeFile(shot, '');
+  await writeFile(
+    path.join(run, 'record.json'),
+    JSON.stringify({ pass: true, started: new Date().toISOString(), seconds: 1 }),
+  );
+  const later = new Date(Date.now() + 60_000);
+  await utimes(path.join(dir, 'dist', 'index.html'), later, later);
+  assert.equal(await shotProblem(dir, shot), null, 'the build writes its output again from the same sources');
+  await utimes(path.join(dir, 'src', 'main.js'), later, later);
+  assert.match(await shotProblem(dir, shot), /changed after that check ran \(src\/main\.js, for one\)/);
 });
 
 test('an economy live on devnet whose "network" says mainnet is refused, with what to do; one on its own cluster goes', async t => {
