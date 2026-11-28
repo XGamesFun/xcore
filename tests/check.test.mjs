@@ -424,10 +424,17 @@ test(
     );
     const r = await pageVerify(dir, { out: path.join(tmp.dir, 'out') });
     const w = r.firstSession;
-    assert.deepEqual(w.firstSignIn, { step: 1, provider: 'X' }, JSON.stringify(w.steps));
+    // (tapped on the game's own Sign in: the sign-in, never counted as play)
+    assert.deepEqual(w.firstSignIn, { step: 1, provider: 'X', control: true }, JSON.stringify(w.steps));
     assert.deepEqual(w.steps[0].asked, [{ kind: 'signin', detail: 'X' }]);
+    assert.equal(w.steps[0].playing, false);
     assert.equal(w.firstWallet, null);
-    assert.equal(w.tell[0], 'The game screen changed on tap 1, after a sign-in with X (at tap 1).');
+    assert.ok(
+      w.tell.includes(
+        'At tap 1 the walk tapped “Sign in”, a sign-in with X; no wallet was asked for in the first 1 tap.',
+      ),
+      w.tell.join('\n'),
+    );
   },
 );
 
