@@ -163,8 +163,12 @@ export default {
           try {
             privateTarget(out, target);
           } catch (e) {
+            // a refusal (exit 1), not a usage mistake: the command was right, and the file is there
             if (e.code === 'exists')
-              throw new UsageError(`${out} is there already: --force writes over it, or --out <file>\n\n${usage}`);
+              throw Object.assign(new Error(`${out} is there already: --force writes over it, or --out <file>`), {
+                code: 'exists',
+                next: `${CMD} files get ${typedPath(a)}${values.out ? ` --out ${typedPath(values.out)}` : ''} --force${values.dir ? ` --dir ${typedPath(values.dir)}` : ''}${live ? ' --live' : ''}`,
+              });
             throw e;
           }
         const r = await filesGet(dir, a, { live });

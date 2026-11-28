@@ -338,7 +338,13 @@ test('xcore files on this machine: put, ls, get, rm, usage', async t => {
   assert.equal(r.status, 0, r.stderr);
   assert.equal(await readFile(path.join(tmp.dir, 'back.json'), 'utf8'), '{"tiles":[1,2]}');
   r = await xc(['get', 'levels/forest-3.json', '--out', path.join(tmp.dir, 'back.json')]);
-  assert.equal(r.status, 2, 'it does not write over a file without --force');
+  assert.equal(r.status, 1, 'it does not write over a file without --force: a refusal, not a usage mistake');
+  assert.match(r.stderr, /back\.json is there already: --force writes over it, or --out <file>\n$/);
+  r = await xc(['get', 'levels/forest-3.json', '--out', path.join(tmp.dir, 'back.json'), '--json']);
+  assert.deepEqual(
+    [JSON.parse(r.stdout).code, / --out .*back\.json --force/.test(JSON.parse(r.stdout).next)],
+    ['exists', true],
+  );
   // by default a download goes where publish never takes it, readable by this user only; a file among the published
   // files is refused, since the next publish would make a private file public
   r = await xc(['get', 'levels/forest-3.json']);

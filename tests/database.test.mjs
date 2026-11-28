@@ -560,6 +560,7 @@ test("xcore db query: the rule of xgames.fun's query route, the same cases taken
     "PRAGMA table_info('guilds');",
     'PRAGMA main.table_info("guilds")',
     '/* hi */ SELECT 1',
+    'WITH top AS (SELECT * FROM guilds) SELECT * FROM top',
   ])
     assert.equal(queryProblem(sql), null, sql);
   for (const sql of [
@@ -585,7 +586,12 @@ test("xcore db query: the rule of xgames.fun's query route, the same cases taken
     assert.ok(queryProblem(sql), sql);
   assert.match(queryProblem('SELECT 1; SELECT 2'), /one statement at a time \(this has 2\)/);
   assert.match(queryProblem("SELECT 'unclosed"), /never ends/);
-  assert.match(queryProblem('DELETE FROM t'), /Add --write/);
+  assert.match(queryProblem('DELETE FROM t'), /changes the database.*add --write to change data/);
+  assert.match(queryProblem('WITH x AS (SELECT 1) DELETE FROM t'), /add --write/);
+  // a typo is no write: it is said as a statement the query does not read with, and --write is not offered
+  assert.match(queryProblem('SELEC 1'), /^A query reads with SELECT .*, and "SELEC" is none of them\.$/);
+  // with --write a trigger's BEGIN … END is one statement, as a migration is read
+  assert.equal(queryProblem('CREATE TRIGGER t AFTER INSERT ON a BEGIN UPDATE a SET x = 1; END', { write: true }), null);
   assert.equal(queryProblem('DELETE FROM t', { write: true }), null);
   assert.match(queryProblem('DELETE FROM t; DELETE FROM u', { write: true }), /one statement/);
   assert.deepEqual(sqlStatements("SELECT 'a;b'; -- c;\nSELECT [x;y] /* ; */"), ["SELECT 'a;b'", 'SELECT [x;y]']);
@@ -1051,7 +1057,7 @@ test('xcore db --live goes through the owner routes; a live change prints itself
   assert.equal(seen.length, sent);
   r = await xc(['query', 'DELETE FROM players', '--live']);
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /a query may only read: SELECT, EXPLAIN.*Add --write/);
+  assert.match(r.stderr, /changes the database, and a query only reads unless it says so: add --write/);
   assert.equal(seen.length, sent);
   // a write live prints exactly what it changes, with a code, and sends nothing (no terminal to type the word in)
   r = await xc(['query', 'DELETE FROM players WHERE id = ?', '--params', '["p1"]', '--live', '--write']);
