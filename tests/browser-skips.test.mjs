@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import browserSkips, { browserSkipsLine, NO_BROWSER } from './browser-skips.mjs';
+import browserSkips, { allRanLine, browserSkipsLine, NO_BROWSER } from './browser-skips.mjs';
 import { ROOT } from './helpers.mjs';
 
 const files = readdirSync(path.join(ROOT, 'tests'))
@@ -23,7 +23,8 @@ test('a run with no browser ends with one line: how many browser tests did not r
   const skipped = (name, skip) => ({ type: 'test:pass', data: { name, skip } });
   const run = async events => {
     let out = '';
-    for await (const text of browserSkips(events)) out += text;
+    // as on a machine where skips are allowed, whatever this run has set
+    for await (const text of browserSkips(events, { env: {} })) out += text;
     return out;
   };
   const line = await run([
@@ -39,6 +40,38 @@ test('a run with no browser ends with one line: how many browser tests did not r
   );
   assert.match(browserSkipsLine(1), /^\n1 browser test did not run: .* To run it, install/);
   assert.equal(await run([{ type: 'test:pass', data: { name: 'ran' } }]), '', 'nothing to say when they all ran');
+});
+
+test('with XCORE_TEST_ALL=1 a skipped test fails the run, each named with its reason (CI on Linux runs them all)', async () => {
+  const events = [
+    { type: 'test:pass', data: { name: 'the page check', skip: NO_BROWSER } },
+    { type: 'test:pass', data: { name: 'a test that ran' } },
+    {
+      type: 'test:pass',
+      data: { name: 'the game’s server', skip: 'GAMESFUN_SERVER_DEPS (a folder with miniflare) is not set' },
+    },
+    { type: 'test:pass', data: { name: 'a bare skip', skip: true } },
+  ];
+  const run = async env => {
+    let out = '',
+      failed = 0;
+    for await (const text of browserSkips(events, { env, fail: () => failed++ })) out += text;
+    return { out, failed };
+  };
+  const all = await run({ XCORE_TEST_ALL: '1' });
+  assert.equal(all.failed, 1);
+  assert.ok(
+    all.out.endsWith(
+      '\nXCORE_TEST_ALL is set, and 3 tests did not run:\n  the page check: no Chrome, Edge or Chromium here\n  the game’s server: GAMESFUN_SERVER_DEPS (a folder with miniflare) is not set\n  a bare skip: skipped\n',
+    ),
+    all.out,
+  );
+  assert.match(all.out, /^\n1 browser test did not run/);
+  // without it, a skip is only counted (a person's machine without Chrome or the server tools)
+  const some = await run({});
+  assert.equal(some.failed, 0);
+  assert.ok(!some.out.includes('XCORE_TEST_ALL'), some.out);
+  assert.equal(allRanLine([]), '');
 });
 
 test('every browser guard gives the reason the last line counts', () => {

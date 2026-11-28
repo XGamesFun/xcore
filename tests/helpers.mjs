@@ -2,7 +2,7 @@
 // xgames.fun that signs in and takes a publish in memory.
 import { spawn, spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { cp, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import os from 'node:os';
@@ -20,11 +20,27 @@ export const BIN = path.join(ROOT, 'bin', 'xcore.mjs');
 // OIDC sign-in passes them itself.
 delete process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
 delete process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
+// The same for what a person's own shell may set: another Studio (a local one), another command name, a kit or a
+// solana checkout of their own. A test that needs one passes it itself.
+for (const name of [
+  'GAMESFUN_STUDIO',
+  'GAMESFUN_OIDC_AUDIENCE',
+  'GAMESFUN_KIT',
+  'GAMESFUN_SOLANA',
+  'GAMESFUN_WORK',
+  'XCORE_COMMAND',
+  'XCORE_DEV_SIGNIN',
+])
+  delete process.env[name];
 
 // Every folder tempDir made, removed once more as the test file's process ends. A test's own cleanup can run before
 // what still writes there has stopped (node:test runs a test's after hooks in the order they were registered, and a dev
 // host or a store closed after it writes its file one last time), which puts the folder back.
 const made = new Set();
+// The sign-in and state folder: a new, empty one for each test file, so a person's own sign-in on this machine is never
+// read or changed. (The secret store is left as the shell chose it: GAMESFUN_SECRET_STORE=file keeps the keychain out.)
+process.env.GAMESFUN_CONFIG_DIR = mkdtempSync(path.join(os.tmpdir(), 'gamesfun-test-config-'));
+made.add(process.env.GAMESFUN_CONFIG_DIR);
 process.on('exit', () => {
   for (const dir of made)
     try {
