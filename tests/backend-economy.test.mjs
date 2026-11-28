@@ -555,6 +555,13 @@ test('loot with a command the tools do not have, and --json: a usage refusal as 
   assert.match(out.error, /Unknown subcommand "bogus"/);
   // without --json, the tools' own words
   assert.notEqual(run(['loot', 'bogus']).status, 0);
+  // --json before the command is for that command
+  const first = run(['loot', '--json', 'bogus']);
+  assert.equal(first.status, 2, first.stderr);
+  assert.match(JSON.parse(first.stdout).error, /Unknown subcommand "bogus"/);
+  const guide = run(['loot', '--json', 'guide']);
+  assert.equal(guide.status, 0, guide.stderr);
+  assert.equal(typeof JSON.parse(guide.stdout).text, 'string');
 });
 
 test("loot handover reads a loot.json game's file, version names the program of the folder's cluster, a refusal says xcore", async t => {

@@ -110,6 +110,8 @@ export default {
   usage,
   helpFor: args => lootHelp(args),
   run: async args => {
+    // a leading --json goes after the command it is for (`loot --json version` is `loot version --json`)
+    if (args[0] === '--json' && args[1] && !args[1].startsWith('-')) args = [args[1], '--json', ...args.slice(2)];
     if (args[0] === '--help' || args[0] === '-h') {
       console.log(lootHelp([]));
       return 0;
