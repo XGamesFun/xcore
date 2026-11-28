@@ -329,3 +329,60 @@ test('a check screenshot makes the preview picture only from a run that passed o
   await utimes(path.join(dir, 'game.js'), later, later);
   assert.match(await shotProblem(dir, shot), /changed after that check ran \(game\.js, for one\)/);
 });
+
+test('an economy live on devnet whose "network" says mainnet is refused, with what to do; one on its own cluster goes', async t => {
+  const { liveClusterProblem } = await import('../lib/publish/index.mjs');
+  const { LOOT_PROGRAMS } = await import('../lib/solana-rpc.mjs');
+  const live = program => ({ live: { program, project: 'P' } });
+  assert.equal(liveClusterProblem({ network: 'mainnet', ...live(LOOT_PROGRAMS.mainnet) }), null);
+  assert.equal(liveClusterProblem({ ...live(LOOT_PROGRAMS.devnet) }), null);
+  assert.equal(liveClusterProblem({ network: 'mainnet' }), null, 'not live yet');
+  assert.equal(liveClusterProblem({ network: 'mainnet', ...live('Some1ocalProgram') }), null, 'no cluster’s loot');
+  assert.match(
+    liveClusterProblem({ network: 'mainnet', ...live(LOOT_PROGRAMS.devnet) }),
+    /"network" is "mainnet", and its "live" section is loot on devnet .*refuse to start\. To go to mainnet: keep a copy of this file .*take its "live" section out/,
+  );
+  assert.match(
+    liveClusterProblem({ network: 'devnet', ...live(LOOT_PROGRAMS.mainnet) }),
+    /Set "network" back to "mainnet"/,
+  );
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  await writeFile(
+    path.join(dir, 'xsolana.json'),
+    JSON.stringify({ network: 'mainnet', ...live(LOOT_PROGRAMS.devnet) }),
+  );
+  assert.ok((await preflight(dir)).problems.some(p => /^xsolana\.json: its "network" is "mainnet"/.test(p)));
+});
+
+test('a mainnet economy whose grant or issuer is the .dev.vars test voucher key is refused; on devnet it is the point', async t => {
+  const { seedAddress } = await import('../lib/voucher-seed.mjs');
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await fixture(tmp, 'static');
+  const seed = 'ab'.repeat(32);
+  const test = await seedAddress(seed);
+  await writeFile(path.join(dir, '.dev.vars'), `VOUCHER_SEED=${seed}\n`);
+  const economy = network =>
+    writeFile(
+      path.join(dir, 'xsolana.json'),
+      JSON.stringify({
+        network,
+        grants: [
+          { key: 'win', vouchers: [test] },
+          { key: 'other', vouchers: [] },
+        ],
+        keys: { issuer: test },
+      }),
+    );
+  await economy('devnet');
+  assert.ok(!(await preflight(dir)).problems.some(p => /test voucher key/.test(p)));
+  await economy('mainnet');
+  const said = (await preflight(dir)).problems.find(p => /test voucher key/.test(p));
+  assert.match(
+    said,
+    /^xsolana\.json: this economy is on mainnet, and grant "win" takes vouchers from the test voucher key \(\w+\), and its keys\.issuer is that key, whose seed is in \.dev\.vars/,
+  );
+  assert.match(said, /secret set VOUCHER_SEED --new-key/);
+});
