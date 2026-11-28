@@ -157,7 +157,9 @@ export default {
         await writeFile(out, r.body);
         const { body: _body, ...facts } = r;
         if (json) return json({ ...facts, file: out });
-        console.log(`Got ${r.path} from ${where} (${mb(r.bytes)}, ${r.type}) into ${out}.`);
+        console.log(
+          `Got ${r.path} from ${live ? 'xgames.fun' : 'this machine'} (${mb(r.bytes)}, ${r.type}) into ${out}.`,
+        );
         return 0;
       }
       if (verb === 'remove') {
