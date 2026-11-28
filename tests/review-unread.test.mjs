@@ -156,3 +156,36 @@ test('a review that cannot finish exits 3 (INCONCLUSIVE) with the verdict in its
   assert.equal(plain.status, 3);
   assert.match(plain.stderr, /^review: INCONCLUSIVE: the review could not finish \(/);
 });
+
+test('server code that sends a transaction itself is a payout not read: INCONCLUSIVE, and METHOD says only vouchers are read', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'bounded');
+  await writeFile(
+    path.join(dir, 'server', 'withdraw.js'),
+    `import { Connection, Keypair, PublicKey, SystemProgram, Transaction, sendAndConfirmTransaction } from '@solana/web3.js';
+import bs58 from 'bs58';
+export async function withdraw(request, env) {
+  const { to, lamports } = await request.json();
+  const payer = Keypair.fromSecretKey(bs58.decode(env.TREASURY_SECRET));
+  const tx = new Transaction().add(SystemProgram.transfer({ fromPubkey: payer.publicKey, toPubkey: new PublicKey(to), lamports: Number(lamports) }));
+  return Response.json({ sig: await sendAndConfirmTransaction(new Connection(env.XSOLANA_RPC_URL), tx, [payer]) });
+}
+`,
+  );
+  const r = await review(dir);
+  assert.equal(r.verdict, 'INCONCLUSIVE');
+  const u = r.unread.find(x => x.what === 'server/withdraw.js');
+  assert.ok(u?.payout, JSON.stringify(r.unread));
+  assert.match(
+    u.why,
+    /^it signs or sends a transaction itself \(Keypair\.fromSecretKey, sendTransaction, from line 5\): a payout outside a voucher/,
+  );
+  assert.match(r.method[3], /only payouts made through a voucher are read/);
+  // a message that names the call is no call
+  await writeFile(
+    path.join(dir, 'server', 'withdraw.js'),
+    "export const help = () => Response.json({ why: 'Use sendTransaction( from your wallet; Keypair.fromSecretKey( is not here.' });\n",
+  );
+  assert.equal((await review(dir)).verdict, 'PASS');
+});
