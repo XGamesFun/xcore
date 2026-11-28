@@ -24,11 +24,13 @@ Contents:
 
 ## Every command
 
-Commands with subcommands (`files`, `secret`, `db`, `embed`, `domain`, `plan`, `coin`) take them the same way:
+Every command that works on a game takes its folder as the last word or as `--dir <folder>`; either works, and both
+must agree. `files` and `data` take `--dir <folder>` only (`files`' words are file paths). The default is the current
+directory. A word too many is a usage mistake (exit code 2), never dropped.
+
+Commands with subcommands (`files`, `secret`, `db`, `embed`, `domain`, `coin`, `data`) take them the same way:
 
 - `list` and `remove` are the names this reference uses; `ls`, and `rm` or `delete`, are the same subcommands.
-- The game's folder is the last word, or `--dir <folder>`; either works, and both must agree. `files` takes
-  `--dir <folder>` only, because its words are file paths. The default is the current directory.
 - A word that is no subcommand is a usage mistake (exit code 2) that names the subcommands there are, never "no such
   folder".
 
@@ -340,7 +342,10 @@ that is overwritten or deleted there is gone for good.
 - `put --live` to a path xgames.fun already has, and `remove --live`, first print what would be lost (the file there, its
   size and type) with a code, and change nothing. Run the same command with `--yes <code>` to go ahead. A code printed
   for a different change is refused.
-- `xcore files get <path> --live` keeps a local copy first.
+- `xcore files get <path> --live` keeps a local copy first. A download goes to `.gamesfun/downloads/<path>` (never
+  published, readable by you only), or to `--out <file>`. A file there already is refused unless `--force`, and an
+  `--out` among the game's published files is refused, since the next publish would make it public. `xcore db export`
+  and `xcore data export` take `--out` and `--force` the same way.
 
 ## login and logout
 
@@ -367,7 +372,10 @@ days. xcore never sees your password.
 ([environment variables](#environment-variables)).
 
 `xcore logout` signs this computer out: the publish token is revoked at xgames.fun and deleted locally. Published
-games stay published.
+games stay published. When xgames.fun could not revoke it (no answer, or a server error), the token is kept so you can
+try again, and logout exits 1; its `--json` carries `status` for a server error. `xcore logout --forget` deletes it
+here anyway, and it stays live until it expires or you revoke it on your console's Sign-ins page. A new `xcore login`
+revokes the token it replaces.
 
 ## publish
 
@@ -393,8 +401,12 @@ longer need on your console, or, on Free, buy a Creator account (`--json`: `code
 
 - At a terminal, type `publish` to go on.
 - Without a terminal (a script, an agent), run the same command again with `--yes <code>`, using the code it printed.
-  With `--json`, the printout is `{ok: true, planned: true, code, plan, next}`, and `next` is the command to run.
+  With `--json`, the printout is `{ok: true, planned: true, code, plan, confirm}`, and `confirm` is the command to run
+  once the person has said yes.
 - The code covers the site, the account, the game's name and the folder. A code printed for anything else is refused.
+  A code works once, within 15 minutes. Every printout with a code works the same way (`secret set` over a name the
+  server has, a live `files` or `db` change); for `secret set`, a value piped in or read from a file is part of what
+  the code covers.
 - Publishing a folder that is already linked to its game (`.gamesfun/publish.json`) updates that game with no question.
   `--new` makes another game, and asks again.
 - A GitHub Actions job signed in with its OIDC token is not asked: it publishes only the game its repository was linked
@@ -407,8 +419,12 @@ The steps of every publish:
    link stops the publish. Two small records are uploaded with them, because xgames.fun keeps them with every version:
    `foundation.lock.json` (which tool published it) and `adaptation-plan.json` (the game's title and a one-line
    description). Like every published file, both can be read at the game's link.
-2. **No secrets**: every text file is scanned for anything that looks like a key (private keys; cloud, payment and AI
-   keys; a Supabase service-role key; a database address with a password). xgames.fun scans again on its side.
+2. **No secrets, and none of your players' data**: every text file is scanned for anything that looks like a key
+   (private keys; cloud, payment and AI keys; a Supabase service-role key; a database address with a password; a
+   signing key's seed by its name, whole, split in pieces or as base64). xgames.fun scans again on its side. A `.sql`
+   file, a `data export` file and the example migration `xcore add database` wrote, unchanged, are refused too.
+   A mainnet economy is refused when its grants pay through the test voucher key in `.dev.vars`, or when its `live`
+   section is loot on the other cluster ([ECONOMY.md](ECONOMY.md#moving-to-mainnet)).
 3. **Its backend**: `backend.json`'s origins are the only other sites the published page may reach.
 4. **Its server code** (`server/`, a Worker under the `gf-server-v1` contract): bundled into one file and checked. It
    must build, contain no code generated from text, use no Node built-in a Worker lacks, contain no secrets, export
@@ -541,6 +557,9 @@ For use with a coding agent, the skill in `skills/bring-your-own-game/` walks th
 - adds the economy's tools, as `xcore loot connect` does (the `xsolana_*` MCP tools and the `xsolana-economy` skill);
 - prints a few lines for a project's AGENTS.md (it never writes AGENTS.md or CLAUDE.md).
 
+`xcore connect --remove` takes out what it added, at the same scope. After upgrading xcore, run `xcore connect` again
+([UPGRADING.md](UPGRADING.md)).
+
 By default it does this for the folder it runs in only: the skills go in that folder's `.claude/skills/` and
 `.agents/skills/`, and Claude Code registers the tools for that project. `xcore connect --scope user` does it for every
 project of this user (`~/.claude/skills/`, `~/.agents/skills/` and the user's MCP settings). Codex registers MCP
@@ -573,6 +592,9 @@ Some include a `state` and the next command in `next`.
 - `publish --status --json` also gives the game's `link`: `never`, `started`, `public`, `draft`, or
   `draft-over-public`.
 - `adopt --json` gives `state` (`refused`, `fix`, `ready`) and `next`.
+- `secret set XSOLANA_RPC_URL` (or `LOOT_RPC_URL`) whose origin `backend.json` did not list adds the origin and sets
+  nothing: it exits 1 with `{ok: false, code: "not-set", set: false, added, file, next, steps}`, where `steps` are the
+  two commands left (publish, then set it again with the same value).
 
 Exit codes:
 

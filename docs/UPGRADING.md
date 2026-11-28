@@ -1,5 +1,12 @@
 # Upgrading a game made with an older xcore
 
+## After upgrading xcore itself
+
+Run `xcore connect` again (with the same `--scope`). It copies the new version's skill, whose links point at that
+version's docs, and prints the lines for AGENTS.md or CLAUDE.md with the new version in them: update them where you
+pasted them. A game's own copies (`gamesfun.js`, the Godot or Unity glue) are brought up to date by `xcore add signin`
+in its folder; `xcore check` and `xcore publish --status` say when one is older.
+
 ## A game with `server/database.js` from xcore 0.1.0
 
 In xcore 0.1.0, `xcore add database` wrote `server/database.js`: one Durable Object whose documents were identified by
