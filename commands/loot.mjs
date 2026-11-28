@@ -184,6 +184,10 @@ export default {
     // its words name its own commands (`npx -y @xgamesfun/solana@… approve xsolana.json --keypair …`, `xsolana check`):
     // said here as this package's, with the file as it was named
     const say = ownWords({ file, named: file ? path.basename(file) : null });
+    // the MCP server and `tool` talk to an agent, which calls the tools by the names they list (xsolana_check): their
+    // output goes through as it is, and their notes on stderr keep the tools' names
+    const asTools = args[0] === 'mcp' || args[0] === 'tool';
+    const note = asTools ? ownWords({ file, named: file ? path.basename(file) : null, tools: false }) : say;
     const child = spawn(xsolana[0], [xsolana[1], ...rest], { stdio: ['inherit', 'pipe', 'pipe'], env, cwd });
     // a reader that stops early (`| head`) closes our output: stop the tools and end quietly, as a pipe expects
     const gone = { yes: false };
@@ -195,8 +199,8 @@ export default {
     process.stdout.on('error', closed);
     process.stderr.on('error', closed);
     const done = [
-      relay(child.stdout, process.stdout, json ? t => t : say, gone),
-      relay(child.stderr, process.stderr, say, gone),
+      relay(child.stdout, process.stdout, json || asTools ? t => t : say, gone),
+      relay(child.stderr, process.stderr, note, gone),
     ];
     return new Promise(resolve =>
       child.on('close', async code => {
@@ -253,9 +257,10 @@ const TOOLS = 'guide|examples|check|simulate|cost|explain|review|publish|status|
  * xsolana's text as xcore's: its pinned npx forms and its `xsolana <command>` become `xcore loot <command>`, and the
  * file it was given by its plain name (it runs in that file's folder) is the file as the person named it. The MCP
  * server's own command (`npx -y --package=@xgamesfun/solana@… xsolana mcp`, what connect registers in an agent) is
- * said as it is: it is the command the agent runs, so a dry run shows exactly what is registered.
+ * said as it is: it is the command the agent runs, so a dry run shows exactly what is registered. `tools`: false keeps
+ * the MCP tools' names (xsolana_check) as they are, for text an agent reads to call them.
  */
-export function ownWords({ file = null, named = null } = {}) {
+export function ownWords({ file = null, named = null, tools = true } = {}) {
   const COMMANDS = toolCommands().join('|');
   const npx = new RegExp(String.raw`npx -y (?:--package=)?@xgamesfun/solana@[\w.-]+(?: xsolana)? (${COMMANDS})\b`, 'g');
   const own = new RegExp(String.raw`(^|[\s\`'"(])(?<!@xgamesfun/solana@[\w.-]+ )xsolana (${COMMANDS})\b`, 'gm');
@@ -269,7 +274,7 @@ export function ownWords({ file = null, named = null } = {}) {
       .replace(npx, (all, command) => (command === 'mcp' ? all : `xcore loot ${command}`))
       .replace(own, '$1xcore loot $2')
       .replaceAll('xsolana <command> --help', 'xcore loot <command> --help')
-      .replace(tool, 'xcore loot $1');
+      .replace(tool, all => (tools ? `xcore loot ${all.slice('xsolana_'.length)}` : all));
     if (asNamed) t = t.replace(asNamed, `$1 ${file}`).replaceAll(`(${named})`, `(${file})`);
     // its help's columns: the three letters `xcore loot` adds are taken from the gap after
     t = t.replace(/^( {2}xcore loot \S.*?\S)( {5,})/gm, (_, a, gap) => a + gap.slice(3));

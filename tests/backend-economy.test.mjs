@@ -8,7 +8,8 @@ import path from 'node:path';
 import { adopt, addLoot } from '../lib/publish/adopt.mjs';
 import { ECONOMY_FILE, economyFile, lootProgram, solanaRoot } from '../lib/economy.mjs';
 import { solanaRpc, rpcWords, SHARED_RPC } from '../lib/solana-rpc.mjs';
-import { fixture, run, tempDir } from './helpers.mjs';
+import { spawn } from 'node:child_process';
+import { BIN, fixture, run, tempDir } from './helpers.mjs';
 import { fromFolder, ownWords, rpcFor } from '../commands/loot.mjs';
 
 test('backend use custom: backend.json in the folder the build copies, its origins checked', async t => {
@@ -150,6 +151,59 @@ test("gamesfun loot runs @xgamesfun/solana's own tools on the economy file", asy
   assert.match(p.stdout, /xcore loot approve public\/xsolana\.json --keypair ~\/\.config\/xsolana\/[a-z0-9-]+\.json/);
   assert.match(p.stdout, /xcore loot approve public\/xsolana\.json --browser/);
   assert.doesNotMatch(p.stdout, /npx -y|xsolana (approve|check|keygen)/);
+});
+
+test('xcore loot mcp lists the tools under the names they answer to, and a call to a listed name works', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const child = spawn(process.execPath, [BIN, 'loot', 'mcp'], {
+    cwd: tmp.dir,
+    env: { ...process.env, GAMESFUN_KIT: '' },
+  });
+  t.after(() => child.kill());
+  const answers = new Map();
+  let rest = '';
+  child.stdout.setEncoding('utf8');
+  const got = id =>
+    new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`no answer ${id}: ${rest}`)), 60_000);
+      const look = () => {
+        if (!answers.has(id)) return;
+        clearTimeout(timer);
+        child.stdout.off('data', look);
+        resolve(answers.get(id));
+      };
+      child.stdout.on('data', look);
+      look();
+    });
+  child.stdout.on('data', chunk => {
+    const lines = (rest + chunk).split('\n');
+    rest = lines.pop();
+    for (const l of lines.filter(Boolean)) {
+      const m = JSON.parse(l);
+      answers.set(m.id, m);
+    }
+  });
+  const send = m => child.stdin.write(JSON.stringify({ jsonrpc: '2.0', ...m }) + '\n');
+  send({
+    id: 1,
+    method: 'initialize',
+    params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '0' } },
+  });
+  await got(1);
+  send({ method: 'notifications/initialized' });
+  send({ id: 2, method: 'tools/list' });
+  const names = (await got(2)).result.tools.map(x => x.name);
+  assert.ok(names.length > 5, names.join(', '));
+  assert.deepEqual(
+    names.filter(n => !/^xsolana_[a-z_]+$/.test(n)),
+    [],
+    'every listed name is a valid MCP tool name the server answers to',
+  );
+  assert.ok(names.includes('xsolana_check'));
+  send({ id: 3, method: 'tools/call', params: { name: 'xsolana_guide', arguments: {} } });
+  const call = await got(3);
+  assert.notEqual(call.result?.isError, true, JSON.stringify(call).slice(0, 400));
 });
 
 test('gamesfun loot approve opens nothing unless told how it is signed; a key file is made outside the game', async t => {
