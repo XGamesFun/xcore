@@ -188,4 +188,20 @@ export async function withdraw(request, env) {
     "export const help = () => Response.json({ why: 'Use sendTransaction( from your wallet; Keypair.fromSecretKey( is not here.' });\n",
   );
   assert.equal((await review(dir)).verdict, 'PASS');
+  // a wallet's signature checked (nacl.sign.detached.verify, nacl.sign.open) signs nothing
+  await writeFile(
+    path.join(dir, 'server', 'withdraw.js'),
+    "import nacl from 'tweetnacl';\nexport const proven = (msg, sig, pub) => nacl.sign.detached.verify(msg, sig, pub);\nexport const opened = (signed, pub) => nacl.sign.open(signed, pub);\n",
+  );
+  assert.equal((await review(dir)).verdict, 'PASS');
+  // one that signs is read as signing
+  for (const spelling of ['nacl.sign.detached(msg, key)', 'nacl.sign(msg, key)', 'nacl.sign.keyPair.fromSeed(seed)']) {
+    await writeFile(
+      path.join(dir, 'server', 'withdraw.js'),
+      `import nacl from 'tweetnacl';\nexport const make = (msg, key, seed) => ${spelling};\n`,
+    );
+    const s = await review(dir);
+    assert.equal(s.verdict, 'INCONCLUSIVE', spelling);
+    assert.match(s.unread.find(x => x.what === 'server/withdraw.js')?.why ?? '', /\(nacl\.sign, from line 2\)/);
+  }
 });
