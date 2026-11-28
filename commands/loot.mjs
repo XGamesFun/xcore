@@ -8,7 +8,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { guard, parse, printJson, UsageError } from '../lib/cli.mjs';
+import { guard, notOneOf, parse, printJson, UsageError } from '../lib/cli.mjs';
 import { resolveGame, shown } from '../lib/games.mjs';
 import { ECONOMY_FILE, NO_SOLANA, solanaCommand, solanaHas, solanaRoot } from '../lib/economy.mjs';
 import { addLoot } from '../lib/loot-add.mjs';
@@ -157,6 +157,11 @@ export default {
       }, args);
     const xsolana = solanaCommand();
     if (!xsolana) return refuse(NO_SOLANA, 'no-solana');
+    // a command the tools do not have, with --json: said as JSON too (the tools' own refusal is words on stderr alone)
+    if (json && !['add', ...toolCommands()].includes(args[0]))
+      return guard(() => {
+        throw new UsageError(`${notOneOf(args[0], ['add', ...toolCommands()])}\n\n${usage}`);
+      }, args);
     // an installed package without `review`: what to do, instead of its help
     if (args[0] === 'review' && !solanaHas('review')) return refuse(`${NO_REVIEW}.`, 'no-review');
     // a game made before the file was named xsolana.json keeps loot.json: given to the command when it names no file

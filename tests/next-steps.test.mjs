@@ -37,6 +37,8 @@ test('add signin, multiplayer and database name the folder typed, and say guests
   assert.match(db.stdout, / dev nx, and read it with /);
   assert.match(db.stdout, /publish creates the database on xgames\.fun, where xcore's stock server keeps/);
   assert.doesNotMatch(db.stdout, /applies the migrations/);
+  // --json names the folder as adopt and review do: as the person reaches it
+  assert.equal(JSON.parse(run(['add', 'signin', 'nx', '--json'], { cwd }).stdout).dir, 'nx');
   const rooms = run(['add', 'multiplayer', 'nx'], { cwd });
   assert.equal(rooms.status, 0, rooms.stderr);
   assert.match(rooms.stdout, / dev nx, and open the game in two tabs/);

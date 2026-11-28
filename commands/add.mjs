@@ -95,7 +95,7 @@ export default {
       if (!add) throw new UsageError(`${unknownKind(what)}\n\n${usage}`);
       const dir = path.resolve(positionals[1] ?? '.');
       const r = await add(dir);
-      if (values.json) return printJson({ ok: true, what, dir, ...r });
+      if (values.json) return printJson({ ok: true, what, dir: shown(dir), ...r });
       console.log(addedLines(what, shown(dir), r, { verbose: values.verbose === true }).join('\n'));
     }, args),
 };

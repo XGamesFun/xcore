@@ -2,7 +2,7 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { guard, parse, printJson, UsageError, notOneOf, folderArg, verbNamed } from '../lib/cli.mjs';
-import { resolveGame, shown } from '../lib/games.mjs';
+import { resolveGame, shown, typedDir } from '../lib/games.mjs';
 import { deleteSecret, listSecrets, setSecret } from '../lib/publish/secrets.mjs';
 import { studioOrigin } from '../lib/publish/client.mjs';
 import { CMD } from '../lib/command.mjs';
@@ -235,10 +235,12 @@ export default {
         const { file, added } = await allowOrigin(dir, origin);
         if (added) {
           const where = path.relative(process.cwd(), file) || file;
-          if (out) out({ ok: false, game, name, set: false, added: origin, file: where, next: `${CMD} publish` });
+          // (done as asked so far: the origin is added; the URL waits for the publish that sends it)
+          const next = `${CMD} publish${shown(dir) === '.' ? '' : ` ${typedDir(dir)}`}`;
+          if (out) out({ ok: true, game, name, set: false, state: 'origin-added', added: origin, file: where, next });
           else
             console.log(
-              `Not set yet: the game's server may call only the origins in ${where}, and ${origin} was not one. It is now: publish (${CMD} publish), then run this again, and the server takes the URL with leave to call it.`,
+              `Not set yet: the game's server may call only the origins in ${where}, and ${origin} was not one. It is now: publish (${next}), then run this again, and the server takes the URL with leave to call it.`,
             );
           return 0;
         }

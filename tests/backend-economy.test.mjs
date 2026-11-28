@@ -498,3 +498,13 @@ test('backend use custom keeps the origins backend.json had, says so, and refuse
     assert.equal(await readFile(file, 'utf8'), broken, 'left as it was');
   }
 });
+
+test('loot with a command the tools do not have, and --json: a usage refusal as JSON on stdout', () => {
+  const r = run(['loot', 'bogus', '--json']);
+  assert.equal(r.status, 2, r.stderr);
+  const out = JSON.parse(r.stdout);
+  assert.deepEqual([out.ok, out.code], [false, 'usage']);
+  assert.match(out.error, /Unknown subcommand "bogus"/);
+  // without --json, the tools' own words
+  assert.notEqual(run(['loot', 'bogus']).status, 0);
+});
