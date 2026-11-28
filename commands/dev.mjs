@@ -120,6 +120,7 @@ export default {
       if (values.json)
         printJson({
           url: dev.url,
+          play: dev.play,
           origin: dev.origin,
           files: dev.files,
           server: dev.server,
@@ -128,6 +129,7 @@ export default {
         });
       else {
         say(`\n${shown(dir)} is running at ${dev.url}  (Ctrl+C stops it)`);
+        if (dev.play) say(`  as xgames.fun's play page frames it: ${dev.play}`);
         say(
           `  server: ${dev.server ? (dev.server.running ? 'running' : 'not running (above)') : 'none (no server/)'} · sign-in: a local player · public project files: ${dev.files}/`,
         );
