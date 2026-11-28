@@ -244,6 +244,13 @@ to remove one.
 true}`. A guest keeps their progress without signing in, but only in that browser: another device, or clearing site
 data, loses it. Saves are written by the player's own page, so a server that pays out never trusts one.
 
+- **Inside a post on X** the game is a frame under x.com, and the browser keeps that frame's storage apart from the
+  game's own link. A guest who plays in the post and then opens the game's link, in the same browser, starts from
+  nothing there. Signing in keeps progress in both.
+- **Where the browser keeps nothing** (storage blocked, as in a frame on another site with third-party storage off, or
+  full), a guest's `put` returns `code: 'no-storage'` (status 0) and an error, not `ok`. `saves.guest.kept()` says
+  ahead of time whether this browser keeps a guest's saves. Ask the player to sign in to keep their progress.
+
 Each game chooses what guests get:
 
 - **No guest saves:** add `data-guest-saves="off"` to the `<script>` tag (or set `GamesFun.saves.guests = false`).

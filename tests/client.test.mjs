@@ -475,6 +475,60 @@ test(
 );
 
 test(
+  "a guest's save the browser does not keep (storage blocked, or full) answers so, and nothing is listed",
+  { skip, timeout: 60_000 },
+  async t => {
+    const g = await standIn();
+    t.after(g.close);
+    const browser = await chrome();
+    t.after(() => browser.close());
+    // blocked, as in a frame on another site with third-party storage off: localStorage itself throws
+    const blocked = await browser.newPage();
+    await blocked.addInitScript(() => {
+      Object.defineProperty(window, 'localStorage', {
+        get() {
+          throw new DOMException('Access is denied for this document.', 'SecurityError');
+        },
+      });
+    });
+    await blocked.goto(`http://moth-play.xgames.test:${g.port}/`);
+    const put = await blocked.evaluate(() => GamesFun.saves.put('main', { level: 3 }));
+    assert.deepEqual([put.data, put.status, put.code], [null, 0, 'no-storage']);
+    assert.match(put.error, /keeps no saves here: sign in/);
+    assert.equal(await blocked.evaluate(() => GamesFun.saves.guest.kept()), false);
+    assert.equal((await blocked.evaluate(() => GamesFun.saves.get('main'))).status, 404);
+
+    // full: the value's write fails, so the key is not listed either
+    const full = await browser.newPage();
+    await full.addInitScript(() => {
+      const set = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (k, v) {
+        if (/guest:save:/.test(k)) throw new DOMException('full', 'QuotaExceededError');
+        return set.call(this, k, v);
+      };
+    });
+    await full.goto(`http://moth-play.xgames.test:${g.port}/`);
+    assert.equal((await full.evaluate(() => GamesFun.saves.put('main', { level: 3 }))).code, 'no-storage');
+    assert.deepEqual((await full.evaluate(() => GamesFun.saves.list())).data, []);
+    assert.deepEqual(await full.evaluate(() => GamesFun.saves.get('main')), { data: null, error: null, status: 404 });
+
+    // a browser that keeps them
+    const fine = await browser.newPage();
+    await fine.goto(`http://moth-play.xgames.test:${g.port}/`);
+    assert.equal(await fine.evaluate(() => GamesFun.saves.guest.kept()), true);
+    assert.deepEqual((await fine.evaluate(() => GamesFun.saves.put('main', { level: 3 }))).data, {
+      ok: true,
+      guest: true,
+    });
+    assert.deepEqual(
+      await fine.evaluate(() => Object.keys(localStorage).sort()),
+      ['gamesfun:moth:guest:save:main', 'gamesfun:moth:guest:saves'],
+      'the probe leaves nothing behind',
+    );
+  },
+);
+
+test(
   'on its own domain (play.mygame.test): the edge says which game and where xgames.fun is; sign-in goes there',
   { skip, timeout: 60_000 },
   async t => {
