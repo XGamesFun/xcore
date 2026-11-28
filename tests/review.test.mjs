@@ -1974,7 +1974,7 @@ test('every result says how it was read and what a PASS means: the same lines on
   assert.match(METHOD[1], /^How: as text, by patterns\. None of the game's code is run and none is parsed/);
   assert.match(
     METHOD[2],
-    /^A PASS means no high finding in what was read, and every payout read through\. It is not proof that the game is safe to pay/,
+    /^A PASS means no high finding, and every part read through: each payout, each file searched for a key, and \(with --live\) every request answered\. It is not proof that the game is safe to pay/,
   );
   assert.match(METHOD[3], /^Where the reading of a payout stops: /);
   const r = await review(dir);
@@ -2062,7 +2062,10 @@ test('what the review could not read is said beside the verdict; a check that an
     },
   ]);
   const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
-  assert.match(md, /^\*\*INCONCLUSIVE\*\*: 0 high, .* info; 1 part not read\. No high finding, but a payout/m);
+  assert.match(
+    md,
+    /^\*\*INCONCLUSIVE\*\*: 0 high, .* info; 1 part not read\. No high finding, but a part was not read through/m,
+  );
   assert.match(
     md,
     /## Not read\n\nThe verdict does not cover these: read them yourself\.\n\n- server\/vouchers\.js: PAY\.check hands env to `Tides`/,
