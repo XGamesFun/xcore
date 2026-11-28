@@ -89,3 +89,12 @@ test('key-shaped bytes in the page under no name: medium; under a seed’s name,
     [false],
   );
 });
+
+test('a seed publish’s scan names is one finding, not two', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'once');
+  const own = await readFile(path.join(dir, 'game.js'), 'utf8');
+  await writeFile(path.join(dir, 'game.js'), `const VOUCHER_SEED = '${HEX}';\n${own}`);
+  assert.deepEqual(custody(await review(dir)), ['high page game.js:1']);
+});
