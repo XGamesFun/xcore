@@ -17,6 +17,7 @@ import {
 import { consented } from '../lib/consent.mjs';
 import { CMD, typedPath } from '../lib/command.mjs';
 import { sha256 } from '../lib/util.mjs';
+import { STUDIO_BODY_BYTES } from '../lib/server/contract.mjs';
 import { privateTarget, writePrivate } from '../lib/publish/private-file.mjs';
 import { stateFolder } from '../lib/state-folder.mjs';
 
@@ -38,7 +39,10 @@ audit log.
 
 Commands:
   list [prefix/]     list the files, or those in one folder ("replays/")
-  put <file> [path]  upload a file from this machine to [path] (default: its file name). Up to 25 MB per file.
+  put <file> [path]  upload a file from this machine to [path] (default: its file name). Up to 25 MB per file on
+                     this machine; with --live up to ${mb(STUDIO_BODY_BYTES)} (it goes through xgames.fun's Studio, whose
+                     host takes no bigger a request). A bigger file, up to 25 MB, can only be written by the game's
+                     own server (env.GF.files.put).
                      --public serves it at https://<slug>.xgamesusercontent.com/<path>, a separate site (locally: the
                      files origin ${CMD} dev prints); without --public, only the game's server can read it.
                      --type <mime> sets its content type

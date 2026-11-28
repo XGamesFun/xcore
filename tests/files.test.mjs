@@ -728,3 +728,18 @@ test(
     );
   },
 );
+
+test('files put says the size a live put takes from this machine, not only the 25 MB the game’s server can write', async () => {
+  const files = (await import('../commands/files.mjs')).default;
+  const help = files.usage.replace(/\s+/g, ' ');
+  assert.match(
+    help,
+    new RegExp(
+      `with --live up to ${sizeText(STUDIO_BODY_BYTES).replace('.', '\\.')} \\(it goes through xgames\\.fun's Studio`,
+    ),
+  );
+  assert.match(
+    help,
+    /A bigger file, up to 25 MB, can only be written by the game's own server \(env\.GF\.files\.put\)/,
+  );
+});
