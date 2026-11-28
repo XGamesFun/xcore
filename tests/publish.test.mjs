@@ -435,6 +435,14 @@ test('an economy file or a backend.json that is not valid JSON is named among wh
   const said = (await preflight(dir)).problems.join('\n');
   assert.match(said, /^xsolana\.json is not valid JSON \(.+\)$/m);
   assert.match(said, /^backend\.json is not valid JSON \(.+\)$/m);
+  // valid JSON that is no object: refused as dev, add and review refuse it, in the same words
+  for (const value of ['null', '[]', '"x"']) {
+    await writeFile(path.join(dir, 'xsolana.json'), value);
+    await writeFile(path.join(dir, 'backend.json'), value);
+    const no = (await preflight(dir)).problems;
+    assert.ok(no.includes('xsolana.json holds no economy (it is not a JSON object); fix it first'), `${value}: ${no}`);
+    assert.ok(no.includes('backend.json is not a JSON object'), `${value}: ${no}`);
+  }
   await writeFile(path.join(dir, 'xsolana.json'), '{ "grants": [] }');
   await writeFile(path.join(dir, 'backend.json'), '{ "version": 1, "origins": [] }');
   assert.deepEqual((await preflight(dir)).problems, []);
