@@ -61,6 +61,32 @@ test('a secret of env answered or logged, through a name it was given; one chang
   assert.deepEqual(names("console.log('set?', Boolean(env.VOUCHER_SEED));"), []);
   // a message that names the secret is no secret
   assert.deepEqual(names("return Response.json({ why: 'env.VOUCHER_SEED is not set' });"), []);
+  // whether it is set, said and not given out; a fallback gives the value itself
+  assert.deepEqual(
+    names(
+      "return Response.json({ seeded: !!env.VOUCHER_SEED, rpc: env.RPC_URL ? 'set' : 'unset', t: env.API_TOKEN !== undefined, k: typeof env.SECRET_KEY, n: undefined === env.DB_TOKEN });",
+    ),
+    [],
+  );
+  assert.deepEqual(names("const s = env.VOUCHER_SEED;\nconsole.log('seed', !s);"), []);
+  assert.deepEqual(names("return Response.json({ rpc: env.RPC_URL ?? '', s: env.VOUCHER_SEED || 'none' });"), [
+    'answered RPC_URL 1',
+    'answered VOUCHER_SEED 1',
+  ]);
+  assert.deepEqual(names("return Response.json({ rpc: env.RPC_URL ? env.RPC_URL : 'unset' });"), ['answered RPC_URL 1']);
+});
+
+test('a health route that says whether its secrets are set is no secret answered: the review still passes', async t => {
+  const tmp = await tempDir();
+  t.after(tmp.cleanup);
+  const dir = await sample(tmp, 'h');
+  await writeFile(
+    path.join(dir, 'server', 'health.js'),
+    "export async function handleHealth(request, env) {\n  if (new URL(request.url).pathname !== '/api/health') return null;\n  return Response.json({ ok: true, seeded: !!env.VOUCHER_SEED, rpc: env.RPC_URL ? 'set' : 'unset' });\n}\n",
+  );
+  const r = await review(dir);
+  assert.equal(r.verdict, 'PASS', JSON.stringify(r.findings.filter(f => f.severity === 'high')));
+  assert.deepEqual(custody(r), []);
 });
 
 test('key-shaped bytes in the page under no name: medium; under a seed’s name, split or base64: high; a hash or an address: nothing', async t => {
