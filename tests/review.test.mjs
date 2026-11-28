@@ -2062,7 +2062,10 @@ test('what the review could not read is said beside the verdict; a check that an
     },
   ]);
   const md = await readFile(path.join(r.outDir, 'review.md'), 'utf8');
-  assert.match(md, /^\*\*INCONCLUSIVE\*\*: 0 high, .* info; 1 part not read\. No high finding, but a part was not read through/m);
+  assert.match(
+    md,
+    /^\*\*INCONCLUSIVE\*\*: 0 high, .* info; 1 part not read\. No high finding, but a part was not read through/m,
+  );
   assert.match(
     md,
     /## Not read\n\nThe verdict does not cover these: read them yourself\.\n\n- server\/vouchers\.js: PAY\.check hands env to `Tides`/,
