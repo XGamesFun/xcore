@@ -1,6 +1,7 @@
 # Lint and the tests on every push and pull request: Linux, macOS and Windows, Node 24. The runners have Chrome,
 # which the page check's tests drive. On Linux the server tools (Miniflare and workerd) are installed too, and every
-# test must run there (XCORE_TEST_ALL=1: a skipped test fails the run).
+# test must run there (XCORE_TEST_ALL=1: a skipped test fails the run). The engines job has Godot parse the Godot glue
+# and the .NET compiler build the Unity glue.
 name: ci
 
 on:
@@ -40,3 +41,31 @@ jobs:
           echo "GAMESFUN_SERVER_DEPS=$dir" >> "$GITHUB_ENV"
           echo "XCORE_TEST_ALL=1" >> "$GITHUB_ENV"
       - run: npm test
+
+  engines:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GODOT: 4.7.2-stable
+      # SHA512-SUMS.txt of https://github.com/godotengine/godot/releases/tag/4.7.2-stable
+      GODOT_SHA512: 9aa00f7a605200940bce3027a567b782f49bd8e940dd06ae9e987bd65aee1b1467edd56ed84fcdcbdd44354bf613bdbb4e5d2913e925850368e150c59ed54c65
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: 8.0.x
+      - run: npm ci
+      - name: Godot, checked against its published sum
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/godot.zip" "https://github.com/godotengine/godot/releases/download/$GODOT/Godot_v${GODOT}_linux.x86_64.zip"
+          echo "$GODOT_SHA512  $RUNNER_TEMP/godot.zip" | sha512sum -c -
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          echo "GODOT_BIN=$RUNNER_TEMP/godot/Godot_v${GODOT}_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Godot parses the .gd files and GamesFun.cs compiles, as xcore add signin writes them
+        run: node scripts/check-engines.mjs --godot "$GODOT_BIN" --dotnet dotnet

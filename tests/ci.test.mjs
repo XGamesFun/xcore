@@ -1,6 +1,6 @@
 // What CI and the release workflow promise, held to their files (.github/workflows): the publish right is held only by
 // a job that runs no dependency's code, a release is tested on all three systems and installed from its tarball first,
-// the tests that need the server tools run on Linux, and every action is pinned to a commit.
+// the tests that need the server tools run on Linux, and Godot and .NET check the engine glue.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -84,6 +84,15 @@ test('on Linux the server tools are installed and every test must run, in CI and
       `${file}: before the tests`,
     );
   }
+});
+
+test('Godot parses the Godot glue and .NET compiles the Unity glue, with a Godot whose sum is checked', () => {
+  const { engines } = parts(workflow('ci.yml')).jobs;
+  assert.ok(engines, 'an engines job');
+  assert.match(engines, /GODOT_SHA512: [0-9a-f]{128}\n/);
+  assert.match(engines, /sha512sum -c -/);
+  assert.match(engines, /node scripts\/check-engines\.mjs --godot "\$GODOT_BIN" --dotnet dotnet/);
+  assert.match(engines, /- run: npm ci/);
 });
 
 test('every action is pinned to a commit', () => {
