@@ -392,6 +392,7 @@ test('the economy guide says what moving to mainnet takes, and the fees say devn
         /loot\s+approve/,
         /xcore\s+publish/,
       ),
+      ...said('README.md', '## FAQ', /ECONOMY\.md#moving-to-mainnet/),
       ...said('docs/FEES.md', '## Hosting', /devnet[^.]*not\s+billed\s+to\s+the\s+game/i),
       ...said('docs/SERVER.md', "### The economy's own RPC", /devnet[^.]*not\s+billed\s+to\s+the\s+game/i),
     ],

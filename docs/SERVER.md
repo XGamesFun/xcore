@@ -882,15 +882,16 @@ my-vault: 278 files, 10 MB, nothing refused. Left out: .gamesfun/, .gitignore, g
 Once hosted, the game's server is at `https://<slug>-play.xgames.fun/api/…`. A blocked or over-limit server returns
 `{error, message}` with status 451, 429, 404, 503 or 502 instead of the server's own response.
 
-**A game that is unpublished, taken down or capped** (over its plan's money for the month: see
-[HOSTING.md](HOSTING.md#plans-xcore-plan)) has its server switched off: every `api/*` request answers `451 {"error":
-"stopped", "reason": "unpublished" | "taken-down" | "capped", "message"}`, its Durable Objects' alarms lapse and their
-sockets close.
+**A game that is unpublished, taken down or capped** (over its plan's money for the month, or its database over its
+plan's size: see [HOSTING.md](HOSTING.md#plans-xcore-plan)) has its server switched off: every `api/*` request answers
+`451 {"error": "stopped", "reason": "unpublished" | "taken-down" | "capped", "message"}`, its Durable Objects' alarms
+lapse and their sockets close.
 
 - A running room stops within about five minutes.
 - Its rooms' data and its secrets are kept.
 - The server comes back on its own when the game is published again (within 30 days, to be sure its data is kept) or
-  when its cap lifts (the start of the next month, a Creator account, or usage credit).
+  when its cap lifts (the start of the next month, a Creator account, usage credit or a higher card spending cap, or
+  a database made smaller).
 - A version published while the game is capped goes live with its pages, and its server waits.
 - The page keeps loading in the meantime, so a game whose server can be off should tell players so when `api/`
   returns 451.

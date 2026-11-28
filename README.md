@@ -143,7 +143,7 @@ For Cursor and other agents, use `npx skills add XGamesFun/xcore`. [Game skill](
 **Do players need a wallet?** Players sign in with X or Google. They can link a wallet for Solana features.
 
 **Does the economy use real money?** It starts on devnet with test funds. Set `"network": "mainnet"` in
-`xsolana.json` to use real funds. [Economy guide](docs/ECONOMY.md)
+`xsolana.json` to use real funds, with the other steps in [Moving to mainnet](docs/ECONOMY.md#moving-to-mainnet).
 
 **Can my game launch a coin?** Once published, it can launch on Meteora or pump.fun.
 [Coin launches](docs/ECONOMY.md#a-coin-that-trades-xcore-coin)
