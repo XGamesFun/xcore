@@ -284,6 +284,12 @@ test('a condition that measures against what the request sent is a medium; one t
     "if (!body.runId || typeof body.runId !== 'string') return { why: 'No run.' };\n    if (!run || Date.now() - run.started_at < 60_000) return { why: 'Too fast.' };\n    ",
   );
   assert.deepEqual(cases(r, 'payout-input'), []);
+  // a size the request sent, only logged, sets no bar
+  r = await read(
+    "if (body.score > 100) console.warn('big score', body.score);\n    if (!run || Date.now() - run.started_at < 60_000) return { why: 'Too fast.' };\n    ",
+  );
+  assert.deepEqual(cases(r, 'payout-input'), []);
+  assert.equal(r.verdict, 'PASS');
   // state read only to write a log line: the request alone decides
   r = await read("if (!run) console.warn('no such run', body.runId);\n    ");
   assert.equal(r.verdict, 'FAIL');
