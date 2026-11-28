@@ -170,7 +170,8 @@ that game. Tell them the link, what you changed in their files, what the checks 
 (their gameplay, their backend's own behaviour).
 
 Some things are the console's alone (xgames.fun/console): a live server's errors (its Logs tab), rolling back to an
-earlier version (Make live), and unpublishing or pausing the game (its Live tab). Send the person there for them
+earlier version (Make live) and unpublishing (both on its Overview tab), and pausing the game (its Live tab). Send the
+person there for them
 (xcore's [docs/COMMANDS.md, "What only the console does"](../../docs/COMMANDS.md#what-only-the-console-does)).
 
 After that, at their request: its plan and the account's (`xcore plan`, whose `--help` has the tiers, limits and

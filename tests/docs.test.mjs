@@ -377,6 +377,10 @@ test('the console has one name, and the reference says what only the console doe
     /Live\s+tab/,
   );
   problems.push(...said('README.md', '## Commands', /COMMANDS\.md#what-only-the-console-does/));
+  // the skill puts each where the reference does: rolling back and unpublishing on Overview, pausing on Live
+  const skill = read('skills/bring-your-own-game/SKILL.md').replace(/\s+/g, ' ');
+  if (!/Make live\) and unpublishing \(both on its Overview tab\), and pausing the game \(its Live tab\)/.test(skill))
+    problems.push("SKILL.md: the console's tabs for rolling back, unpublishing and pausing");
   // the console is "your console" (xgames.fun/console); Studio is xgames.fun's game builder, a place apart
   for (const file of REFERENCE)
     for (const [m] of read(file).matchAll(/creator console|Studio is your|your xgames\.fun Studio|in Studio\.?$/gim))
