@@ -176,10 +176,15 @@ at run time, such as a path from the root built in a script, or a request to a s
      [Inside the play page](HOSTING.md#inside-the-play-page));
    - from a link with a query string, as a shared link is.
 
-   It passes when no error is thrown, the console shows no errors, none of the game's own files are missing, nothing
-   is requested from the root, something is on screen, and (in the frame) nothing tries a pop-up, form submit or
-   top-level navigation while loading. Screenshots: `phone.png`, `desktop.png` and `framed.png` in
-   `evidence/verify-N/`.
+   It passes when, in its first 5 s, no error is thrown, the console shows no errors, none of the game's own files are
+   missing, nothing is requested from the root, something is on screen (a canvas drawn in one flat colour counts as
+   nothing), and (in the frame) nothing tries a pop-up, form submit or top-level navigation. Focus taken as the page
+   loads, which the frame refuses until the first tap (a Godot export does it), is a note, not a failure.
+   Screenshots: `phone.png`, `desktop.png` and `framed.png` in `evidence/verify-N/`.
+
+   An engine's web export older than its project is a warning beside the verdict. Under publish's own check it fails
+   only when the export has nothing of an autoload `project.godot` names, or the project changed more than 10 minutes
+   after the export; a gap of seconds, as a clone or a copy leaves, stays a warning.
 
    A page whose script never yields to the browser (an endless loop) fails here as "the page stopped answering". The
    check waits 15 s for each answer it asks of a page, stops at the first view that gives none, and then skips step 4
@@ -212,7 +217,8 @@ It reports:
 - a short summary at the end ("In short").
 
 A first reward is mentioned only for a game with an economy. A tap that leaves the page in an endless loop is reported
-with that tap, and ends the walk. The walk is informational and never fails the check. Publish's own check does not
+with that tap, and ends the walk. An error the walk meets is printed, and is a warning beside the verdict. The walk is
+informational and never fails the check. Publish's own check does not
 run it. With `--json`, it is the `firstSession` field.
 
 A backend that does not answer your machine is a note, not a failure. The page check only shows that the game starts
@@ -575,7 +581,7 @@ Exit codes:
 | 0    | success                                                                                                                                        |
 | 1    | any failure other than a usage mistake                                                                                                         |
 | 2    | a usage mistake (no such command, subcommand or flag; a missing or extra argument): stderr says what was wrong, then the command's usage lines |
-| 3    | `xcore review` only: INCONCLUSIVE, no high finding but a payout the review could not read                                                      |
+| 3    | `xcore review` only: INCONCLUSIVE, no high finding but a part the review did not read, or a review that could not finish                       |
 
 ## Environment variables
 

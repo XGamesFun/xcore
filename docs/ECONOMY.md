@@ -218,11 +218,15 @@ of it, so a PASS is not proof that the game is safe to pay real money from. Run 
 `xcore review <folder>` writes `evidence/review-N/review.md` and `review.json`, and prints what it found and one of three
 verdicts (`verdict` in `--json`):
 
-| Verdict      | Meaning                                                                  | Exit code |
-| ------------ | ------------------------------------------------------------------------ | --------- |
-| PASS         | no high finding in what it read, and every payout read through           | 0         |
-| FAIL         | at least one high finding                                                | 1         |
-| INCONCLUSIVE | no high finding, but a payout it could not read through; `ok` is `false` | 3         |
+| Verdict      | Meaning                                                              | Exit code |
+| ------------ | -------------------------------------------------------------------- | --------- |
+| PASS         | no high finding, and every part read through                         | 0         |
+| FAIL         | at least one high finding                                            | 1         |
+| INCONCLUSIVE | no high finding, but a part it did not read (below); `ok` is `false` | 3         |
+
+INCONCLUSIVE is any part not read: a payout it could not follow, server code that signs or sends a transaction itself,
+a file it could not open, `--live` requests that got no answer, or a review that could not finish (`--verbose` then
+prints where it stopped).
 
 A payout is not read through when its code calls code the review did not follow (a package, or more than three calls
 deep), or when PAY.check reads what it was handed by a computed key (`ctx[k]`, `ctx['bo' + 'dy']`,
