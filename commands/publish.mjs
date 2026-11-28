@@ -216,12 +216,14 @@ export function publishCommand({
             );
           throw e;
         });
-        if (values.json) printJson(r);
+        if (values.json) printJson(r.url ? { ...r, xPostUrl: playerCardUrl(r.url) } : r);
         else {
           console.log(
             (r.url
               ? publishedLines(r.title ? `“${r.title}”` : named(dir), r)
-              : draftLines(named(dir), r, shown(dir))
+              : r.kept
+                ? keptLines(r.title ? `“${r.title}”` : named(dir), r)
+                : draftLines(named(dir), r, shown(dir))
             ).join('\n'),
           );
           if (r.url) {
@@ -238,25 +240,33 @@ export function publishCommand({
 
 const failedNames = failed => failed.map(c => `${c.n} ${c.name}`).join('; ');
 
-/** `publish --status`: where this folder's game is published, and whether it is live. */
-function statusLine(where, origin, s) {
-  let live = '';
-  if (s.live?.error) live = ` xgames.fun says: ${s.live.error}`;
-  else if (s.live) live = s.live.published ? ` Live: version ${s.live.version?.number}.` : ' Not live now.';
-  const own = s.known?.gameUrl ? `\n  the game itself: ${s.known.gameUrl}` : '';
-  const v = s.known?.lastVersion;
-  switch (s.link) {
-    case 'never':
-      return `${where} has not been published to ${origin} yet.`;
-    case 'started':
-      return `${where} was started on ${origin}, but no version finished going up. Run ${CMD} publish again: it goes on with the same game.${live}`;
-    case 'draft':
-      return `${where} is a private draft (version ${v}).${live}${own}`;
-    case 'draft-over-public':
-      return `${where} is published at ${s.known.url}; its latest version (${v}) is a private draft, so an earlier version is the one playing.${live}${own}`;
-    default:
-      return `${where} is published at ${s.known.url} (version ${v}).${live}${own}`;
-  }
+/**
+ * `publish --status`: where this folder's game stands. xgames.fun's answer (what plays now, a takedown) leads; the
+ * folder's own record (.gamesfun/publish.json) says what was last sent from here.
+ */
+export function statusLine(where, origin, s) {
+  const k = s.known ?? {};
+  const own = k.gameUrl ? `\n  the game itself: ${k.gameUrl}` : '';
+  if (s.link === 'never') return `${where} has not been published to ${origin} yet.`;
+  if (s.link === 'started')
+    return `${where} was started on ${origin}, but no version finished going up. Run ${CMD} publish again; if xgames.fun answers that the game has no version yet, publish it with --new and archive the empty game in your console.${s.live?.error ? ` xgames.fun says: ${s.live.error}` : ''}`;
+  // what plays now, by xgames.fun's word when it answered
+  let now;
+  if (s.live && !s.live.error)
+    now = s.live.takenDown
+      ? `${where} was taken down by xgames.fun: nothing plays at its link (${k.url ?? `/play/${k.slug}`}).`
+      : s.live.published
+        ? `${where} is live at ${s.live.url ?? k.url} (version ${s.live.version?.number}).`
+        : `${where} is not live now: nothing plays at its link${k.url ? ` (${k.url})` : ''}.`;
+  else
+    now = `${where} ${k.url ? `was last published at ${k.url}` : 'has no public link yet'}${s.live?.error ? ` (xgames.fun did not say what plays now: ${s.live.error})` : ' (xgames.fun was not asked what plays now: not signed in)'}.`;
+  const sent =
+    s.link === 'kept'
+      ? `  Version ${k.kept.version ?? '?'} was kept on xgames.fun but did not go live: ${k.kept.why ?? 'not published'}.`
+      : s.link === 'draft' || s.link === 'draft-over-public'
+        ? `  The latest version sent from here (${k.lastVersion}) is a private draft.`
+        : `  The latest version sent from here: ${k.lastVersion}.`;
+  return `${now}\n${sent}${own}`;
 }
 
 /** `publish --check` when nothing is refused: what goes up, and the server bundle when there is one. */
@@ -299,10 +309,37 @@ function verifyLine(v, where) {
   return `the checks did not pass: ${why}. A publish now saves a private draft.${evidence}`;
 }
 
+/** The game's link that X shows as a player card (the game inside the post), for a plain /play/<slug> link. */
+export function playerCardUrl(url) {
+  try {
+    const u = new URL(url);
+    u.searchParams.set('card', 'player');
+    return u.href;
+  } catch {
+    return null;
+  }
+}
+
+/** The game's database past its plan's size, from xgames.fun's answer: what happens, and what to do. */
+export function databaseLine(db) {
+  if (!db) return null;
+  const over = Number.isFinite(db.sizeBytes) && Number.isFinite(db.cap) && db.sizeBytes > db.cap;
+  if (!over && !db.warning) return null;
+  const size = over ? `${sizeText(db.sizeBytes)}, past its plan's ${sizeText(db.cap)}` : 'past its plan’s size';
+  return `  Worth fixing now: its database is ${size}. xgames.fun stops the game's server for a database past its plan's size (every /api/ call answers 451) until it is under: delete rows (${CMD} db query "DELETE …" --write --live), or move to a plan that allows more (${CMD} plan --all).`;
+}
+
 /** A publish that went live. */
 function publishedLines(where, r) {
+  const x = playerCardUrl(r.url);
   const lines = [
     `Published ${where} (version ${r.version.number}, unlisted): ${r.url}`,
+    ...(x
+      ? [
+          `  to play inside a post on X: ${x}`,
+          '    (on X the plain link shows a picture card, and a tap opens the game; this one plays the game inside the post on desktop and Android, and on iPhone shows as a bare link that plays once the post is opened)',
+        ]
+      : []),
     `  the game itself: ${r.gameUrl}`,
   ];
   if (r.friendsUrl) lines.push(`  play with friends: ${r.friendsUrl}`);
@@ -314,7 +351,22 @@ function publishedLines(where, r) {
         : `  its server code did not go up: ${r.server.why}`,
     );
   }
+  const db = databaseLine(r.database);
+  if (db) lines.push(db);
   return lines;
+}
+
+/** A version xgames.fun kept but could not put live: neither a draft nor published. */
+function keptLines(where, r) {
+  return [
+    `Kept ${where} as version ${r.version.number} on xgames.fun, but it did not go live: ${r.publishError}`,
+    r.takenDown
+      ? '  The game was taken down by xgames.fun, so nothing plays at its link.'
+      : r.liveBefore
+        ? `  Version ${r.liveBefore.version} still plays at ${r.liveBefore.url}. Publish again once the reason above is fixed.`
+        : '  Nothing plays at its link yet. Publish again once the reason above is fixed.',
+    ...(r.studioUrl ? [`  in your Studio: ${r.studioUrl}`] : []),
+  ];
 }
 
 /** After a publish that went live: the card its link shows. */
